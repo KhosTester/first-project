@@ -1,1833 +1,1566 @@
--- ================================================================
---  FEMBOY HUB v11 | KhoaProSigmaAlphaMale
---  Fixed: Sky IDs, Scrollbar spacing/width, Gravity jump,
---         Inf Jump (discrete, not fly), Placeholder text
--- ================================================================
-
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
 local StarterGui       = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
 local TweenService     = game:GetService("TweenService")
 local Lighting         = game:GetService("Lighting")
+local InsertService    = game:GetService("InsertService")
 
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- ======================== ORIGINAL STATE ========================
-local ORIGINAL_GRAVITY = workspace.Gravity
-local ORIGINAL_JUMP    = 22
-
-local origSkyInst = Lighting:FindFirstChildOfClass("Sky")
-local origSkyData = {}
-if origSkyInst then
-    for _, k in ipairs({"SkyboxBk","SkyboxDn","SkyboxFt","SkyboxLf","SkyboxRt","SkyboxUp","CelestialBodiesShown"}) do
-        origSkyData[k] = origSkyInst[k]
-    end
-end
-
--- ======================== KEYBINDS ==============================
-local KB = {
-    toggleUI  = Enum.KeyCode.Z,
-    boost     = Enum.KeyCode.U,
-    jump      = Enum.KeyCode.X,
-    infJump   = Enum.KeyCode.C,
-    wallClean = Enum.KeyCode.J,
-    fly       = Enum.KeyCode.F,
-}
-local KB_LABELS = {
-    toggleUI  = "Toggle UI",
-    boost     = "Edge Boost",
-    jump      = "Jump Boost",
-    infJump   = "Inf Jump",
-    wallClean = "Wall Clean",
-    fly       = "Fly",
-}
-local KB_ORDER = {"toggleUI","boost","jump","infJump","wallClean","fly"}
-
-local function kn(kcode)
-    return tostring(kcode):match("KeyCode%.(.+)") or "?"
-end
-
--- ======================== CONNECTIONS ===========================
-local AllConnections = {}
-local function trackConn(c)
-    table.insert(AllConnections, c)
-    return c
-end
-local function disconnectAll()
-    for _, c in pairs(AllConnections) do
-        pcall(function() c:Disconnect() end)
-    end
-    AllConnections = {}
-end
-
--- ======================== NOTIFY (defined first) ================
-local function notify(title, text, dur)
-    pcall(function()
-        StarterGui:SetCore("SendNotification", {
-            Title    = title,
-            Text     = text,
-            Duration = dur or 4,
-        })
-    end)
-end
-
--- ======================== PALETTE ==============================
-local C = {
-    white     = Color3.fromRGB(255,255,255),
-    lightGray = Color3.fromRGB(238,238,244),
-    midGray   = Color3.fromRGB(195,195,210),
-    neonRed   = Color3.fromRGB(210,16,42),
-    red       = Color3.fromRGB(215,28,55),
-    redDark   = Color3.fromRGB(160,14,38),
-    redPale   = Color3.fromRGB(255,232,236),
-    textDark  = Color3.fromRGB(20,16,30),
-    textMid   = Color3.fromRGB(100,88,118),
-    green     = Color3.fromRGB(30,195,90),
-    orange    = Color3.fromRGB(255,152,36),
-    black     = Color3.fromRGB(0,0,0),
-}
-local SN = {
-    Color3.fromRGB(215,28,55),
-    Color3.fromRGB(175,35,145),
-    Color3.fromRGB(115,55,210),
-    Color3.fromRGB(50,95,220),
-    Color3.fromRGB(26,145,160),
-    Color3.fromRGB(80,140,200),
-    Color3.fromRGB(140,60,210),
-    Color3.fromRGB(200,120,30),
-    Color3.fromRGB(30,185,85),
-}
-local SD = {
-    Color3.fromRGB(160,14,38),
-    Color3.fromRGB(125,18,106),
-    Color3.fromRGB(80,30,160),
-    Color3.fromRGB(25,60,170),
-    Color3.fromRGB(14,100,110),
-    Color3.fromRGB(50,100,160),
-    Color3.fromRGB(100,30,160),
-    Color3.fromRGB(150,85,15),
-    Color3.fromRGB(15,135,55),
-}
-
-local function stroke(inst, thick, col)
-    local s = Instance.new("UIStroke", inst)
-    s.Thickness    = thick or 1.3
-    s.Color        = col or C.black
-    s.Transparency = 0
-    return s
-end
-
-local function corner(inst, r)
-    Instance.new("UICorner", inst).CornerRadius = UDim.new(0, r or 8)
-end
-
--- ======================== SIZING ================================
-local FW, FH = 375, 480
-local MIN_W, MAX_W = 270, 660
-local MIN_H, MAX_H = 340, 740
-local BAR_H = 46
-local activeDrags = 0
-local isResizing  = false
-local resizeDir   = ""
-local rStartMouse = Vector2.new()
-local rStartSize  = Vector2.new()
-
--- ======================== SCREENGUI ============================
-local SG = Instance.new("ScreenGui")
-SG.Name            = "FemboyHub"
-SG.ResetOnSpawn    = false
-SG.ZIndexBehavior  = Enum.ZIndexBehavior.Global
-SG.DisplayOrder    = 999
-SG.Parent          = playerGui
-
--- ======================== MAIN FRAME ===========================
-local MF = Instance.new("Frame", SG)
-MF.AnchorPoint      = Vector2.new(0.5, 0.5)
-MF.Size             = UDim2.new(0, FW, 0, FH)
-MF.Position         = UDim2.new(0.5, 0, 0.5, 0)
-MF.BackgroundColor3 = C.neonRed
-MF.BorderSizePixel  = 0
-MF.Active           = true
-MF.Draggable        = true
-MF.ZIndex           = 10
-MF.ClipsDescendants = true
-MF.Visible          = false
-corner(MF, 14)
-
-local outerStroke = stroke(MF, 4, Color3.fromRGB(255,0,55))
-outerStroke.Transparency = 1
-
--- ======================== RESIZE HANDLES =======================
-local function mkHandle(zi, cr)
-    local h = Instance.new("Frame", SG)
-    h.BackgroundColor3       = Color3.fromRGB(255,30,70)
-    h.BackgroundTransparency = 0.55
-    h.BorderSizePixel        = 0
-    h.ZIndex                 = zi
-    h.Active                 = true
-    h.Visible                = false
-    if cr then corner(h, 3) end
-    return h
-end
-local HR   = mkHandle(35)
-local HB   = mkHandle(35)
-local HT   = mkHandle(35)
-local HCbr = mkHandle(36, true)
-local HCtr = mkHandle(36, true)
-
-local function showHandles()
-    if not MF.Visible then return end
-    HR.Visible = true; HB.Visible = true; HT.Visible = true
-    HCbr.Visible = true; HCtr.Visible = true
-end
-local function hideHandles()
-    HR.Visible = false; HB.Visible = false; HT.Visible = false
-    HCbr.Visible = false; HCtr.Visible = false
-end
-
-local function startResize(dir)
-    if isResizing then return end
-    isResizing    = true
-    resizeDir     = dir
-    rStartMouse   = UserInputService:GetMouseLocation()
-    rStartSize    = Vector2.new(MF.AbsoluteSize.X, MF.AbsoluteSize.Y)
-    MF.Draggable  = false
-end
-
-HR.InputBegan:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then startResize("R") end
-end)
-HB.InputBegan:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then startResize("B") end
-end)
-HT.InputBegan:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then startResize("T") end
-end)
-HCbr.InputBegan:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then startResize("BR") end
-end)
-HCtr.InputBegan:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then startResize("TR") end
-end)
-
-UserInputService.InputEnded:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 and isResizing then
-        isResizing = false
-        resizeDir  = ""
-        FW = MF.AbsoluteSize.X
-        FH = MF.AbsoluteSize.Y
-        if activeDrags == 0 then MF.Draggable = true end
-    end
-end)
-
-trackConn(RunService.RenderStepped:Connect(function()
-    if MF.Visible then
-        local ap = MF.AbsolutePosition
-        local as = MF.AbsoluteSize
-        HR.Size     = UDim2.new(0, 8, 0, as.Y - 24)
-        HR.Position = UDim2.new(0, ap.X + as.X, 0, ap.Y + 12)
-        HB.Size     = UDim2.new(0, as.X - 24, 0, 8)
-        HB.Position = UDim2.new(0, ap.X + 12, 0, ap.Y + as.Y)
-        HT.Size     = UDim2.new(0, as.X - 24, 0, 8)
-        HT.Position = UDim2.new(0, ap.X + 12, 0, ap.Y - 8)
-        HCbr.Size     = UDim2.new(0, 12, 0, 12)
-        HCbr.Position = UDim2.new(0, ap.X + as.X, 0, ap.Y + as.Y)
-        HCtr.Size     = UDim2.new(0, 12, 0, 12)
-        HCtr.Position = UDim2.new(0, ap.X + as.X, 0, ap.Y - 12)
-    end
-    if isResizing then
-        local mouse = UserInputService:GetMouseLocation()
-        local dx = mouse.X - rStartMouse.X
-        local dy = mouse.Y - rStartMouse.Y
-        local nW = rStartSize.X
-        local nH = rStartSize.Y
-        if resizeDir == "R" or resizeDir == "BR" or resizeDir == "TR" then
-            nW = math.clamp(rStartSize.X + dx * 2, MIN_W, MAX_W)
-        end
-        if resizeDir == "B" or resizeDir == "BR" then
-            nH = math.clamp(rStartSize.Y + dy * 2, MIN_H, MAX_H)
-        end
-        if resizeDir == "T" or resizeDir == "TR" then
-            nH = math.clamp(rStartSize.Y - dy * 2, MIN_H, MAX_H)
-        end
-        MF.Size = UDim2.new(0, nW, 0, nH)
-    end
-end))
-
--- ======================== TITLE BAR ============================
-local TB = Instance.new("Frame", MF)
-TB.Size             = UDim2.new(1, -8, 0, BAR_H)
-TB.Position         = UDim2.new(0, 4, 0, 4)
-TB.BackgroundColor3 = C.white
-TB.BorderSizePixel  = 0
-TB.ZIndex           = 12
-corner(TB, 10)
-stroke(TB, 2.5, Color3.fromRGB(255,0,55))
-
-local TitleLbl = Instance.new("TextLabel", TB)
-TitleLbl.Size                   = UDim2.new(1, -104, 1, 0)
-TitleLbl.Position               = UDim2.new(0, 8, 0, 0)
-TitleLbl.BackgroundTransparency = 1
-TitleLbl.Text                   = "Femboy Hub"
-TitleLbl.TextColor3             = C.red
-TitleLbl.TextSize               = 18
-TitleLbl.Font                   = Enum.Font.GothamBold
-TitleLbl.TextXAlignment         = Enum.TextXAlignment.Center
-TitleLbl.ZIndex                 = 14
-stroke(TitleLbl, 2.2, C.white)
-
-local function mkTbBtn(xRight, text, bg, fg, bdCol)
-    local b = Instance.new("TextButton", TB)
-    b.Size             = UDim2.new(0, 26, 0, 26)
-    b.Position         = UDim2.new(1, -xRight, 0.5, -13)
-    b.BackgroundColor3 = bg
-    b.Text             = text
-    b.TextColor3       = fg
-    b.TextSize         = 13
-    b.Font             = Enum.Font.GothamBold
-    b.BorderSizePixel  = 0
-    b.ZIndex           = 15
-    corner(b, 6)
-    stroke(b, 1.2, bdCol or C.black)
-    return b
-end
-
-local KBBtn    = mkTbBtn(96, "⌨",  SD[4], C.white, SN[4])
-local MinBtn   = mkTbBtn(64, "–",  C.redPale, C.red, C.red)
-local CloseBtn = mkTbBtn(33, "X",  C.red, C.white, C.black)
-
-local function hover(btn, norm, hov)
-    btn.MouseEnter:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.13), {BackgroundColor3 = hov}):Play()
-    end)
-    btn.MouseLeave:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.13), {BackgroundColor3 = norm}):Play()
-    end)
-end
-hover(CloseBtn, C.red,    C.redDark)
-hover(MinBtn,   C.redPale, Color3.fromRGB(255,200,210))
-hover(KBBtn,    SD[4],    SN[4])
-
--- ======================== INNER PANEL ==========================
-local Inner = Instance.new("Frame", MF)
-Inner.Size             = UDim2.new(1, -8, 1, -(BAR_H + 12))
-Inner.Position         = UDim2.new(0, 4, 0, BAR_H + 8)
-Inner.BackgroundColor3 = C.white
-Inner.BorderSizePixel  = 0
-Inner.ZIndex           = 11
-Inner.ClipsDescendants = true
-corner(Inner, 10)
-
--- Pill row
-local SubSF = Instance.new("ScrollingFrame", Inner)
-SubSF.Size              = UDim2.new(1, -6, 0, 20)
-SubSF.Position          = UDim2.new(0, 3, 0, 3)
-SubSF.BackgroundTransparency = 1
-SubSF.BorderSizePixel   = 0
-SubSF.ScrollBarThickness = 0
-SubSF.ScrollingDirection = Enum.ScrollingDirection.X
-SubSF.ZIndex            = 12
-
-local pillLayout = Instance.new("UIListLayout", SubSF)
-pillLayout.FillDirection     = Enum.FillDirection.Horizontal
-pillLayout.SortOrder         = Enum.SortOrder.LayoutOrder
-pillLayout.Padding           = UDim.new(0, 4)
-pillLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-
-local PILLS = {
-    {n="Boost",c=SN[1]},{n="Jump",c=SN[2]},{n="Gravity",c=SN[3]},
-    {n="InfJump",c=SN[4]},{n="AutoJump",c=SN[5]},{n="Fly",c=SN[6]},
-    {n="Sky",c=SN[7]},{n="Wall",c=SN[8]},{n="FPS",c=SN[9]},
-}
-local pillW = 0
-for idx, fp in ipairs(PILLS) do
-    local pw = #fp.n * 7 + 14
-    pillW = pillW + pw + (idx > 1 and 4 or 0)
-    local pill = Instance.new("Frame", SubSF)
-    pill.BackgroundColor3 = fp.c
-    pill.BorderSizePixel  = 0
-    pill.Size             = UDim2.new(0, pw, 0, 15)
-    pill.ZIndex           = 13
-    pill.LayoutOrder      = idx
-    corner(pill, 99)
-    local pl = Instance.new("TextLabel", pill)
-    pl.Size                   = UDim2.new(1, 0, 1, 0)
-    pl.BackgroundTransparency = 1
-    pl.Text                   = fp.n
-    pl.TextColor3             = C.white
-    pl.TextSize               = 8
-    pl.Font                   = Enum.Font.GothamBold
-    pl.TextXAlignment         = Enum.TextXAlignment.Center
-    pl.ZIndex                 = 14
-end
-SubSF.CanvasSize = UDim2.new(0, pillW + 8, 0, 0)
-
--- ======================== SCROLL CONTENT ========================
-local SF = Instance.new("ScrollingFrame", Inner)
-SF.Size              = UDim2.new(1, -4, 1, -28)
-SF.Position          = UDim2.new(0, 2, 0, 26)
-SF.BackgroundTransparency = 1
-SF.BorderSizePixel   = 0
-SF.ScrollBarThickness = 4
-SF.ScrollBarImageColor3 = C.midGray
-SF.ScrollingDirection = Enum.ScrollingDirection.Y
-SF.CanvasSize        = UDim2.new(0, 0, 0, 1344)
-SF.ZIndex            = 12
-
-local Cnt = Instance.new("Frame", SF)
-Cnt.Size             = UDim2.new(1, -14, 0, 1344)
-Cnt.Position         = UDim2.new(0, 7, 0, 4)
-Cnt.BackgroundTransparency = 1
-Cnt.ZIndex           = 12
-
--- ======================== WIDGET HELPERS ========================
-local function secLabel(text, y, si)
-    local col = SN[si] or C.red
-    local f = Instance.new("Frame", Cnt)
-    f.Size             = UDim2.new(1, 0, 0, 20)
-    f.Position         = UDim2.new(0, 0, 0, y)
-    f.BackgroundColor3 = col
-    f.BorderSizePixel  = 0
-    f.ZIndex           = 13
-    corner(f, 5)
-    local lbl = Instance.new("TextLabel", f)
-    lbl.Size                   = UDim2.new(1, -8, 1, 0)
-    lbl.Position               = UDim2.new(0, 6, 0, 0)
-    lbl.BackgroundTransparency = 1
-    lbl.Text                   = text
-    lbl.TextColor3             = C.white
-    lbl.TextSize               = 11
-    lbl.Font                   = Enum.Font.GothamBold
-    lbl.TextXAlignment         = Enum.TextXAlignment.Left
-    lbl.ZIndex                 = 14
-    stroke(lbl, 1.2)
-    return f
-end
-
-local function statusBox(y, dotColor)
-    local f = Instance.new("Frame", Cnt)
-    f.Size             = UDim2.new(1, 0, 0, 32)
-    f.Position         = UDim2.new(0, 0, 0, y)
-    f.BackgroundColor3 = C.lightGray
-    f.BorderSizePixel  = 0
-    f.ZIndex           = 13
-    corner(f, 7)
-    stroke(f, 1, C.midGray)
-    local dot = Instance.new("Frame", f)
-    dot.Size             = UDim2.new(0, 9, 0, 9)
-    dot.Position         = UDim2.new(0, 10, 0.5, -4.5)
-    dot.BackgroundColor3 = dotColor or C.red
-    dot.BorderSizePixel  = 0
-    dot.ZIndex           = 14
-    corner(dot, 99)
-    local txt = Instance.new("TextLabel", f)
-    txt.Size                   = UDim2.new(1, -28, 1, 0)
-    txt.Position               = UDim2.new(0, 25, 0, 0)
-    txt.BackgroundTransparency = 1
-    txt.TextColor3             = C.textDark
-    txt.TextSize               = 11
-    txt.Font                   = Enum.Font.Gotham
-    txt.TextXAlignment         = Enum.TextXAlignment.Left
-    txt.ZIndex                 = 14
-    return f, dot, txt
-end
-
-local function bigBtn(text, y, col)
-    local b = Instance.new("TextButton", Cnt)
-    b.Size             = UDim2.new(1, 0, 0, 32)
-    b.Position         = UDim2.new(0, 0, 0, y)
-    b.BackgroundColor3 = col
-    b.Text             = text
-    b.TextColor3       = C.white
-    b.TextSize         = 12
-    b.Font             = Enum.Font.GothamBold
-    b.BorderSizePixel  = 0
-    b.ZIndex           = 13
-    corner(b, 7)
-    stroke(b, 1.3)
-    return b
-end
-
-local function smallBtn(text, y, col)
-    local b = Instance.new("TextButton", Cnt)
-    b.Size             = UDim2.new(1, 0, 0, 28)
-    b.Position         = UDim2.new(0, 0, 0, y)
-    b.BackgroundColor3 = col
-    b.Text             = text
-    b.TextColor3       = C.white
-    b.TextSize         = 10
-    b.Font             = Enum.Font.GothamBold
-    b.BorderSizePixel  = 0
-    b.ZIndex           = 13
-    corner(b, 7)
-    stroke(b, 1.2)
-    return b
-end
-
-local function hintLbl(text, y)
-    local l = Instance.new("TextLabel", Cnt)
-    l.Size                   = UDim2.new(1, 0, 0, 14)
-    l.Position               = UDim2.new(0, 0, 0, y)
-    l.BackgroundTransparency = 1
-    l.Text                   = text
-    l.TextColor3             = C.textMid
-    l.TextSize               = 8
-    l.Font                   = Enum.Font.Gotham
-    l.TextXAlignment         = Enum.TextXAlignment.Left
-    l.ZIndex                 = 13
-    return l
-end
-
-local function addHover(btn, norm, hov)
-    btn.MouseEnter:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.13), {BackgroundColor3 = hov}):Play()
-    end)
-    btn.MouseLeave:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.13), {BackgroundColor3 = norm}):Play()
-    end)
-end
-
-local function sliderHeader(y, labelText)
-    local row = Instance.new("Frame", Cnt)
-    row.Size                   = UDim2.new(1, 0, 0, 16)
-    row.Position               = UDim2.new(0, 0, 0, y)
-    row.BackgroundTransparency = 1
-    row.ZIndex                 = 13
-    local lbl = Instance.new("TextLabel", row)
-    lbl.Size                   = UDim2.new(0.6, 0, 1, 0)
-    lbl.BackgroundTransparency = 1
-    lbl.Text                   = labelText
-    lbl.TextColor3             = Color3.fromRGB(0, 0, 0)
-    lbl.TextSize               = 12
-    lbl.Font                   = Enum.Font.GothamBold
-    lbl.TextXAlignment         = Enum.TextXAlignment.Left
-    lbl.ZIndex                 = 13
-    local val = Instance.new("TextLabel", row)
-    val.Size                   = UDim2.new(0.4, 0, 1, 0)
-    val.Position               = UDim2.new(0.6, 0, 0, 0)
-    val.BackgroundTransparency = 1
-    val.TextColor3             = Color3.fromRGB(0, 0, 0)
-    val.TextSize               = 13
-    val.Font                   = Enum.Font.GothamBold
-    val.TextXAlignment         = Enum.TextXAlignment.Right
-    val.ZIndex                 = 13
-    return val
-end
-
-local function buildSlider(yPos, minVal, maxVal, initVal, fillCol, valLabel, onChange)
-    local track = Instance.new("Frame", Cnt)
-    track.Size             = UDim2.new(1, 0, 0, 9)
-    track.Position         = UDim2.new(0, 0, 0, yPos)
-    track.BackgroundColor3 = C.midGray
-    track.BorderSizePixel  = 0
-    track.ZIndex           = 14
-    corner(track, 99)
-
-    local fill = Instance.new("Frame", track)
-    fill.BackgroundColor3 = fillCol
-    fill.BorderSizePixel  = 0
-    fill.Size             = UDim2.new(0, 0, 1, 0)
-    fill.ZIndex           = 15
-    corner(fill, 99)
-
-    local knob = Instance.new("Frame", track)
-    knob.Size             = UDim2.new(0, 18, 0, 18)
-    knob.AnchorPoint      = Vector2.new(0.5, 0.5)
-    knob.Position         = UDim2.new(0, 0, 0.5, 0)
-    knob.BackgroundColor3 = C.white
-    knob.BorderSizePixel  = 0
-    knob.ZIndex           = 17
-    corner(knob, 99)
-    stroke(knob, 2.5, fillCol)
-
-    local curVal   = initVal
-    local dragging = false
-
-    local function setVal(v)
-        curVal = math.clamp(math.round(v), minVal, maxVal)
-        local frac = (curVal - minVal) / (maxVal - minVal)
-        fill.Size     = UDim2.new(frac, 0, 1, 0)
-        knob.Position = UDim2.new(frac, 0, 0.5, 0)
-        if valLabel then valLabel.Text = tostring(curVal) end
-        if onChange  then onChange(curVal) end
-    end
-
-    local function getFrac()
-        local mx = UserInputService:GetMouseLocation().X
-        return math.clamp((mx - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
-    end
-
-    local function beginDrag()
-        if not dragging then
-            dragging    = true
-            activeDrags = activeDrags + 1
-            MF.Draggable = false
-        end
-    end
-
-    local function endDrag()
-        if dragging then
-            dragging    = false
-            activeDrags = math.max(0, activeDrags - 1)
-            if activeDrags == 0 and not isResizing then
-                MF.Draggable = true
-            end
-        end
-    end
-
-    track.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then
-            beginDrag()
-            setVal(minVal + getFrac() * (maxVal - minVal))
-        end
-    end)
-    knob.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then
-            beginDrag()
-        end
-    end)
-    UserInputService.InputEnded:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then
-            endDrag()
-        end
-    end)
-    trackConn(RunService.RenderStepped:Connect(function()
-        if dragging then
-            setVal(minVal + getFrac() * (maxVal - minVal))
-        end
-    end))
-
-    setVal(initVal)
-    return function() return curVal end, setVal
-end
-
-local function presetRow(vals, y, normBg, hovBg, onFn)
-    local n   = #vals
-    local gap = 4
-    local bw  = math.floor((344 - gap * (n - 1)) / n)
-    for i, v in ipairs(vals) do
-        local btn = Instance.new("TextButton", Cnt)
-        btn.Size             = UDim2.new(0, bw, 0, 22)
-        btn.Position         = UDim2.new(0, (i - 1) * (bw + gap), 0, y)
-        btn.BackgroundColor3 = normBg
-        btn.Text             = tostring(v)
-        btn.TextColor3       = C.white
-        btn.TextSize         = 11
-        btn.Font             = Enum.Font.GothamBold
-        btn.BorderSizePixel  = 0
-        btn.ZIndex           = 13
-        corner(btn, 5)
-        stroke(btn, 1.1, hovBg)
-        btn.MouseButton1Click:Connect(function() onFn(v) end)
-        btn.MouseEnter:Connect(function()
-            TweenService:Create(btn, TweenInfo.new(0.12), {BackgroundColor3 = hovBg}):Play()
-        end)
-        btn.MouseLeave:Connect(function()
-            TweenService:Create(btn, TweenInfo.new(0.12), {BackgroundColor3 = normBg}):Play()
-        end)
-    end
-end
-
--- ======================== SECTION CONTENTS =====================
-
--- ⚡ EDGE BOOST  y=0
-secLabel("⚡  EDGE BOOST  (Key: "..kn(KB.boost)..")", 0, 1)
-local _, BoostDot, BoostTxt = statusBox(24, C.red)
-BoostTxt.Text = "Femboi Form: OFF"
-local BoostValLbl = sliderHeader(62, "Boost Power (Dih cm)")
-local getBoost, setBoostSlider = buildSlider(82, 80, 300, 80, SN[1], BoostValLbl)
-local bPale = Color3.fromRGB(255,218,226)
-presetRow({80,120,160,200,240}, 96,  bPale, SN[1], setBoostSlider)
-presetRow({260,280,300},        122, bPale, SN[1], setBoostSlider)
-local BoostBtn = bigBtn("⚡  TOGGLE EDGE BOOST  —  OFF", 150, SD[1])
-addHover(BoostBtn, SD[1], SN[1])
-
--- 🦘 JUMP BOOST  y=192
-secLabel("🦘  FEMBOY JUMP  (Key: "..kn(KB.jump)..")", 192, 2)
-local _, JumpDot, JumpTxt = statusBox(216, C.red)
-JumpTxt.Text = "Femboy Jump: OFF"
-local JumpValLbl = sliderHeader(254, "Jump Power")
-local getJump, setJumpSlider = buildSlider(274, 20, 300, 20, SN[2], JumpValLbl)
-local jPale = Color3.fromRGB(242,215,255)
-presetRow({20,60,100,150,200}, 290, jPale, SN[2], setJumpSlider)
-presetRow({220,250,280,300},   316, jPale, SN[2], setJumpSlider)
-local JumpBtn = bigBtn("🦘  TOGGLE JUMP BOOST  —  OFF", 342, SD[2])
-addHover(JumpBtn, SD[2], SN[2])
-
--- ======================== GRAVITY FIX HELPERS ==================
--- Adjusts JumpPower proportionally when gravity changes so jumping still works
-local gravityJumpConn = nil
-local function applyGravityJumpFix(grav)
-    local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-    if not h then return end
-    -- Only adjust if jump boost is not manually set
-    if not (h.UseJumpPower) then
-        pcall(function() h.UseJumpPower = true end)
-    end
-    local safeGrav = math.max(grav, 1)
-    -- Keep a jump height of ~7 studs regardless of gravity
-    local desiredHeight = 7
-    local newJP = math.sqrt(2 * safeGrav * desiredHeight)
-    newJP = math.clamp(newJP, 10, 250)
-    pcall(function()
-        if not jumpOn then
-            h.JumpPower = newJP
-        end
-    end)
-end
-
--- 🌍 GRAVITY  y=386
-secLabel("🌍  FEMBOI GRAVITY CONTROL", 386, 3)
-hintLbl("-400=Float  0=None  196=Earth  400=Heavy", 408)
-local GravValLbl = sliderHeader(426, "Gravity")
-local getGravity, setGravSlider = buildSlider(446, -400, 400, math.round(ORIGINAL_GRAVITY),
-    SN[3], GravValLbl, function(v)
-        pcall(function() workspace.Gravity = v end)
-        -- Fix: re-apply jump so character can still jump after gravity change
-        task.defer(function()
-            applyGravityJumpFix(v)
-        end)
-    end
-)
-local GravResetBtn = smallBtn("🔄  RESET GRAVITY TO GAME DEFAULT", 460, Color3.fromRGB(70,70,70))
-addHover(GravResetBtn, Color3.fromRGB(70,70,70), Color3.fromRGB(50,50,50))
-GravResetBtn.MouseButton1Click:Connect(function()
-    pcall(function() workspace.Gravity = ORIGINAL_GRAVITY end)
-    setGravSlider(math.round(ORIGINAL_GRAVITY))
-    local h = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
-    if h then
-        pcall(function()
-            h.UseJumpPower = true
-            h.JumpPower    = ORIGINAL_JUMP
-        end)
-    end
-end)
-
--- Also re-apply jump fix on character spawn
-trackConn(player.CharacterAdded:Connect(function(c)
-    task.wait(0.5)
-    local gv = getGravity()
-    if gv ~= ORIGINAL_GRAVITY then
-        applyGravityJumpFix(gv)
-    end
-end))
-
--- 🌀 INF JUMP  y=500
--- FIX: Use InputBegan (discrete key press) instead of JumpRequest (fires while held)
--- This allows spam-jumping in air without flying continuously
-secLabel("🌀  FEMBOI INFINITY JUMP  (Key: "..kn(KB.infJump)..")", 500, 4)
-local _, InfDot, InfTxt = statusBox(524, C.red)
-InfTxt.Text = "Femboi Infinity Jump: OFF"
-local InfPowerLbl = sliderHeader(562, "Inf Jump Power")
-local getInfPow, setInfSlider = buildSlider(582, 0, 30, 20, SN[4], InfPowerLbl)
-local InfBtn = bigBtn("🌀  TOGGLE INF JUMP  —  OFF", 602, SD[4])
-addHover(InfBtn, SD[4], SN[4])
-
--- ⬆ AUTO JUMP  y=646
-secLabel("⬆  FEMBOI AUTO JUMP  (Hold Space)", 646, 5)
-local _, AJDot, AJTxt = statusBox(670, C.red)
-AJTxt.Text = "Femboi Auto Jump: OFF"
-local AJBtn = bigBtn("⬆  TOGGLE AUTO JUMP  —  OFF", 708, SD[5])
-addHover(AJBtn, SD[5], SN[5])
-
--- 🛸 FLY  y=752
-secLabel("🛸  FEMBOY FLY  (Key: "..kn(KB.fly)..")", 752, 6)
-local _, FlyDot, FlyTxt = statusBox(776, C.red)
-FlyTxt.Text = "Femboy Fly: OFF"
-hintLbl("WASD=Move  Space=Up  LShift=Down", 812)
-local FlySpeedLbl = sliderHeader(830, "Fly Speed")
-local getFlySpeed, setFlySlider = buildSlider(850, 10, 200, 60, SN[6], FlySpeedLbl)
-local FlyBtn = bigBtn("🛸  TOGGLE FLY  —  OFF", 868, SD[6])
-addHover(FlyBtn, SD[6], SN[6])
-
--- ======================== SKY CHANGER  y=912 ====================
-secLabel("🌌  FEMBOI SKY CHANGER", 912, 7)
-hintLbl("Scroll left/right to browse  ·  or paste asset ID below", 934)
-
--- Updated sky list with new names and IDs
-local SKIES = {
-    {name="Gray",    id="130547382131410"},
-    {name="Night",   id="128839006185497"},
-    {name="Anime1",  id="125641870562571"},
-    {name="Anime2",  id="127770372529424"},
-    {name="Anime3",  id="110570238374062"},
-    {name="Anime4",  id="138349252564540"},
-    {name="Femboy1", id="82666462942145"},
-    {name="Femboy2", id="95142505890749"},
-    {name="Femboy3", id="110326016107832"},
-    {name="Femboy4", id="123826538827500"},
-}
-local SKY_COLORS = {
-    Color3.fromRGB(140,140,150),
-    Color3.fromRGB(10,10,50),
-    Color3.fromRGB(180,100,170),
-    Color3.fromRGB(100,80,190),
-    Color3.fromRGB(60,100,200),
-    Color3.fromRGB(180,80,120),
-    Color3.fromRGB(195,90,155),
-    Color3.fromRGB(155,75,195),
-    Color3.fromRGB(65,155,195),
-    Color3.fromRGB(195,148,75),
-}
-
-local function applySky(id, gray)
-    pcall(function()
-        local sky = Lighting:FindFirstChildOfClass("Sky")
-        if not sky then sky = Instance.new("Sky", Lighting) end
-        local full = "rbxassetid://" .. id
-        sky.SkyboxBk = full; sky.SkyboxDn = full; sky.SkyboxFt = full
-        sky.SkyboxLf = full; sky.SkyboxRt = full; sky.SkyboxUp = full
-        sky.CelestialBodiesShown = not (gray == true)
-    end)
-end
-
--- Sky buttons: 1.3x wider (70 → 91) and scrollframe taller (46 → 62)
--- so the horizontal scrollbar has more breathing room below the buttons
-local SkyBW   = 91   -- was 70, now 1.3x wider
-local SkyGap  = 4
-local skyScrollW = #SKIES * (SkyBW + SkyGap) - SkyGap
-
-local SkySF = Instance.new("ScrollingFrame", Cnt)
-SkySF.Size               = UDim2.new(1, 0, 0, 62)   -- was 46, now 62 (+16 for scrollbar gap)
-SkySF.Position           = UDim2.new(0, 0, 0, 952)
-SkySF.BackgroundTransparency = 1
-SkySF.BorderSizePixel    = 0
-SkySF.ScrollBarThickness = 5
-SkySF.ScrollBarImageColor3 = C.midGray
-SkySF.ScrollingDirection = Enum.ScrollingDirection.X
-SkySF.CanvasSize         = UDim2.new(0, skyScrollW, 0, 0)
-SkySF.ZIndex             = 13
-
-for i, sky in ipairs(SKIES) do
-    local nc = SKY_COLORS[i]
-    local btn = Instance.new("TextButton", SkySF)
-    btn.Size             = UDim2.new(0, SkyBW, 0, 38)
-    btn.Position         = UDim2.new(0, (i - 1) * (SkyBW + SkyGap), 0, 4)
-    btn.BackgroundColor3 = nc
-    btn.Text             = sky.name
-    btn.TextColor3       = C.white
-    btn.TextSize         = 9
-    btn.Font             = Enum.Font.GothamBold
-    btn.BorderSizePixel  = 0
-    btn.ZIndex           = 14
-    corner(btn, 7)
-    stroke(btn, 1.2)
-    local hc = Color3.new(
-        math.min(nc.R + 0.18, 1),
-        math.min(nc.G + 0.18, 1),
-        math.min(nc.B + 0.18, 1)
-    )
-    btn.MouseEnter:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.12), {BackgroundColor3 = hc}):Play()
-    end)
-    btn.MouseLeave:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.12), {BackgroundColor3 = nc}):Play()
-    end)
-    local sid = sky.id
-    btn.MouseButton1Click:Connect(function()
-        applySky(sid, false)
-    end)
-end
-
--- Sky custom input  (y=1020, shifted +16 from old 1004)
-local skyInputBg = Instance.new("Frame", Cnt)
-skyInputBg.Size             = UDim2.new(1, 0, 0, 34)
-skyInputBg.Position         = UDim2.new(0, 0, 0, 1020)
-skyInputBg.BackgroundColor3 = C.lightGray
-skyInputBg.BorderSizePixel  = 0
-skyInputBg.ZIndex           = 13
-corner(skyInputBg, 7)
-stroke(skyInputBg, 1, C.midGray)
-
-local skyBox = Instance.new("TextBox", skyInputBg)
-skyBox.Size               = UDim2.new(1, -94, 1, -6)
-skyBox.Position           = UDim2.new(0, 6, 0, 3)
-skyBox.BackgroundColor3   = C.white
-skyBox.BorderSizePixel    = 0
-skyBox.PlaceholderText    = "Type..........."     -- changed from "ghi"
-skyBox.PlaceholderColor3  = C.textMid
-skyBox.TextColor3         = C.textDark
-skyBox.TextSize           = 11
-skyBox.Font               = Enum.Font.Gotham
-skyBox.ZIndex             = 14
-skyBox.ClearTextOnFocus   = false
-skyBox.Text               = ""
-corner(skyBox, 5)
-
-local skyApply = Instance.new("TextButton", skyInputBg)
-skyApply.Size             = UDim2.new(0, 82, 0, 26)
-skyApply.Position         = UDim2.new(1, -86, 0.5, -13)
-skyApply.BackgroundColor3 = SN[7]
-skyApply.Text             = "Apply"
-skyApply.TextColor3       = C.white
-skyApply.TextSize         = 11
-skyApply.Font             = Enum.Font.GothamBold
-skyApply.BorderSizePixel  = 0
-skyApply.ZIndex           = 14
-corner(skyApply, 5)
-stroke(skyApply, 1.2)
-addHover(skyApply, SN[7], SD[7])
-skyApply.MouseButton1Click:Connect(function()
-    local raw = skyBox.Text:match("%d+")
-    if raw and #raw > 3 then
-        applySky(raw, false)
-    end
-end)
-
--- Example hint label below input box  (y=1058)
-local skyExampleLbl = Instance.new("TextLabel", Cnt)
-skyExampleLbl.Size                   = UDim2.new(1, 0, 0, 14)
-skyExampleLbl.Position               = UDim2.new(0, 0, 0, 1058)
-skyExampleLbl.BackgroundTransparency = 1
-skyExampleLbl.Text                   = "Example: rbxassetid://___________(skybox code)"
-skyExampleLbl.TextColor3             = C.textMid
-skyExampleLbl.TextSize               = 8
-skyExampleLbl.Font                   = Enum.Font.Gotham
-skyExampleLbl.TextXAlignment         = Enum.TextXAlignment.Left
-skyExampleLbl.ZIndex                 = 13
-
--- Sky reset button  (y=1076, shifted +32 from old 1044)
-local SkyResetBtn = smallBtn("🔄  RESET SKY TO GAME DEFAULT", 1076, Color3.fromRGB(70,70,70))
-addHover(SkyResetBtn, Color3.fromRGB(70,70,70), Color3.fromRGB(50,50,50))
-SkyResetBtn.MouseButton1Click:Connect(function()
-    pcall(function()
-        local sky = Lighting:FindFirstChildOfClass("Sky")
-        if origSkyInst then
-            if not sky then sky = Instance.new("Sky", Lighting) end
-            for k, v in pairs(origSkyData) do
-                sky[k] = v
-            end
-        else
-            if sky then sky:Destroy() end
-        end
-    end)
-end)
-
--- 🧱 WALL REMOVER  y=1114  (was 1082, +32)
-secLabel("🧱  INVISIBLE WALL REMOVER  (Key: "..kn(KB.wallClean)..")", 1114, 8)
-local _, WallDot, WallTxt = statusBox(1138, C.orange)
-WallTxt.Text = "Ready — press "..kn(KB.wallClean).." to run"
-
--- 🌿 FPS  y=1182  (was 1150, +32)
-secLabel("🌿  FPS RESOURCE CLEANER", 1182, 9)
-local _, ResDot, ResTxt = statusBox(1206, C.orange)
-ResTxt.Text = "Click to activate FPS Booster"
-local ResBtn = bigBtn("🌿  ACTIVATE FPS BOOSTER", 1244, SD[9])
-addHover(ResBtn, SD[9], SN[9])
-
--- Footer  (y=1292, was 1260, +32)
-local footF = Instance.new("Frame", Cnt)
-footF.Size             = UDim2.new(1, 0, 0, 26)
-footF.Position         = UDim2.new(0, 0, 0, 1292)
-footF.BackgroundColor3 = C.neonRed
-footF.BorderSizePixel  = 0
-footF.ZIndex           = 13
-corner(footF, 7)
-stroke(footF, 2, Color3.fromRGB(255,0,55))
-
-local footLbl = Instance.new("TextLabel", footF)
-footLbl.Size                   = UDim2.new(1, -8, 1, 0)
-footLbl.Position               = UDim2.new(0, 4, 0, 0)
-footLbl.BackgroundTransparency = 1
-footLbl.Text                   = "Femboy Hub (BETA)  —  Created by Khoa"
-footLbl.TextColor3             = C.white
-footLbl.TextSize               = 9
-footLbl.Font                   = Enum.Font.GothamBold
-footLbl.TextXAlignment         = Enum.TextXAlignment.Center
-footLbl.ZIndex                 = 14
-stroke(footLbl, 1.5, C.red)
-
--- ======================== MINI BAR =============================
-local MB = Instance.new("Frame", SG)
-MB.AnchorPoint      = Vector2.new(0.5, 0.5)
-MB.Size             = UDim2.new(0, 240, 0, 44)
-MB.Position         = UDim2.new(0.5, 0, 0.5, 0)
-MB.BackgroundColor3 = C.neonRed
-MB.BorderSizePixel  = 0
-MB.Active           = true
-MB.Draggable        = true
-MB.ZIndex           = 20
-MB.Visible          = false
-corner(MB, 10)
-stroke(MB, 3, Color3.fromRGB(255,0,55))
-
-local MBInner = Instance.new("Frame", MB)
-MBInner.Size             = UDim2.new(1, -6, 1, -6)
-MBInner.Position         = UDim2.new(0, 3, 0, 3)
-MBInner.BackgroundColor3 = C.white
-MBInner.BorderSizePixel  = 0
-MBInner.ZIndex           = 21
-corner(MBInner, 7)
-
-local MBLbl = Instance.new("TextLabel", MBInner)
-MBLbl.Size                   = UDim2.new(1, -54, 1, 0)
-MBLbl.Position               = UDim2.new(0, 10, 0, 0)
-MBLbl.BackgroundTransparency = 1
-MBLbl.Text                   = "Femboy Hub"
-MBLbl.TextColor3             = C.red
-MBLbl.TextSize               = 14
-MBLbl.Font                   = Enum.Font.GothamBold
-MBLbl.TextXAlignment         = Enum.TextXAlignment.Left
-MBLbl.ZIndex                 = 22
-stroke(MBLbl, 2.0, C.white)
-
-local ExpandBtn = Instance.new("TextButton", MBInner)
-ExpandBtn.Size             = UDim2.new(0, 38, 0, 28)
-ExpandBtn.Position         = UDim2.new(1, -42, 0.5, -14)
-ExpandBtn.BackgroundColor3 = C.red
-ExpandBtn.Text             = "↓"
-ExpandBtn.TextColor3       = C.white
-ExpandBtn.TextSize         = 22
-ExpandBtn.Font             = Enum.Font.GothamBold
-ExpandBtn.BorderSizePixel  = 0
-ExpandBtn.ZIndex           = 23
-corner(ExpandBtn, 7)
-stroke(ExpandBtn, 2, Color3.fromRGB(255,60,100))
-hover(ExpandBtn, C.red, C.redDark)
-
--- ======================== KEYBIND PANEL ========================
-local KBP = Instance.new("Frame", SG)
-KBP.AnchorPoint      = Vector2.new(0.5, 0.5)
-KBP.Size             = UDim2.new(0, 310, 0, 370)
-KBP.Position         = UDim2.new(0.5, 0, 0.5, 0)
-KBP.BackgroundColor3 = C.neonRed
-KBP.BorderSizePixel  = 0
-KBP.ZIndex           = 50
-KBP.Visible          = false
-corner(KBP, 14)
-stroke(KBP, 4, Color3.fromRGB(255,0,55))
-
-local kbpTB = Instance.new("Frame", KBP)
-kbpTB.Size             = UDim2.new(1, -8, 0, 42)
-kbpTB.Position         = UDim2.new(0, 4, 0, 4)
-kbpTB.BackgroundColor3 = C.white
-kbpTB.BorderSizePixel  = 0
-kbpTB.ZIndex           = 52
-corner(kbpTB, 10)
-stroke(kbpTB, 2.5, Color3.fromRGB(255,0,55))
-
-local kbpTitle = Instance.new("TextLabel", kbpTB)
-kbpTitle.Size                   = UDim2.new(1, -38, 1, 0)
-kbpTitle.Position               = UDim2.new(0, 8, 0, 0)
-kbpTitle.BackgroundTransparency = 1
-kbpTitle.Text                   = "⌨  Keybind Settings"
-kbpTitle.TextColor3             = C.red
-kbpTitle.TextSize               = 14
-kbpTitle.Font                   = Enum.Font.GothamBold
-kbpTitle.TextXAlignment         = Enum.TextXAlignment.Left
-kbpTitle.ZIndex                 = 53
-stroke(kbpTitle, 2.0, C.white)
-
-local kbpX = Instance.new("TextButton", kbpTB)
-kbpX.Size             = UDim2.new(0, 26, 0, 26)
-kbpX.Position         = UDim2.new(1, -30, 0.5, -13)
-kbpX.BackgroundColor3 = C.red
-kbpX.Text             = "X"
-kbpX.TextColor3       = C.white
-kbpX.TextSize         = 12
-kbpX.Font             = Enum.Font.GothamBold
-kbpX.BorderSizePixel  = 0
-kbpX.ZIndex           = 54
-corner(kbpX, 6)
-stroke(kbpX, 1.2)
-hover(kbpX, C.red, C.redDark)
-kbpX.MouseButton1Click:Connect(function() KBP.Visible = false end)
-
-local kbpInner = Instance.new("Frame", KBP)
-kbpInner.Size             = UDim2.new(1, -8, 1, -58)
-kbpInner.Position         = UDim2.new(0, 4, 0, 54)
-kbpInner.BackgroundColor3 = C.white
-kbpInner.BorderSizePixel  = 0
-kbpInner.ZIndex           = 51
-corner(kbpInner, 10)
-
-local kbHint = Instance.new("TextLabel", kbpInner)
-kbHint.Size                   = UDim2.new(1, -8, 0, 14)
-kbHint.Position               = UDim2.new(0, 4, 0, 6)
-kbHint.BackgroundTransparency = 1
-kbHint.Text                   = "Click a key button, then press any key to rebind"
-kbHint.TextColor3             = C.textMid
-kbHint.TextSize               = 9
-kbHint.Font                   = Enum.Font.Gotham
-kbHint.TextXAlignment         = Enum.TextXAlignment.Left
-kbHint.ZIndex                 = 52
-
-local recordingAction = nil
-local recordConn      = nil
-local kbRowBtns       = {}
-
-local function stopRecording()
-    if recordConn then
-        recordConn:Disconnect()
-        recordConn = nil
-    end
-    recordingAction = nil
-    for _, row in pairs(kbRowBtns) do
-        if row.btn then
-            TweenService:Create(row.btn, TweenInfo.new(0.2), {BackgroundColor3 = SD[1]}):Play()
-            row.btn.Text = row.btn:GetAttribute("cur") or "?"
-        end
-    end
-end
-
-for i, ak in ipairs(KB_ORDER) do
-    local yRow = 24 + (i - 1) * 44
-    local rowF = Instance.new("Frame", kbpInner)
-    rowF.Size             = UDim2.new(1, -12, 0, 36)
-    rowF.Position         = UDim2.new(0, 6, 0, yRow)
-    rowF.BackgroundColor3 = C.lightGray
-    rowF.BorderSizePixel  = 0
-    rowF.ZIndex           = 53
-    corner(rowF, 7)
-    stroke(rowF, 1, C.midGray)
-
-    local nameL = Instance.new("TextLabel", rowF)
-    nameL.Size                   = UDim2.new(0.56, 0, 1, 0)
-    nameL.Position               = UDim2.new(0, 8, 0, 0)
-    nameL.BackgroundTransparency = 1
-    nameL.Text                   = KB_LABELS[ak]
-    nameL.TextColor3             = C.textDark
-    nameL.TextSize               = 11
-    nameL.Font                   = Enum.Font.GothamBold
-    nameL.TextXAlignment         = Enum.TextXAlignment.Left
-    nameL.ZIndex                 = 54
-
-    local curKN = kn(KB[ak])
-    local bb = Instance.new("TextButton", rowF)
-    bb.Size             = UDim2.new(0, 82, 0, 26)
-    bb.Position         = UDim2.new(1, -88, 0.5, -13)
-    bb.BackgroundColor3 = SD[1]
-    bb.Text             = curKN
-    bb:SetAttribute("cur", curKN)
-    bb.TextColor3       = C.white
-    bb.TextSize         = 11
-    bb.Font             = Enum.Font.GothamBold
-    bb.BorderSizePixel  = 0
-    bb.ZIndex           = 55
-    corner(bb, 5)
-    stroke(bb, 1.3, Color3.fromRGB(255,0,55))
-
-    local captAK = ak
-    bb.MouseButton1Click:Connect(function()
-        stopRecording()
-        recordingAction = captAK
-        TweenService:Create(bb, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(255,175,0)}):Play()
-        bb.Text = "Press..."
-        recordConn = UserInputService.InputBegan:Connect(function(inp, gp)
-            if gp then return end
-            if inp.UserInputType ~= Enum.UserInputType.Keyboard then return end
-            KB[captAK] = inp.KeyCode
-            local newKN = kn(inp.KeyCode)
-            bb.Text = newKN
-            bb:SetAttribute("cur", newKN)
-            TweenService:Create(bb, TweenInfo.new(0.2), {BackgroundColor3 = SN[1]}):Play()
-            stopRecording()
-            notify("Keybind Changed", "[" .. KB_LABELS[captAK] .. "] = " .. newKN, 3)
-        end)
-    end)
-
-    kbRowBtns[ak] = {btn = bb}
-end
-
-KBBtn.MouseButton1Click:Connect(function()
-    KBP.Visible = not KBP.Visible
-    if KBP.Visible then
-        stopRecording()
-        for ak, row in pairs(kbRowBtns) do
-            local kn2 = kn(KB[ak])
-            row.btn.Text = kn2
-            row.btn:SetAttribute("cur", kn2)
-            TweenService:Create(row.btn, TweenInfo.new(0.1), {BackgroundColor3 = SD[1]}):Play()
-        end
-    end
-end)
-
--- ======================== UI STATE & ANIMATIONS ================
-local uiState = "hidden"
-
-local function playIntro()
-    MF.Visible = true
-    MF.Size    = UDim2.new(0, 0, 0, 0)
-    MF.BackgroundTransparency = 1
-    outerStroke.Transparency  = 1
-    TitleLbl.TextColor3 = C.white
-    showHandles()
-    TweenService:Create(MF, TweenInfo.new(1.0, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Size = UDim2.new(0, FW, 0, FH),
-        BackgroundTransparency = 0,
-    }):Play()
-    TweenService:Create(outerStroke, TweenInfo.new(0.9), {Transparency = 0}):Play()
-    task.delay(1.0, function()
-        TweenService:Create(outerStroke,
-            TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 3, true),
-            {Thickness = 12}):Play()
-    end)
-    task.delay(1.2, function()
-        local function shimmer(n)
-            if n <= 0 then
-                TweenService:Create(TitleLbl, TweenInfo.new(0.3), {TextColor3 = C.red}):Play()
-                return
-            end
-            TweenService:Create(TitleLbl, TweenInfo.new(0.25), {TextColor3 = C.red}):Play()
-            task.delay(0.25, function()
-                TweenService:Create(TitleLbl, TweenInfo.new(0.25), {TextColor3 = C.white}):Play()
-                task.delay(0.25, function() shimmer(n - 1) end)
-            end)
-        end
-        shimmer(4)
-    end)
-    task.delay(3.5, function()
-        TweenService:Create(outerStroke, TweenInfo.new(0.4), {Thickness = 4}):Play()
-        TweenService:Create(TitleLbl,   TweenInfo.new(0.3), {TextColor3 = C.red}):Play()
-    end)
-end
-
-local function animIn()
-    MF.Visible = true
-    MF.Size    = UDim2.new(0, FW, 0, 0)
-    MF.BackgroundTransparency = 1
-    outerStroke.Transparency  = 1
-    showHandles()
-    TweenService:Create(MF, TweenInfo.new(0.32, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Size = UDim2.new(0, FW, 0, FH),
-        BackgroundTransparency = 0,
-    }):Play()
-    TweenService:Create(outerStroke, TweenInfo.new(0.28), {Transparency = 0}):Play()
-end
-
-local function animOut(callback)
-    KBP.Visible = false
-    hideHandles()
-    TweenService:Create(MF, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-        Size = UDim2.new(0, FW, 0, 0),
-        BackgroundTransparency = 1,
-    }):Play()
-    TweenService:Create(outerStroke, TweenInfo.new(0.18), {Transparency = 1}):Play()
-    task.delay(0.25, function()
-        MF.Visible = false
-        MF.BackgroundTransparency = 0
-        MF.Size = UDim2.new(0, FW, 0, FH)
-        outerStroke.Transparency = 0
-        if callback then callback() end
-    end)
-end
-
-local function animMinimize()
-    KBP.Visible = false
-    hideHandles()
-    TweenService:Create(MF, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-        Size = UDim2.new(0, FW, 0, BAR_H + 8),
-    }):Play()
-    task.delay(0.22, function()
-        MF.Visible = false
-        MF.Size    = UDim2.new(0, FW, 0, FH)
-        MB.Position = UDim2.new(
-            MF.Position.X.Scale,
-            MF.Position.X.Offset - 120,
-            MF.Position.Y.Scale,
-            MF.Position.Y.Offset
-        )
-        MB.Visible = true
-        uiState    = "mini"
-    end)
-end
-
-local function showFull()
-    MB.Visible = false
-    animIn()
-    uiState = "full"
-end
-
-local function hideAll()
-    if uiState == "mini" then
-        MB.Visible = false
-    end
-    animOut(function()
-        MB.Visible = false
-    end)
-    uiState = "hidden"
-    notify("UI Hidden", "Press " .. kn(KB.toggleUI) .. " to show again.", 3)
-end
-
-MinBtn.MouseButton1Click:Connect(function()
-    if uiState == "full" then animMinimize() end
-end)
-ExpandBtn.MouseButton1Click:Connect(function()
-    if uiState == "mini" then showFull() end
-end)
-
--- ======================== FEATURE LOGIC ========================
-
--- EDGE BOOST
-local boostOn    = false
-local boostConn  = nil
-local lastBoostT = 0
+-- ===================== COLORS =====================
+local BLUE         = Color3.fromRGB(90,  175, 255)
+local BLUE_BORDER  = Color3.fromRGB(0,   90,  210)
+local BLUE_BTN     = Color3.fromRGB(30,  110, 200)
+local BLUE_DARK    = Color3.fromRGB(10,  50,  140)
+local BLUE_LIGHT   = Color3.fromRGB(180, 220, 255)
+local BLUE_NEON    = Color3.fromRGB(0,   90,  210)
+
+local WHITE      = Color3.fromRGB(255, 255, 255)
+local OFF_WHITE  = Color3.fromRGB(240, 248, 255)
+local GRAY_TEXT  = Color3.fromRGB(20,  50, 100)
+local GREEN_ON   = Color3.fromRGB(40,  180,  80)
+local ORANGE     = Color3.fromRGB(220, 100,  20)
+
+-- ===================== STATE ======================
+local BOOST_POWER      = 80
+local edgePowerValue   = 80
+local jumpPowerValue   = 20
+local defaultJumpPower = 50
+local flySpeed         = 10
+
+local isEdgeEnabled = false
+local isJumpEnabled = false
+local isFlyEnabled  = false
+local isEspEnabled  = false
+
+local edgeConn       = nil
+local jumpPropConn   = nil
+local flyConn        = nil
+local espRainbowConn = nil
+
+local MIN_Y_VEL = 1.0
+
+local uiKeybind   = Enum.KeyCode.RightShift
+local edgeKeybind = Enum.KeyCode.U
+local jumpKeybind = Enum.KeyCode.J
+local flyKeybind  = Enum.KeyCode.F
+local espKeybind  = Enum.KeyCode.E
+
+local listenUI    = false
+local listenEdge  = false
+local listenJump  = false
+local listenFly   = false
+local listenEsp   = false
+
+local character, hrp, humanoid
+local flyBodyVel, flyBodyGyro
+local espHolder
+
+local spawnedMap = nil
 
 local function getChar()
-    local c = player.Character or player.CharacterAdded:Wait()
-    return c, c:WaitForChild("HumanoidRootPart"), c:WaitForChild("Humanoid")
+    character = player.Character or player.CharacterAdded:Wait()
+    hrp       = character:WaitForChild("HumanoidRootPart")
+    humanoid  = character:WaitForChild("Humanoid")
 end
-local _, hrp, hum = getChar()
+getChar()
 
-local bKW = {"bounce","boost","launch","jump","pad","ramp","platform"}
-local function isBouncePart(part)
-    local n = string.lower(part.Name)
-    for _, kw in pairs(bKW) do
-        if n:find(kw) then return true end
-    end
-    if part.Parent then
-        if part.Parent:IsA("Model") or part.Parent:IsA("Folder") then
-            local pn = string.lower(part.Parent.Name)
-            for _, kw in pairs(bKW) do
-                if pn:find(kw) then return true end
-            end
-        end
+-- ===================== NOTIFY =====================
+local function notify(title, text, dur)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {Title = title, Text = text, Duration = dur or 4})
+    end)
+end
+
+-- =================== EDGE LOGIC ===================
+local bounceKw = {"bounce", "boost", "launch", "jump", "pad", "ramp", "platform"}
+local function isBouncePart(p)
+    local n = p.Name:lower()
+    for _, k in pairs(bounceKw) do if n:find(k) then return true end end
+    if p.Parent and (p.Parent:IsA("Model") or p.Parent:IsA("Folder")) then
+        local pn = p.Parent.Name:lower()
+        for _, k in pairs(bounceKw) do if pn:find(k) then return true end end
     end
     return false
 end
-
-local function applyBoost()
-    if not boostOn or not hrp or not hum or hum.Health <= 0 then return end
-    local now = tick()
-    if now - lastBoostT < 0.15 then return end
-    if hrp.AssemblyLinearVelocity.Y < -1.0 then
-        local touching = hrp:GetTouchingParts()
-        if #touching == 0 then return end
-        for _, p in pairs(touching) do
-            if isBouncePart(p) then return end
+local function applyEdge()
+    if not isEdgeEnabled or not hrp or not humanoid or humanoid.Health <= 0 then return end
+    local vel = hrp.AssemblyLinearVelocity
+    if vel.Y < -MIN_Y_VEL then
+        local parts = hrp:GetTouchingParts()
+        if #parts > 0 then
+            for _, p in pairs(parts) do if isBouncePart(p) then return end end
+            hrp.AssemblyLinearVelocity = Vector3.new(vel.X, 0, vel.Z) + Vector3.new(0, BOOST_POWER, 0)
         end
-        local hv = Vector3.new(hrp.AssemblyLinearVelocity.X, 0, hrp.AssemblyLinearVelocity.Z)
-        hrp.AssemblyLinearVelocity = hv + Vector3.new(0, getBoost(), 0)
-        lastBoostT = now
     end
 end
 
-local function updBoostUI()
-    if boostOn then
-        BoostDot.BackgroundColor3 = C.green
-        BoostTxt.Text = "Femboi Form: ON  |  Dih: " .. getBoost() .. "cm"
-        BoostBtn.Text = "⚡  TOGGLE EDGE BOOST  —  ON"
-        BoostBtn.BackgroundColor3 = SN[1]
-    else
-        BoostDot.BackgroundColor3 = C.red
-        BoostTxt.Text = "Femboi Form: OFF"
-        BoostBtn.Text = "⚡  TOGGLE EDGE BOOST  —  OFF"
-        BoostBtn.BackgroundColor3 = SD[1]
-    end
-end
-
-trackConn(RunService.Heartbeat:Connect(function()
-    if boostOn then
-        BoostTxt.Text = "Femboi Form: ON  |  Dih: " .. getBoost() .. "cm"
-    end
-end))
-
-local function toggleBoost()
-    if boostOn then
-        boostOn = false
-        if boostConn then boostConn:Disconnect(); boostConn = nil end
-        notify("Edge Boost OFF", "Press " .. kn(KB.boost) .. " to re-enable.", 3)
-    else
-        local _, nh, nhu = getChar()
-        hrp = nh; hum = nhu
-        boostOn   = true
-        boostConn = trackConn(RunService.Stepped:Connect(applyBoost))
-        notify("Edge Boost ON ⚡", "Dih: " .. getBoost() .. "cm", 3)
-    end
-    updBoostUI()
-end
-BoostBtn.MouseButton1Click:Connect(toggleBoost)
-
--- JUMP BOOST
-local jumpOn      = false
-local jumpPowConn = nil
-
-local function getHum()
-    local c = player.Character
-    if not c then return nil end
-    return c:FindFirstChildOfClass("Humanoid")
-end
-
-local function restoreJump()
-    local h = getHum()
-    if h then
-        pcall(function()
-            h.UseJumpPower = true
-            h.JumpPower    = ORIGINAL_JUMP
-        end)
-    end
-end
-
-local function startJumpGuard()
-    if jumpPowConn then jumpPowConn:Disconnect(); jumpPowConn = nil end
-    local h = getHum()
-    if not h then return end
-    pcall(function()
-        h.UseJumpPower = true
-        h.JumpPower    = getJump()
+-- =================== FLY LOGIC ====================
+local function enableFly()
+    if not hrp or not humanoid then return end
+    humanoid.PlatformStand = true
+    flyBodyVel = Instance.new("BodyVelocity")
+    flyBodyVel.Velocity  = Vector3.new(0, 0, 0)
+    flyBodyVel.MaxForce  = Vector3.new(9e9, 9e9, 9e9)
+    flyBodyVel.Parent    = hrp
+    flyBodyGyro = Instance.new("BodyGyro")
+    flyBodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+    flyBodyGyro.P         = 9e4
+    flyBodyGyro.CFrame    = hrp.CFrame
+    flyBodyGyro.Parent    = hrp
+    flyConn = RunService.Heartbeat:Connect(function()
+        if not isFlyEnabled or not hrp or not flyBodyVel then return end
+        local cam = workspace.CurrentCamera
+        local dir = Vector3.new(0, 0, 0)
+        local spd = flySpeed * 12
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir = dir + cam.CFrame.LookVector   end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir = dir - cam.CFrame.LookVector   end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir = dir - cam.CFrame.RightVector  end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir = dir + cam.CFrame.RightVector  end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space)     then dir = dir + Vector3.new(0, 1, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then dir = dir - Vector3.new(0, 1, 0) end
+        flyBodyVel.Velocity = if dir.Magnitude > 0 then dir.Unit * spd else Vector3.new(0, 0, 0)
+        flyBodyGyro.CFrame  = cam.CFrame
     end)
-    jumpPowConn = trackConn(h:GetPropertyChangedSignal("JumpPower"):Connect(function()
-        if jumpOn and h.JumpPower ~= getJump() then
-            pcall(function() h.JumpPower = getJump() end)
+end
+
+local function disableFly()
+    if flyConn     then flyConn:Disconnect();    flyConn    = nil end
+    if flyBodyVel  then flyBodyVel:Destroy();    flyBodyVel  = nil end
+    if flyBodyGyro then flyBodyGyro:Destroy();   flyBodyGyro = nil end
+    if humanoid    then humanoid.PlatformStand = false end
+end
+
+-- =================== ESP LOGIC ====================
+local rainbowHue = 0
+local function createESP()
+    if espHolder then espHolder:Destroy() end
+    espHolder      = Instance.new("Folder")
+    espHolder.Name = "FemboyESP"
+    espHolder.Parent = game.CoreGui
+
+    local function setupChar(v)
+        if not v.Character then return end
+        local folder = espHolder:FindFirstChild(v.Name)
+        if not folder then return end
+        folder:ClearAllChildren()
+        local char = v.Character
+        local head = char:FindFirstChild("Head")
+        if not head then return end
+        local box = Instance.new("SelectionBox")
+        box.Name                = "ESPBox"
+        box.Adornee             = char
+        box.Color3              = BLUE_BORDER
+        box.LineThickness       = 0.07
+        box.SurfaceTransparency = 0.9
+        box.SurfaceColor3       = WHITE
+        box.Parent              = folder
+        local bill = Instance.new("BillboardGui")
+        bill.AlwaysOnTop = true
+        bill.Size        = UDim2.new(0, 200, 0, 55)
+        bill.StudsOffset = Vector3.new(0, 3.2, 0)
+        bill.Adornee     = head
+        bill.Parent      = folder
+        local nameLbl = Instance.new("TextLabel")
+        nameLbl.Size                   = UDim2.new(1, 0, 0.5, 0)
+        nameLbl.BackgroundTransparency = 1
+        nameLbl.Text                   = v.Name
+        nameLbl.TextColor3             = WHITE
+        nameLbl.TextStrokeTransparency = 0
+        nameLbl.TextStrokeColor3       = Color3.fromRGB(0, 0, 0)
+        nameLbl.Font                   = Enum.Font.GothamBold
+        nameLbl.TextSize               = 14
+        nameLbl.Parent                 = bill
+        local hpLbl = Instance.new("TextLabel")
+        hpLbl.Size                   = UDim2.new(1, 0, 0.5, 0)
+        hpLbl.Position               = UDim2.new(0, 0, 0.5, 0)
+        hpLbl.BackgroundTransparency = 1
+        hpLbl.TextColor3             = Color3.fromRGB(100, 255, 120)
+        hpLbl.TextStrokeTransparency = 0
+        hpLbl.TextStrokeColor3       = Color3.fromRGB(0, 0, 0)
+        hpLbl.Font                   = Enum.Font.GothamBold
+        hpLbl.TextSize               = 12
+        hpLbl.Parent                 = bill
+        local function updateHP()
+            local hum = char:FindFirstChild("Humanoid")
+            if hum then
+                local pct = math.floor((hum.Health / math.max(hum.MaxHealth, 1)) * 100)
+                hpLbl.Text = pct .. "% HP"
+            end
         end
-    end))
-end
-
-local function stopJumpGuard()
-    if jumpPowConn then jumpPowConn:Disconnect(); jumpPowConn = nil end
-    restoreJump()
-end
-
-trackConn(RunService.Heartbeat:Connect(function()
-    if not jumpOn then return end
-    local h = getHum()
-    if not h then return end
-    if math.abs(h.JumpPower - getJump()) > 0.5 then
-        pcall(function() h.JumpPower = getJump() end)
+        updateHP()
+        local hum = char:FindFirstChild("Humanoid")
+        if hum then hum.Changed:Connect(updateHP) end
     end
-    JumpTxt.Text = "Femboy Jump: ON  |  Power: " .. getJump()
-end))
 
-trackConn(player.CharacterAdded:Connect(function()
-    if jumpOn then task.wait(0.5); startJumpGuard() end
-end))
+    local function setupPlayer(v)
+        if v == player then return end
+        local folder = Instance.new("Folder")
+        folder.Name  = v.Name
+        folder.Parent = espHolder
+        setupChar(v)
+        v.CharacterAdded:Connect(function() task.wait(0.5); setupChar(v) end)
+    end
 
-local function updJumpUI()
-    if jumpOn then
-        JumpDot.BackgroundColor3 = C.green
-        JumpTxt.Text = "Femboy Jump: ON  |  Power: " .. getJump()
-        JumpBtn.Text = "🦘  TOGGLE JUMP BOOST  —  ON"
-        JumpBtn.BackgroundColor3 = SN[2]
+    for _, v in pairs(Players:GetPlayers()) do task.spawn(setupPlayer, v) end
+    Players.PlayerAdded:Connect(setupPlayer)
+    Players.PlayerRemoving:Connect(function(v)
+        if espHolder then
+            local f = espHolder:FindFirstChild(v.Name)
+            if f then f:Destroy() end
+        end
+    end)
+
+    espRainbowConn = RunService.Heartbeat:Connect(function(dt)
+        rainbowHue = (rainbowHue + dt * 0.5) % 1
+        local col  = Color3.fromHSV(rainbowHue, 1, 1)
+        if espHolder then
+            for _, folder in pairs(espHolder:GetChildren()) do
+                local box = folder:FindFirstChild("ESPBox")
+                if box then box.Color3 = col end
+            end
+        end
+    end)
+end
+
+local function removeESP()
+    if espRainbowConn then espRainbowConn:Disconnect(); espRainbowConn = nil end
+    if espHolder       then espHolder:Destroy();        espHolder       = nil end
+end
+
+-- =================== SKY LOGIC ====================
+local function applySky(assetId)
+    local sky = Lighting:FindFirstChildOfClass("Sky")
+    if not sky then
+        sky = Instance.new("Sky")
+        sky.Parent = Lighting
+    end
+    sky.SkyboxBk = assetId
+    sky.SkyboxDn = assetId
+    sky.SkyboxFt = assetId
+    sky.SkyboxLf = assetId
+    sky.SkyboxRt = assetId
+    sky.SkyboxUp = assetId
+end
+
+local function resetSky()
+    local sky = Lighting:FindFirstChildOfClass("Sky")
+    if sky then sky:Destroy() end
+end
+
+-- =================== UI HELPERS ===================
+local function corner(r, p)
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, r); c.Parent = p
+end
+local function stroke(col, thick, p)
+    local s = Instance.new("UIStroke"); s.Color = col; s.Thickness = thick; s.Parent = p
+end
+local function uiPad(a, p)
+    local u = Instance.new("UIPadding")
+    u.PaddingTop = UDim.new(0, a); u.PaddingBottom = UDim.new(0, a)
+    u.PaddingLeft = UDim.new(0, a); u.PaddingRight  = UDim.new(0, a)
+    u.Parent = p
+end
+local function listLayout(gap, p)
+    local l = Instance.new("UIListLayout")
+    l.Padding   = UDim.new(0, gap)
+    l.SortOrder = Enum.SortOrder.LayoutOrder
+    l.Parent    = p
+    return l
+end
+local function mkLabel(parent, text, h, col, align)
+    local l = Instance.new("TextLabel")
+    l.Size                   = UDim2.new(1, 0, 0, h or 22)
+    l.BackgroundTransparency = 1
+    l.Text                   = text
+    l.TextColor3             = col or GRAY_TEXT
+    l.Font                   = Enum.Font.GothamBold
+    l.TextSize               = 15
+    l.TextXAlignment         = align or Enum.TextXAlignment.Left
+    l.TextWrapped            = true
+    l.Parent                 = parent
+    return l
+end
+
+local function mkBtn(parent, text, bg, tc, h)
+    local b = Instance.new("TextButton")
+    b.Size                   = UDim2.new(1, 0, 0, h or 36)
+    b.BackgroundColor3       = bg or BLUE_BTN
+    b.BorderSizePixel        = 0
+    b.Text                   = text
+    b.TextColor3             = tc or WHITE
+    b.TextStrokeColor3       = BLUE_DARK
+    b.TextStrokeTransparency = 0.3
+    b.Font                   = Enum.Font.GothamBold
+    b.TextSize               = 15
+    b.AutoButtonColor        = true
+    b.Parent                 = parent
+    corner(8, b); stroke(BLUE_DARK, 2, b)
+    return b
+end
+
+local function mkSection(parent, titleText, order)
+    local wrap = Instance.new("Frame")
+    wrap.Size             = UDim2.new(1, 0, 0, 0)
+    wrap.AutomaticSize    = Enum.AutomaticSize.Y
+    wrap.BackgroundColor3 = BLUE
+    wrap.BorderSizePixel  = 0
+    wrap.LayoutOrder      = order or 0
+    wrap.Parent           = parent
+    corner(10, wrap); stroke(BLUE_BORDER, 3, wrap)
+
+    local inner = Instance.new("Frame")
+    inner.Size                   = UDim2.new(1, 0, 0, 0)
+    inner.AutomaticSize          = Enum.AutomaticSize.Y
+    inner.BackgroundTransparency = 1
+    inner.Parent                 = wrap
+    listLayout(8, inner); uiPad(10, inner)
+
+    local secTitleLbl = nil
+    if titleText then
+        local hdr = Instance.new("Frame")
+        hdr.Size             = UDim2.new(1, -20, 0, 34)
+        hdr.BackgroundColor3 = BLUE_BTN
+        hdr.BorderSizePixel  = 0
+        hdr.LayoutOrder      = 0
+        hdr.Parent           = inner
+        corner(7, hdr); stroke(BLUE_DARK, 2, hdr)
+        secTitleLbl = Instance.new("TextLabel")
+        secTitleLbl.Size                   = UDim2.new(1, -14, 1, 0)
+        secTitleLbl.Position               = UDim2.new(0, 10, 0, 0)
+        secTitleLbl.BackgroundTransparency = 1
+        secTitleLbl.Text                   = titleText
+        secTitleLbl.TextColor3             = WHITE
+        secTitleLbl.TextStrokeColor3       = BLUE_DARK
+        secTitleLbl.TextStrokeTransparency = 0.3
+        secTitleLbl.Font                   = Enum.Font.GothamBold
+        secTitleLbl.TextSize               = 15
+        secTitleLbl.TextXAlignment         = Enum.TextXAlignment.Left
+        secTitleLbl.Parent                 = hdr
+    end
+    return wrap, inner, secTitleLbl
+end
+
+local function mkSlider(parent, minV, maxV, curV)
+    local bg = Instance.new("Frame")
+    bg.Size             = UDim2.new(1, 0, 0, 18)
+    bg.BackgroundColor3 = Color3.fromRGB(230, 200, 245)
+    bg.BorderSizePixel  = 0
+    bg.Parent           = parent
+    corner(9, bg); stroke(BLUE_BORDER, 2, bg)
+    local fill = Instance.new("Frame")
+    fill.Size             = UDim2.new((curV - minV) / (maxV - minV), 0, 1, 0)
+    fill.BackgroundColor3 = BLUE_BTN
+    fill.BorderSizePixel  = 0
+    fill.Parent           = bg
+    corner(9, fill)
+    local knob = Instance.new("Frame")
+    knob.Size             = UDim2.new(0, 18, 0, 18)
+    knob.Position         = UDim2.new(fill.Size.X.Scale, -9, 0.5, -9)
+    knob.BackgroundColor3 = WHITE
+    knob.BorderSizePixel  = 0
+    knob.Parent           = bg
+    corner(9, knob); stroke(BLUE_DARK, 2, knob)
+    return bg, fill, knob
+end
+
+local function mkPresetBtn(parent, text)
+    local pb = Instance.new("TextButton")
+    pb.Size                   = UDim2.new(0, 72, 0, 30)
+    pb.BackgroundColor3       = BLUE_BTN
+    pb.BorderSizePixel        = 0
+    pb.Text                   = text
+    pb.TextColor3             = WHITE
+    pb.TextStrokeColor3       = BLUE_DARK
+    pb.TextStrokeTransparency = 0.3
+    pb.Font                   = Enum.Font.GothamBold
+    pb.TextSize               = 14
+    pb.AutoButtonColor        = true
+    pb.Parent                 = parent
+    corner(7, pb); stroke(BLUE_BORDER, 2, pb)
+    return pb
+end
+
+-- =================== SCREENGUI ====================
+local old = playerGui:FindFirstChild("FemboyHub")
+if old then old:Destroy() end
+
+local Gui = Instance.new("ScreenGui")
+Gui.Name           = "FemboyHub"
+Gui.ResetOnSpawn   = false
+Gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+Gui.DisplayOrder   = 9999
+Gui.IgnoreGuiInset = true
+Gui.Parent         = playerGui
+
+-- =================== WELCOME FRAME ================
+local WF = Instance.new("Frame")
+WF.Name             = "WelcomeFrame"
+WF.Size             = UDim2.new(0, 370, 0, 195)
+WF.Position         = UDim2.new(0.5, -185, 0.5, -97)
+WF.BackgroundColor3 = BLUE
+WF.BorderSizePixel  = 0
+WF.ZIndex           = 10
+WF.Parent           = Gui
+corner(14, WF); stroke(BLUE_BORDER, 4, WF)
+
+local WRow = Instance.new("Frame")
+WRow.Size                   = UDim2.new(1, -24, 0, 42)
+WRow.Position               = UDim2.new(0, 12, 0, 16)
+WRow.BackgroundTransparency = 1
+WRow.ZIndex                 = 11
+WRow.Parent                 = WF
+
+local WIco = Instance.new("TextLabel")
+WIco.Size                   = UDim2.new(0, 32, 1, 0)
+WIco.BackgroundTransparency = 1
+WIco.Text                   = "⚡"
+WIco.TextColor3             = WHITE
+WIco.TextStrokeColor3       = BLUE_DARK
+WIco.TextStrokeTransparency = 0.3
+WIco.Font                   = Enum.Font.GothamBold
+WIco.TextSize               = 28
+WIco.ZIndex                 = 11
+WIco.Parent                 = WRow
+
+local WTit = Instance.new("TextLabel")
+WTit.Size                   = UDim2.new(1, -40, 1, 0)
+WTit.Position               = UDim2.new(0, 40, 0, 0)
+WTit.BackgroundTransparency = 1
+WTit.Text                   = "Welcome!"
+WTit.TextColor3             = WHITE
+WTit.TextStrokeColor3       = BLUE_DARK
+WTit.TextStrokeTransparency = 0.3
+WTit.Font                   = Enum.Font.GothamBold
+WTit.TextSize               = 26
+WTit.TextXAlignment         = Enum.TextXAlignment.Left
+WTit.ZIndex                 = 11
+WTit.Parent                 = WRow
+
+local WMsg = Instance.new("TextLabel")
+WMsg.Size                   = UDim2.new(1, -24, 0, 46)
+WMsg.Position               = UDim2.new(0, 12, 0, 68)
+WMsg.BackgroundTransparency = 1
+WMsg.Text                   = "Welcome To Femboy Hub (Beta)"
+WMsg.TextColor3             = WHITE
+WMsg.TextStrokeColor3       = BLUE_DARK
+WMsg.TextStrokeTransparency = 0.4
+WMsg.Font                   = Enum.Font.GothamBold
+WMsg.TextSize               = 18
+WMsg.TextXAlignment         = Enum.TextXAlignment.Left
+WMsg.TextWrapped            = true
+WMsg.ZIndex                 = 11
+WMsg.Parent                 = WF
+
+local WDiv = Instance.new("Frame")
+WDiv.Size             = UDim2.new(1, -24, 0, 2)
+WDiv.Position         = UDim2.new(0, 12, 0, 122)
+WDiv.BackgroundColor3 = BLUE_LIGHT
+WDiv.BorderSizePixel  = 0
+WDiv.ZIndex           = 11
+WDiv.Parent           = WF
+
+local WOpenBtn = Instance.new("TextButton")
+WOpenBtn.Size                   = UDim2.new(0, 135, 0, 38)
+WOpenBtn.Position               = UDim2.new(1, -147, 1, -52)
+WOpenBtn.BackgroundColor3       = BLUE_BTN
+WOpenBtn.BorderSizePixel        = 0
+WOpenBtn.Text                   = "→   Open"
+WOpenBtn.TextColor3             = WHITE
+WOpenBtn.TextStrokeColor3       = BLUE_DARK
+WOpenBtn.TextStrokeTransparency = 0.3
+WOpenBtn.Font                   = Enum.Font.GothamBold
+WOpenBtn.TextSize               = 17
+WOpenBtn.AutoButtonColor        = true
+WOpenBtn.ZIndex                 = 12
+WOpenBtn.Parent                 = WF
+corner(10, WOpenBtn); stroke(BLUE_DARK, 2, WOpenBtn)
+
+-- =================== MAIN FRAME ===================
+local MF = Instance.new("Frame")
+MF.Name             = "MainFrame"
+MF.Size             = UDim2.new(0, 700, 0, 490)
+MF.Position         = UDim2.new(0.5, -350, 0.5, -245)
+MF.BackgroundColor3 = BLUE
+MF.BorderSizePixel  = 0
+MF.Visible          = false
+MF.ZIndex           = 5
+MF.Parent           = Gui
+corner(14, MF); stroke(BLUE_BORDER, 4, MF)
+
+local TBar = Instance.new("Frame")
+TBar.Size             = UDim2.new(1, 0, 0, 46)
+TBar.BackgroundColor3 = BLUE_BTN
+TBar.BorderSizePixel  = 0
+TBar.ZIndex           = 6
+TBar.Parent           = MF
+corner(12, TBar)
+
+local TFix = Instance.new("Frame")
+TFix.Size             = UDim2.new(1, 0, 0.5, 0)
+TFix.Position         = UDim2.new(0, 0, 0.5, 0)
+TFix.BackgroundColor3 = BLUE_BTN
+TFix.BorderSizePixel  = 0
+TFix.ZIndex           = 6
+TFix.Parent           = TBar
+
+local TInnerBorder = Instance.new("Frame")
+TInnerBorder.Size                   = UDim2.new(1, -8, 1, -6)
+TInnerBorder.Position               = UDim2.new(0, 4, 0, 3)
+TInnerBorder.BackgroundTransparency = 1
+TInnerBorder.BorderSizePixel        = 0
+TInnerBorder.ZIndex                 = 7
+TInnerBorder.Parent                 = TBar
+corner(8, TInnerBorder)
+stroke(BLUE_LIGHT, 1.5, TInnerBorder)
+
+local TIco = Instance.new("TextLabel")
+TIco.Size                   = UDim2.new(0, 32, 1, 0)
+TIco.Position               = UDim2.new(0, 10, 0, 0)
+TIco.BackgroundTransparency = 1
+TIco.Text                   = "⚡"
+TIco.TextColor3             = WHITE
+TIco.Font                   = Enum.Font.GothamBold
+TIco.TextSize               = 22
+TIco.ZIndex                 = 8
+TIco.Parent                 = TBar
+
+local TTit = Instance.new("TextLabel")
+TTit.Size                   = UDim2.new(0, 560, 0, 26)
+TTit.Position               = UDim2.new(0, 46, 0.5, -13)
+TTit.BackgroundTransparency = 1
+TTit.Text                   = "Femboy Hub (Beta)  ·  Evade Supported | v1.1 BETA  🟢 Active"
+TTit.TextColor3             = WHITE
+TTit.TextStrokeColor3       = BLUE_DARK
+TTit.TextStrokeTransparency = 0.3
+TTit.Font                   = Enum.Font.GothamBold
+TTit.TextSize               = 16
+TTit.TextXAlignment         = Enum.TextXAlignment.Left
+TTit.ZIndex                 = 8
+TTit.Parent                 = TBar
+
+local MinBtn = Instance.new("TextButton")
+MinBtn.Size             = UDim2.new(0, 30, 0, 30)
+MinBtn.Position         = UDim2.new(1, -76, 0.5, -15)
+MinBtn.BackgroundColor3 = BLUE_DARK
+MinBtn.BorderSizePixel  = 0
+MinBtn.Text             = "—"
+MinBtn.TextColor3       = WHITE
+MinBtn.Font             = Enum.Font.GothamBold
+MinBtn.TextSize         = 14
+MinBtn.AutoButtonColor  = true
+MinBtn.ZIndex           = 9
+MinBtn.Parent           = TBar
+corner(7, MinBtn); stroke(WHITE, 1, MinBtn)
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size             = UDim2.new(0, 30, 0, 30)
+CloseBtn.Position         = UDim2.new(1, -40, 0.5, -15)
+CloseBtn.BackgroundColor3 = BLUE_DARK
+CloseBtn.BorderSizePixel  = 0
+CloseBtn.Text             = "X"
+CloseBtn.TextColor3       = WHITE
+CloseBtn.Font             = Enum.Font.GothamBold
+CloseBtn.TextSize         = 14
+CloseBtn.AutoButtonColor  = true
+CloseBtn.ZIndex           = 9
+CloseBtn.Parent           = TBar
+corner(7, CloseBtn); stroke(WHITE, 1, CloseBtn)
+
+-- =================== MINIMIZED BAR ================
+local MinBar = Instance.new("Frame")
+MinBar.Name             = "MinimizedBar"
+MinBar.Size             = UDim2.new(0, 230, 0, 36)
+MinBar.Position         = UDim2.new(0.5, -115, 0, 6)
+MinBar.BackgroundColor3 = BLUE
+MinBar.BorderSizePixel  = 0
+MinBar.Visible          = false
+MinBar.ZIndex           = 10
+MinBar.Parent           = Gui
+corner(12, MinBar); stroke(BLUE_NEON, 3, MinBar)
+
+local MinBarIco = Instance.new("TextLabel")
+MinBarIco.Size                   = UDim2.new(0, 24, 1, 0)
+MinBarIco.Position               = UDim2.new(0, 8, 0, 0)
+MinBarIco.BackgroundTransparency = 1
+MinBarIco.Text                   = "⚡"
+MinBarIco.TextColor3             = WHITE
+MinBarIco.TextStrokeColor3       = BLUE_DARK
+MinBarIco.TextStrokeTransparency = 0.2
+MinBarIco.Font                   = Enum.Font.GothamBold
+MinBarIco.TextSize               = 15
+MinBarIco.ZIndex                 = 11
+MinBarIco.Parent                 = MinBar
+
+local MinBarTitle = Instance.new("TextLabel")
+MinBarTitle.Size                   = UDim2.new(0, 110, 1, 0)
+MinBarTitle.Position               = UDim2.new(0, 34, 0, 0)
+MinBarTitle.BackgroundTransparency = 1
+MinBarTitle.Text                   = "Femboy Hub"
+MinBarTitle.TextColor3             = WHITE
+MinBarTitle.TextStrokeColor3       = BLUE_DARK
+MinBarTitle.TextStrokeTransparency = 0.2
+MinBarTitle.Font                   = Enum.Font.GothamBold
+MinBarTitle.TextSize               = 13
+MinBarTitle.TextXAlignment         = Enum.TextXAlignment.Left
+MinBarTitle.ZIndex                 = 11
+MinBarTitle.Parent                 = MinBar
+
+local ExpandBtn = Instance.new("TextButton")
+ExpandBtn.Size             = UDim2.new(0, 28, 0, 26)
+ExpandBtn.Position         = UDim2.new(1, -62, 0.5, -13)
+ExpandBtn.BackgroundColor3 = BLUE_BTN
+ExpandBtn.BorderSizePixel  = 0
+ExpandBtn.Text             = "▲"
+ExpandBtn.TextColor3       = WHITE
+ExpandBtn.Font             = Enum.Font.GothamBold
+ExpandBtn.TextSize         = 11
+ExpandBtn.AutoButtonColor  = true
+ExpandBtn.ZIndex           = 12
+ExpandBtn.Parent           = MinBar
+corner(6, ExpandBtn); stroke(BLUE_NEON, 2, ExpandBtn)
+
+local MinBarClose = Instance.new("TextButton")
+MinBarClose.Size             = UDim2.new(0, 28, 0, 26)
+MinBarClose.Position         = UDim2.new(1, -30, 0.5, -13)
+MinBarClose.BackgroundColor3 = BLUE_BTN
+MinBarClose.BorderSizePixel  = 0
+MinBarClose.Text             = "X"
+MinBarClose.TextColor3       = WHITE
+MinBarClose.Font             = Enum.Font.GothamBold
+MinBarClose.TextSize         = 11
+MinBarClose.AutoButtonColor  = true
+MinBarClose.ZIndex           = 12
+MinBarClose.Parent           = MinBar
+corner(6, MinBarClose); stroke(BLUE_NEON, 2, MinBarClose)
+
+-- =================== CONTENT AREA =================
+local ContentArea = Instance.new("Frame")
+ContentArea.Size                   = UDim2.new(1, 0, 1, -50)
+ContentArea.Position               = UDim2.new(0, 0, 0, 50)
+ContentArea.BackgroundTransparency = 1
+ContentArea.ZIndex                 = 6
+ContentArea.Parent                 = MF
+
+local SideOuter = Instance.new("Frame")
+SideOuter.Size             = UDim2.new(0, 165, 1, -10)
+SideOuter.Position         = UDim2.new(0, 5, 0, 5)
+SideOuter.BackgroundColor3 = BLUE
+SideOuter.BorderSizePixel  = 0
+SideOuter.ZIndex           = 7
+SideOuter.Parent           = ContentArea
+corner(10, SideOuter); stroke(BLUE_BORDER, 5, SideOuter)
+
+local SideScroll = Instance.new("ScrollingFrame")
+SideScroll.Size                   = UDim2.new(1, -8, 1, -8)
+SideScroll.Position               = UDim2.new(0, 4, 0, 4)
+SideScroll.BackgroundTransparency = 1
+SideScroll.BorderSizePixel        = 0
+SideScroll.ScrollBarThickness     = 4
+SideScroll.ScrollBarImageColor3   = BLUE_BORDER
+SideScroll.AutomaticCanvasSize    = Enum.AutomaticSize.Y
+SideScroll.CanvasSize             = UDim2.new(0, 0, 0, 0)
+SideScroll.ZIndex                 = 8
+SideScroll.Parent                 = SideOuter
+listLayout(8, SideScroll); uiPad(6, SideScroll)
+
+local function mkSideBtn(text, order)
+    local b = Instance.new("TextButton")
+    b.Size                   = UDim2.new(1, 0, 0, 44)
+    b.BackgroundColor3       = BLUE_BTN
+    b.BorderSizePixel        = 0
+    b.Text                   = text
+    b.TextColor3             = WHITE
+    b.TextStrokeColor3       = BLUE_DARK
+    b.TextStrokeTransparency = 0.4
+    b.Font                   = Enum.Font.GothamBold
+    b.TextSize               = 14
+    b.LayoutOrder            = order
+    b.AutoButtonColor        = false
+    b.ZIndex                 = 9
+    b.Parent                 = SideScroll
+    corner(8, b); stroke(BLUE_DARK, 4, b)
+    return b
+end
+
+local BtnCredits = mkSideBtn("📋  Credits", 1)
+local BtnMain    = mkSideBtn("⚡  Main",    2)
+local BtnCustom  = mkSideBtn("🎨  Custom",  3)
+
+local RScroll = Instance.new("ScrollingFrame")
+RScroll.Size                  = UDim2.new(1, -182, 1, -10)
+RScroll.Position              = UDim2.new(0, 178, 0, 5)
+RScroll.BackgroundColor3      = OFF_WHITE
+RScroll.BorderSizePixel       = 0
+RScroll.ScrollBarThickness    = 6
+RScroll.ScrollBarImageColor3  = BLUE_BORDER
+RScroll.AutomaticCanvasSize   = Enum.AutomaticSize.Y
+RScroll.CanvasSize            = UDim2.new(0, 0, 0, 0)
+RScroll.ZIndex                = 7
+RScroll.Parent                = ContentArea
+corner(10, RScroll); stroke(BLUE_BORDER, 3, RScroll)
+listLayout(12, RScroll); uiPad(10, RScroll)
+
+-- =================== CREDITS PANEL ================
+local CPanel = Instance.new("Frame")
+CPanel.Size                   = UDim2.new(1, 0, 0, 0)
+CPanel.AutomaticSize          = Enum.AutomaticSize.Y
+CPanel.BackgroundTransparency = 1
+CPanel.Visible                = false
+CPanel.LayoutOrder            = 1
+CPanel.ZIndex                 = 8
+CPanel.Parent                 = RScroll
+listLayout(12, CPanel)
+
+local _, cIn = mkSection(CPanel, "📋  Credits", 1)
+mkLabel(cIn, "•  Created by  KhoaProSigmaAlphaMale", 28, GRAY_TEXT)
+mkLabel(cIn, "•  Idea from another Script",           24, GRAY_TEXT)
+mkLabel(cIn, "•  Swis loves Femboy",                  24, GRAY_TEXT)
+mkLabel(cIn, "•  Supported game: Evade",              24, GRAY_TEXT)
+
+local _, kbIn = mkSection(CPanel, "🔑  UI Toggle Keybind", 2)
+local kbStatus    = mkLabel(kbIn, "Current Keybind: " .. uiKeybind.Name, 24, GRAY_TEXT)
+local kbChangeBtn = mkBtn(kbIn, "🔑  Click to change keybind: " .. uiKeybind.Name, BLUE_BTN)
+
+-- =================== MAIN PANEL ===================
+local MPanel = Instance.new("Frame")
+MPanel.Size                   = UDim2.new(1, 0, 0, 0)
+MPanel.AutomaticSize          = Enum.AutomaticSize.Y
+MPanel.BackgroundTransparency = 1
+MPanel.Visible                = false
+MPanel.LayoutOrder            = 2
+MPanel.ZIndex                 = 8
+MPanel.Parent                 = RScroll
+listLayout(14, MPanel)
+
+-- ======= EDGE BOOST SECTION =======
+local _, eIn, eTitleLbl = mkSection(MPanel, "⚡  Edge Boost  (Power: 80)", 1)
+local eStatus = mkLabel(eIn, "🔴  Edge Boost: OFF", 26, BLUE_DARK)
+eStatus.LayoutOrder = 1
+
+local eKbBtn = mkBtn(eIn, "⌨️  Keybind: " .. edgeKeybind.Name, BLUE_BTN)
+eKbBtn.LayoutOrder = 2
+
+local ePwrLbl = mkLabel(eIn, "Boost Power: 80", 22, GRAY_TEXT)
+ePwrLbl.LayoutOrder = 3
+
+local eSliderWrap = Instance.new("Frame")
+eSliderWrap.Size                   = UDim2.new(1, 0, 0, 22)
+eSliderWrap.BackgroundTransparency = 1
+eSliderWrap.LayoutOrder            = 4
+eSliderWrap.Parent                 = eIn
+local eSBg, eSFill, eSKnob = mkSlider(eSliderWrap, 0, 400, 80)
+eSBg.Size = UDim2.new(1, 0, 0, 18)
+
+local ePresets = Instance.new("Frame")
+ePresets.Size                   = UDim2.new(1, 0, 0, 80)
+ePresets.BackgroundTransparency = 1
+ePresets.LayoutOrder            = 5
+ePresets.Parent                 = eIn
+local eg = Instance.new("UIGridLayout")
+eg.CellSize    = UDim2.new(0, 72, 0, 30)
+eg.CellPadding = UDim2.new(0, 6, 0, 6)
+eg.Parent      = ePresets
+
+local function updateEdge(val)
+    edgePowerValue  = math.clamp(math.floor(val), 0, 400)
+    BOOST_POWER     = edgePowerValue
+    local pct       = edgePowerValue / 400
+    eSFill.Size     = UDim2.new(pct, 0, 1, 0)
+    eSKnob.Position = UDim2.new(pct, -9, 0.5, -9)
+    ePwrLbl.Text    = "Boost Power: " .. edgePowerValue
+    if eTitleLbl then eTitleLbl.Text = "⚡  Edge Boost  (Power: " .. edgePowerValue .. ")" end
+end
+
+for _, v in pairs({80, 120, 160, 200, 240, 260, 280, 300, 400}) do
+    local pb = mkPresetBtn(ePresets, tostring(v))
+    pb.MouseButton1Click:Connect(function() updateEdge(v) end)
+end
+
+local eToggle = mkBtn(eIn, "⚡  TOGGLE EDGE BOOST  —  OFF", BLUE_DARK)
+eToggle.LayoutOrder = 6
+
+-- ======= JUMP BOOST SECTION =======
+local _, jIn, jTitleLbl = mkSection(MPanel, "🦵  Jump Boost  (Power: 20)", 2)
+local jStatus = mkLabel(jIn, "🔴  Jump Boost: OFF", 26, BLUE_DARK)
+jStatus.LayoutOrder = 1
+
+local jKbBtn = mkBtn(jIn, "⌨️  Keybind: " .. jumpKeybind.Name, BLUE_BTN)
+jKbBtn.LayoutOrder = 2
+
+local jPwrLbl = mkLabel(jIn, "Jump Power: 20", 22, GRAY_TEXT)
+jPwrLbl.LayoutOrder = 3
+
+local jSliderWrap = Instance.new("Frame")
+jSliderWrap.Size                   = UDim2.new(1, 0, 0, 22)
+jSliderWrap.BackgroundTransparency = 1
+jSliderWrap.LayoutOrder            = 4
+jSliderWrap.Parent                 = jIn
+local jSBg, jSFill, jSKnob = mkSlider(jSliderWrap, 0, 400, 20)
+jSBg.Size = UDim2.new(1, 0, 0, 18)
+
+local jPresets = Instance.new("Frame")
+jPresets.Size                   = UDim2.new(1, 0, 0, 80)
+jPresets.BackgroundTransparency = 1
+jPresets.LayoutOrder            = 5
+jPresets.Parent                 = jIn
+local jg = Instance.new("UIGridLayout")
+jg.CellSize    = UDim2.new(0, 72, 0, 30)
+jg.CellPadding = UDim2.new(0, 6, 0, 6)
+jg.Parent      = jPresets
+
+local function applyJumpPower()
+    if humanoid then pcall(function() humanoid.JumpPower = jumpPowerValue end) end
+end
+
+local function updateJump(val)
+    jumpPowerValue  = math.clamp(math.floor(val), 0, 400)
+    local pct       = jumpPowerValue / 400
+    jSFill.Size     = UDim2.new(pct, 0, 1, 0)
+    jSKnob.Position = UDim2.new(pct, -9, 0.5, -9)
+    jPwrLbl.Text    = "Jump Power: " .. jumpPowerValue
+    if jTitleLbl then jTitleLbl.Text = "🦵  Jump Boost  (Power: " .. jumpPowerValue .. ")" end
+    if isJumpEnabled then applyJumpPower() end
+end
+
+for _, v in pairs({20, 60, 100, 150, 200, 220, 250, 280, 300}) do
+    local pb = mkPresetBtn(jPresets, tostring(v))
+    pb.MouseButton1Click:Connect(function() updateJump(v) end)
+end
+
+local jResetBtn = mkBtn(jIn, "↩️  Reset to Default Jump (" .. defaultJumpPower .. ")", BLUE_BTN)
+jResetBtn.LayoutOrder = 6
+local jToggle = mkBtn(jIn, "🦵  TOGGLE JUMP BOOST  —  OFF", BLUE_DARK)
+jToggle.LayoutOrder = 7
+
+-- ======= FLY SECTION =======
+local _, fIn, fTitleLbl = mkSection(MPanel, "🕊️  Fly  (Speed: 10)", 3)
+local fStatus = mkLabel(fIn, "🔴  Fly: OFF", 26, BLUE_DARK)
+fStatus.LayoutOrder = 1
+
+local fKbBtn = mkBtn(fIn, "⌨️  Keybind: " .. flyKeybind.Name, BLUE_BTN)
+fKbBtn.LayoutOrder = 2
+
+local fSpeedLbl = mkLabel(fIn, "Speed: 10   |   WASD + Space (up) + LShift (down)", 22, GRAY_TEXT)
+fSpeedLbl.LayoutOrder = 3
+
+local fSliderWrap = Instance.new("Frame")
+fSliderWrap.Size                   = UDim2.new(1, 0, 0, 22)
+fSliderWrap.BackgroundTransparency = 1
+fSliderWrap.LayoutOrder            = 4
+fSliderWrap.Parent                 = fIn
+local fSBg, fSFill, fSKnob = mkSlider(fSliderWrap, 0, 20, 10)
+fSBg.Size = UDim2.new(1, 0, 0, 18)
+
+local function updateFlySpeed(val)
+    flySpeed        = math.clamp(math.floor(val * 10) / 10, 0, 20)
+    local pct       = flySpeed / 20
+    fSFill.Size     = UDim2.new(pct, 0, 1, 0)
+    fSKnob.Position = UDim2.new(pct, -9, 0.5, -9)
+    fSpeedLbl.Text  = "Speed: " .. flySpeed .. "   |   WASD + Space (up) + LShift (down)"
+    if fTitleLbl then fTitleLbl.Text = "🕊️  Fly  (Speed: " .. flySpeed .. ")" end
+end
+
+local fToggle = mkBtn(fIn, "🕊️  TOGGLE FLY  —  OFF", BLUE_DARK)
+fToggle.LayoutOrder = 5
+
+-- ======= ESP SECTION =======
+local _, espIn, espTitleLbl = mkSection(MPanel, "👁️  ESP Players", 4)
+local espStatusLbl = mkLabel(espIn, "🔴  ESP: OFF", 26, BLUE_DARK)
+espStatusLbl.LayoutOrder = 1
+
+local espKbBtn = mkBtn(espIn, "⌨️  Keybind: " .. espKeybind.Name, BLUE_BTN)
+espKbBtn.LayoutOrder = 2
+
+mkLabel(espIn, "Rainbow border  •  Name & HP%", 22, GRAY_TEXT).LayoutOrder = 3
+
+local espToggle = mkBtn(espIn, "👁️  TOGGLE ESP  —  OFF", BLUE_DARK)
+espToggle.LayoutOrder = 4
+
+-- =================== CUSTOM PANEL =================
+local CustomPanel = Instance.new("Frame")
+CustomPanel.Size                   = UDim2.new(1, 0, 0, 0)
+CustomPanel.AutomaticSize          = Enum.AutomaticSize.Y
+CustomPanel.BackgroundTransparency = 1
+CustomPanel.Visible                = false
+CustomPanel.LayoutOrder            = 3
+CustomPanel.ZIndex                 = 8
+CustomPanel.Parent                 = RScroll
+listLayout(12, CustomPanel)
+
+-- ======= SKY CHANGE =======
+local _, skyIn, _ = mkSection(CustomPanel, "🌌  Sky Change", 1)
+
+-- FIX 1: Dùng AutomaticSize thay vì height cố định để xóa khoảng trống
+local skyGrid = Instance.new("Frame")
+skyGrid.Size                   = UDim2.new(1, 0, 0, 0)
+skyGrid.AutomaticSize          = Enum.AutomaticSize.Y
+skyGrid.BackgroundTransparency = 1
+skyGrid.LayoutOrder            = 1
+skyGrid.Parent                 = skyIn
+
+local skyGridLayout = Instance.new("UIGridLayout")
+skyGridLayout.CellSize    = UDim2.new(0, 88, 0, 34)
+skyGridLayout.CellPadding = UDim2.new(0, 8, 0, 8)
+skyGridLayout.Parent      = skyGrid
+
+local skyPresets = {
+    {name = "Gray",    id = "rbxassetid://130547382131410"},
+    {name = "Night",   id = "rbxassetid://128839006185497"},
+    {name = "Anime1",  id = "rbxassetid://125641870562571"},
+    {name = "Anime2",  id = "rbxassetid://127770372529424"},
+    {name = "Anime3",  id = "rbxassetid://110570238374062"},
+    {name = "Anime4",  id = "rbxassetid://138349252564540"},
+    {name = "Femboy1", id = "rbxassetid://82666462942145"},
+    {name = "Femboy2", id = "rbxassetid://95142505890749"},
+    {name = "Femboy3", id = "rbxassetid://110326016107832"},
+    {name = "Femboy4", id = "rbxassetid://123826538827500"},
+}
+
+for _, preset in pairs(skyPresets) do
+    local pb = Instance.new("TextButton")
+    pb.Size                   = UDim2.new(0, 88, 0, 34)
+    pb.BackgroundColor3       = BLUE_BTN
+    pb.BorderSizePixel        = 0
+    pb.Text                   = preset.name
+    pb.TextColor3             = WHITE
+    pb.TextStrokeColor3       = BLUE_DARK
+    pb.TextStrokeTransparency = 0.3
+    pb.Font                   = Enum.Font.GothamBold
+    pb.TextSize               = 14
+    pb.AutoButtonColor        = true
+    pb.Parent                 = skyGrid
+    corner(8, pb); stroke(BLUE_BORDER, 2, pb)
+    local id = preset.id
+    local nm = preset.name
+    pb.MouseButton1Click:Connect(function()
+        applySky(id)
+        notify("Femboy Hub — Sky", "Sky changed to " .. nm, 3)
+    end)
+end
+
+local skyDiv = Instance.new("Frame")
+skyDiv.Size             = UDim2.new(1, 0, 0, 2)
+skyDiv.BackgroundColor3 = BLUE_LIGHT
+skyDiv.BorderSizePixel  = 0
+skyDiv.LayoutOrder      = 2
+skyDiv.Parent           = skyIn
+
+local skyInputLabel = mkLabel(skyIn, "Custom Sky AssetID:", 22, GRAY_TEXT)
+skyInputLabel.LayoutOrder = 3
+
+-- FIX 2 & 3: TextBox chữ trắng viền xanh dương, border xanh đậm dày hơn
+local skyTextBox = Instance.new("TextBox")
+skyTextBox.Size                   = UDim2.new(1, 0, 0, 36)
+skyTextBox.BackgroundColor3       = WHITE
+skyTextBox.BorderSizePixel        = 0
+skyTextBox.Text                   = ""
+skyTextBox.PlaceholderText        = "Type..."
+skyTextBox.TextColor3             = WHITE                          -- FIX: chữ trắng
+skyTextBox.PlaceholderColor3      = WHITE
+skyTextBox.TextStrokeColor3       = BLUE_BORDER                    -- FIX: viền chữ xanh dương
+skyTextBox.TextStrokeTransparency = 0                              -- FIX: viền chữ rõ hoàn toàn
+skyTextBox.Font                   = Enum.Font.GothamBold
+skyTextBox.TextSize               = 14
+skyTextBox.ClearTextOnFocus       = false
+skyTextBox.LayoutOrder            = 4
+skyTextBox.Parent                 = skyIn
+corner(8, skyTextBox)
+stroke(BLUE_DARK, 4, skyTextBox)                                   -- FIX: viền box xanh đậm dày
+
+local skyExampleLbl = mkLabel(skyIn, "Example: rbxassetid://130547382131410", 18, Color3.fromRGB(130, 60, 160))
+skyExampleLbl.LayoutOrder = 5
+skyExampleLbl.TextSize    = 12
+
+local skyApplyBtn = mkBtn(skyIn, "✔  Apply Sky", BLUE_BTN)
+skyApplyBtn.LayoutOrder = 6
+
+local skyResetBtn = mkBtn(skyIn, "🔄  Reset Sky to Default", BLUE_DARK)
+skyResetBtn.LayoutOrder = 7
+
+skyApplyBtn.MouseButton1Click:Connect(function()
+    local txt = skyTextBox.Text
+    if txt and txt ~= "" then
+        if not txt:lower():find("rbxassetid://") then
+            txt = "rbxassetid://" .. txt
+        end
+        applySky(txt)
+        notify("Femboy Hub — Sky", "Sky changed successfully!", 3)
     else
-        JumpDot.BackgroundColor3 = C.red
-        JumpTxt.Text = "Femboy Jump: OFF"
-        JumpBtn.Text = "🦘  TOGGLE JUMP BOOST  —  OFF"
-        JumpBtn.BackgroundColor3 = SD[2]
+        notify("Femboy Hub — Sky", "Please enter an Asset ID!", 3)
+    end
+end)
+
+skyResetBtn.MouseButton1Click:Connect(function()
+    resetSky()
+    notify("Femboy Hub — Sky", "Sky reset to game default!", 3)
+end)
+
+-- ======= IMPORT MAP =======
+local _, mapIn, _ = mkSection(CustomPanel, "🗺️  Import Map", 2)
+
+mkLabel(mapIn, "Load a map into the workspace via Asset ID.", 22, GRAY_TEXT).LayoutOrder = 1
+
+-- FIX 2 & 3: MapTextBox chữ trắng viền xanh dương, border xanh đậm dày hơn
+local mapTextBox = Instance.new("TextBox")
+mapTextBox.Size                   = UDim2.new(1, 0, 0, 36)
+mapTextBox.BackgroundColor3       = WHITE
+mapTextBox.BorderSizePixel        = 0
+mapTextBox.Text                   = ""
+mapTextBox.PlaceholderText        = "Enter Map Asset ID..."
+mapTextBox.TextColor3             = WHITE                          -- FIX: chữ trắng
+mapTextBox.PlaceholderColor3      = WHITE
+mapTextBox.TextStrokeColor3       = BLUE_BORDER                    -- FIX: viền chữ xanh dương
+mapTextBox.TextStrokeTransparency = 0                              -- FIX: viền chữ rõ hoàn toàn
+mapTextBox.Font                   = Enum.Font.GothamBold
+mapTextBox.TextSize               = 14
+mapTextBox.ClearTextOnFocus       = false
+mapTextBox.LayoutOrder            = 2
+mapTextBox.Parent                 = mapIn
+corner(8, mapTextBox)
+stroke(BLUE_DARK, 4, mapTextBox)                                   -- FIX: viền box xanh đậm dày
+
+local mapExLbl = mkLabel(mapIn, "Example: 12345678  (numbers only or full rbxassetid://)", 18, Color3.fromRGB(130, 60, 160))
+mapExLbl.LayoutOrder = 3
+mapExLbl.TextSize    = 12
+
+local mapSpawnBtn = mkBtn(mapIn, "📥  Import Map", BLUE_BTN)
+mapSpawnBtn.LayoutOrder = 4
+
+local mapRemoveBtn = mkBtn(mapIn, "🗑️  Remove Imported Map", BLUE_DARK)
+mapRemoveBtn.LayoutOrder = 5
+
+mapSpawnBtn.MouseButton1Click:Connect(function()
+    local raw = mapTextBox.Text
+    if not raw or raw == "" then
+        notify("Femboy Hub — Map", "Please enter a valid Asset ID!", 3)
+        return
+    end
+    local idStr = raw:gsub("rbxassetid://", ""):match("^%s*(.-)%s*$")
+    local numId = tonumber(idStr)
+    if not numId then
+        notify("Femboy Hub — Map", "Invalid Asset ID! Numbers only.", 4)
+        return
+    end
+    if spawnedMap and spawnedMap.Parent then
+        spawnedMap:Destroy()
+        spawnedMap = nil
+    end
+    local success, result = pcall(function()
+        return game:GetObjects("rbxassetid://" .. idStr)[1]
+    end)
+    if not success or not result then
+        notify("Femboy Hub — Map", "Failed to load map! Make sure the asset is public.", 5)
+        return
+    end
+    result.Parent = workspace
+    spawnedMap = result
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if root then
+        local spawnCF = root.CFrame * CFrame.new(0, 0, -20)
+        if result.PrimaryPart then
+            result:SetPrimaryPartCFrame(spawnCF)
+        else
+            local bp = result:FindFirstChildWhichIsA("BasePart")
+            if bp then bp.CFrame = spawnCF end
+        end
+    end
+    notify("Femboy Hub — Map", "Map imported successfully! (ID: " .. idStr .. ")", 4)
+end)
+
+mapRemoveBtn.MouseButton1Click:Connect(function()
+    if spawnedMap and spawnedMap.Parent then
+        spawnedMap:Destroy()
+        spawnedMap = nil
+        notify("Femboy Hub — Map", "Imported map removed!", 3)
+    else
+        notify("Femboy Hub — Map", "No imported map to remove!", 3)
+    end
+end)
+
+-- =================== PANEL SWITCH =================
+local function showPanel(p)
+    CPanel.Visible      = false
+    MPanel.Visible      = false
+    CustomPanel.Visible = false
+    p.Visible           = true
+end
+
+local function selectSide(active, ...)
+    local inactives = {...}
+    active.BackgroundColor3 = BLUE_DARK
+    active.TextColor3       = WHITE
+    for _, b in pairs(inactives) do
+        b.BackgroundColor3 = BLUE_BTN
+        b.TextColor3       = WHITE
+    end
+end
+
+BtnCredits.MouseButton1Click:Connect(function() showPanel(CPanel);      selectSide(BtnCredits, BtnMain, BtnCustom) end)
+BtnMain.MouseButton1Click:Connect(function()    showPanel(MPanel);       selectSide(BtnMain, BtnCredits, BtnCustom) end)
+BtnCustom.MouseButton1Click:Connect(function()  showPanel(CustomPanel);  selectSide(BtnCustom, BtnMain, BtnCredits) end)
+
+-- =================== TOGGLE FUNCTIONS =============
+local function toggleEdge()
+    if isEdgeEnabled then
+        isEdgeEnabled = false
+        if edgeConn then edgeConn:Disconnect(); edgeConn = nil end
+        eStatus.Text             = "🔴  Edge Boost: OFF"
+        eStatus.TextColor3       = BLUE_DARK
+        eToggle.Text             = "⚡  TOGGLE EDGE BOOST  —  OFF"
+        eToggle.BackgroundColor3 = BLUE_DARK
+        notify("Femboy Hub — Edge Boost", "Edge Boost disabled!", 3)
+    else
+        isEdgeEnabled = true
+        edgeConn = RunService.Stepped:Connect(applyEdge)
+        eStatus.Text             = "🟢  Edge Boost: ON"
+        eStatus.TextColor3       = GREEN_ON
+        eToggle.Text             = "⚡  TOGGLE EDGE BOOST  —  ON"
+        eToggle.BackgroundColor3 = GREEN_ON
+        notify("Femboy Hub — Edge Boost", "Edge Boost activated! Power: " .. BOOST_POWER, 4)
     end
 end
 
 local function toggleJump()
-    jumpOn = not jumpOn
-    if jumpOn then
-        startJumpGuard()
-        notify("Jump Boost ON 🦘", "Power: " .. getJump(), 3)
+    if isJumpEnabled then
+        isJumpEnabled = false
+        if jumpPropConn then jumpPropConn:Disconnect(); jumpPropConn = nil end
+        if humanoid then pcall(function() humanoid.JumpPower = defaultJumpPower end) end
+        jStatus.Text             = "🔴  Jump Boost: OFF"
+        jStatus.TextColor3       = BLUE_DARK
+        jToggle.Text             = "🦵  TOGGLE JUMP BOOST  —  OFF"
+        jToggle.BackgroundColor3 = BLUE_DARK
+        notify("Femboy Hub — Jump", "Jump Boost disabled!", 3)
     else
-        stopJumpGuard()
-        notify("Jump Boost OFF", "Restored to " .. ORIGINAL_JUMP .. ".", 3)
-    end
-    updJumpUI()
-end
-JumpBtn.MouseButton1Click:Connect(toggleJump)
-
--- ======================== INF JUMP (FIXED) =====================
--- FIX: Changed from JumpRequest (fires continuously when held) to
--- InputBegan (fires once per discrete key press). This means the player
--- must press Space each time to get a jump in air — can spam for height
--- but holding Space will NOT cause continuous flying like before.
-local infOn    = false
-local infConn  = nil
-local lastInfT = 0
-
-local function updInfUI()
-    if infOn then
-        InfDot.BackgroundColor3 = C.green
-        InfTxt.Text = "Femboi Infinity Jump: ENABLED 🌀"
-        InfBtn.Text = "🌀  TOGGLE INF JUMP  —  ON"
-        InfBtn.BackgroundColor3 = SN[4]
-    else
-        InfDot.BackgroundColor3 = C.red
-        InfTxt.Text = "Femboi Infinity Jump: OFF"
-        InfBtn.Text = "🌀  TOGGLE INF JUMP  —  OFF"
-        InfBtn.BackgroundColor3 = SD[4]
-    end
-end
-
-local function toggleInf()
-    infOn = not infOn
-    if infOn then
-        -- Use InputBegan instead of JumpRequest so it fires once per press,
-        -- not continuously while Space is held down
-        infConn = trackConn(UserInputService.InputBegan:Connect(function(inp, gp)
-            if gp then return end
-            if inp.KeyCode ~= Enum.KeyCode.Space then return end
-            if not infOn then return end
-            local now = tick()
-            if now - lastInfT < 0.12 then return end   -- small cooldown to prevent spam lag
-            lastInfT = now
-            local c = player.Character
-            if not c then return end
-            local h = c:FindFirstChildOfClass("Humanoid")
-            if not h then return end
-            -- Use jump boost power if active, otherwise use inf jump power slider
-            local jp = jumpOn and getJump() or getInfPow()
-            pcall(function()
-                h.UseJumpPower = true
-                h.JumpPower    = jp
-                h:ChangeState(Enum.HumanoidStateType.Jumping)
+        isJumpEnabled = true
+        applyJumpPower()
+        if humanoid then
+            jumpPropConn = humanoid:GetPropertyChangedSignal("JumpPower"):Connect(function()
+                if isJumpEnabled then applyJumpPower() end
             end)
-        end))
-        notify("Inf Jump ON 🌀", "Tap Space each time to jump in air!", 3)
-    else
-        if infConn then infConn:Disconnect(); infConn = nil end
-        restoreJump()
-        notify("Inf Jump OFF", "Restored to " .. ORIGINAL_JUMP .. ".", 3)
-    end
-    updInfUI()
-end
-InfBtn.MouseButton1Click:Connect(toggleInf)
-
--- AUTO JUMP
-local ajOn   = false
-local spHeld = false
-local ajHum  = nil
-
-local function setupAJChar(c) ajHum = c:WaitForChild("Humanoid") end
-trackConn(player.CharacterAdded:Connect(setupAJChar))
-if player.Character then setupAJChar(player.Character) end
-
-trackConn(UserInputService.InputBegan:Connect(function(inp, proc)
-    if proc then return end
-    if inp.KeyCode == Enum.KeyCode.Space then spHeld = true end
-end))
-trackConn(UserInputService.InputEnded:Connect(function(inp)
-    if inp.KeyCode == Enum.KeyCode.Space then spHeld = false end
-end))
-trackConn(RunService.RenderStepped:Connect(function()
-    if not ajOn or not spHeld or not ajHum then return end
-    local st = ajHum:GetState()
-    if st == Enum.HumanoidStateType.Running or st == Enum.HumanoidStateType.Landed then
-        pcall(function() ajHum:ChangeState(Enum.HumanoidStateType.Jumping) end)
-    end
-end))
-
-local function updAJUI()
-    if ajOn then
-        AJDot.BackgroundColor3 = C.green
-        AJTxt.Text = "Femboi Auto Jump: ENABLED ⬆ (Hold Space)"
-        AJBtn.Text = "⬆  TOGGLE AUTO JUMP  —  ON"
-        AJBtn.BackgroundColor3 = SN[5]
-    else
-        AJDot.BackgroundColor3 = C.red
-        AJTxt.Text = "Femboi Auto Jump: OFF"
-        AJBtn.Text = "⬆  TOGGLE AUTO JUMP  —  OFF"
-        AJBtn.BackgroundColor3 = SD[5]
-    end
-end
-
-local function toggleAJ()
-    ajOn = not ajOn
-    if ajOn then
-        notify("Auto Jump ON ⬆", "Hold Space to bhop!", 3)
-    else
-        notify("Auto Jump OFF", "Auto jump disabled.", 3)
-    end
-    updAJUI()
-end
-AJBtn.MouseButton1Click:Connect(toggleAJ)
-
--- FLY
-local flyOn    = false
-local flyConn2 = nil
-local flyBV    = nil
-local flyBG    = nil
-
-local function startFly()
-    local c = player.Character
-    if not c then return end
-    local fhrp = c:FindFirstChild("HumanoidRootPart")
-    local fhum = c:FindFirstChildOfClass("Humanoid")
-    if not fhrp or not fhum then return end
-    fhum.PlatformStand = true
-
-    flyBV            = Instance.new("BodyVelocity")
-    flyBV.MaxForce   = Vector3.new(1e6, 1e6, 1e6)
-    flyBV.Velocity   = Vector3.new(0, 0, 0)
-    flyBV.Parent     = fhrp
-
-    flyBG            = Instance.new("BodyGyro")
-    flyBG.MaxTorque  = Vector3.new(1e6, 1e6, 1e6)
-    flyBG.P          = 1e4
-    flyBG.D          = 100
-    flyBG.CFrame     = fhrp.CFrame
-    flyBG.Parent     = fhrp
-
-    flyConn2 = trackConn(RunService.RenderStepped:Connect(function()
-        if not flyOn then return end
-        local c2 = player.Character
-        if not c2 then return end
-        local fhrp2 = c2:FindFirstChild("HumanoidRootPart")
-        if not fhrp2 then return end
-        local cam   = workspace.CurrentCamera
-        local speed = getFlySpeed()
-        local dir   = Vector3.new(0, 0, 0)
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-            local lv = cam.CFrame.LookVector
-            dir = dir + Vector3.new(lv.X, 0, lv.Z).Unit
         end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-            local lv = cam.CFrame.LookVector
-            dir = dir - Vector3.new(lv.X, 0, lv.Z).Unit
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-            local rv = cam.CFrame.RightVector
-            dir = dir - Vector3.new(rv.X, 0, rv.Z).Unit
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-            local rv = cam.CFrame.RightVector
-            dir = dir + Vector3.new(rv.X, 0, rv.Z).Unit
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-            dir = dir + Vector3.new(0, 1, 0)
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-            dir = dir - Vector3.new(0, 1, 0)
-        end
-        local vel = Vector3.new(0, 0, 0)
-        if dir.Magnitude > 0 then
-            vel = dir.Unit * speed
-        end
-        if flyBV and flyBV.Parent then flyBV.Velocity = vel end
-        if flyBG and flyBG.Parent and dir.Magnitude > 0 then
-            local lv = cam.CFrame.LookVector
-            local lt = Vector3.new(lv.X, 0, lv.Z)
-            if lt.Magnitude > 0 then
-                flyBG.CFrame = CFrame.lookAt(fhrp2.Position, fhrp2.Position + lt)
-            end
-        end
-    end))
-end
-
-local function stopFly()
-    if flyConn2 then flyConn2:Disconnect(); flyConn2 = nil end
-    if flyBV then pcall(function() flyBV:Destroy() end); flyBV = nil end
-    if flyBG then pcall(function() flyBG:Destroy() end); flyBG = nil end
-    local c = player.Character
-    if c then
-        local fhum = c:FindFirstChildOfClass("Humanoid")
-        if fhum then fhum.PlatformStand = false end
-    end
-end
-
-local function updFlyUI()
-    if flyOn then
-        FlyDot.BackgroundColor3 = C.green
-        FlyTxt.Text = "Femboy Fly: ENABLED 🛸"
-        FlyBtn.Text = "🛸  TOGGLE FLY  (" .. kn(KB.fly) .. ")  —  ON"
-        FlyBtn.BackgroundColor3 = SN[6]
-    else
-        FlyDot.BackgroundColor3 = C.red
-        FlyTxt.Text = "Femboy Fly: OFF"
-        FlyBtn.Text = "🛸  TOGGLE FLY  (" .. kn(KB.fly) .. ")  —  OFF"
-        FlyBtn.BackgroundColor3 = SD[6]
+        jStatus.Text             = "🟢  Jump Boost: ON"
+        jStatus.TextColor3       = GREEN_ON
+        jToggle.Text             = "🦵  TOGGLE JUMP BOOST  —  ON"
+        jToggle.BackgroundColor3 = GREEN_ON
+        notify("Femboy Hub — Jump", "Jump Boost activated! Power: " .. jumpPowerValue, 4)
     end
 end
 
 local function toggleFly()
-    flyOn = not flyOn
-    if flyOn then
-        startFly()
-        notify("Femboy Fly ON 🛸", "WASD + Space + LShift", 3)
+    if isFlyEnabled then
+        isFlyEnabled = false
+        disableFly()
+        fStatus.Text             = "🔴  Fly: OFF"
+        fStatus.TextColor3       = BLUE_DARK
+        fToggle.Text             = "🕊️  TOGGLE FLY  —  OFF"
+        fToggle.BackgroundColor3 = BLUE_DARK
+        notify("Femboy Hub — Fly", "Fly disabled!", 3)
     else
-        stopFly()
-        notify("Femboy Fly OFF", "Grounded.", 3)
+        isFlyEnabled = true
+        enableFly()
+        fStatus.Text             = "🟢  Fly: ON"
+        fStatus.TextColor3       = GREEN_ON
+        fToggle.Text             = "🕊️  TOGGLE FLY  —  ON"
+        fToggle.BackgroundColor3 = GREEN_ON
+        notify("Femboy Hub — Fly", "Fly activated! WASD + Space / LShift to move.", 4)
     end
-    updFlyUI()
-end
-FlyBtn.MouseButton1Click:Connect(toggleFly)
-
-trackConn(player.CharacterAdded:Connect(function()
-    if flyOn then task.wait(0.5); startFly() end
-end))
-
--- WALL REMOVER
-local stored    = {}
-local processed = {}
-local wallBusy  = false
-local repKW     = {"stair","step","ramp","trimp","platform","invisibleplatform","floor","ground","pad","road","path","bridge"}
-
-local function isGameplay(name)
-    local n = string.lower(name)
-    for _, kw in pairs(repKW) do
-        if string.find(n, kw, 1, true) then return true end
-    end
-    return false
 end
 
-local function doWallClean()
-    if wallBusy then return end
-    wallBusy = true
-    local parts = {}
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if (obj:IsA("BasePart") or obj:IsA("MeshPart")) and not processed[obj] then
-            table.insert(parts, obj)
+local function toggleESP()
+    if isEspEnabled then
+        isEspEnabled = false
+        removeESP()
+        espStatusLbl.Text             = "🔴  ESP: OFF"
+        espStatusLbl.TextColor3       = BLUE_DARK
+        espToggle.Text                = "👁️  TOGGLE ESP  —  OFF"
+        espToggle.BackgroundColor3    = BLUE_DARK
+        notify("Femboy Hub — ESP", "ESP disabled!", 3)
+    else
+        isEspEnabled = true
+        createESP()
+        espStatusLbl.Text             = "🟢  ESP: ON"
+        espStatusLbl.TextColor3       = GREEN_ON
+        espToggle.Text                = "👁️  TOGGLE ESP  —  ON"
+        espToggle.BackgroundColor3    = GREEN_ON
+        notify("Femboy Hub — ESP", "ESP activated! Rainbow box enabled.", 4)
+    end
+end
+
+eToggle.MouseButton1Click:Connect(toggleEdge)
+jToggle.MouseButton1Click:Connect(toggleJump)
+fToggle.MouseButton1Click:Connect(toggleFly)
+espToggle.MouseButton1Click:Connect(toggleESP)
+
+jResetBtn.MouseButton1Click:Connect(function()
+    updateJump(defaultJumpPower)
+    if humanoid then pcall(function() humanoid.JumpPower = defaultJumpPower end) end
+    notify("Femboy Hub — Jump", "Reset to default jump power (" .. defaultJumpPower .. ")", 3)
+end)
+
+-- =================== SLIDERS ======================
+local eDrag, jDrag, fDrag = false, false, false
+eSBg.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then eDrag = true  end end)
+eSBg.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then eDrag = false end end)
+jSBg.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then jDrag = true  end end)
+jSBg.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then jDrag = false end end)
+fSBg.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then fDrag = true  end end)
+fSBg.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then fDrag = false end end)
+
+UserInputService.InputEnded:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        eDrag = false; jDrag = false; fDrag = false
+    end
+end)
+UserInputService.InputChanged:Connect(function(i)
+    if i.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+    if eDrag then
+        local r = math.clamp((i.Position.X - eSBg.AbsolutePosition.X) / eSBg.AbsoluteSize.X, 0, 1)
+        updateEdge(r * 400)
+    end
+    if jDrag then
+        local r = math.clamp((i.Position.X - jSBg.AbsolutePosition.X) / jSBg.AbsoluteSize.X, 0, 1)
+        updateJump(r * 400)
+    end
+    if fDrag then
+        local r = math.clamp((i.Position.X - fSBg.AbsolutePosition.X) / fSBg.AbsoluteSize.X, 0, 1)
+        updateFlySpeed(r * 20)
+    end
+end)
+
+-- =================== KEYBIND CHANGERS =============
+local function listenForKey(flagRef, btn, onDone)
+    if flagRef[1] then return end
+    flagRef[1] = true
+    btn.Text             = "⌨️  Press any key..."
+    btn.BackgroundColor3 = ORANGE
+    local c; c = UserInputService.InputBegan:Connect(function(inp, gp)
+        if gp then return end
+        if inp.UserInputType == Enum.UserInputType.Keyboard then
+            flagRef[1] = false
+            btn.BackgroundColor3 = BLUE_BTN
+            c:Disconnect()
+            onDone(inp.KeyCode)
         end
-    end
-    for i = 1, #parts, 50 do
-        for j = i, math.min(i + 49, #parts) do
-            local obj = parts[j]
-            if obj and obj.Parent then
-                if isGameplay(obj.Name) then
-                    if obj.CanCollide then
-                        local np = obj:Clone(); np.Parent = nil
-                        table.insert(stored, np)
-                        pcall(function() obj:Destroy() end)
-                    end
-                else
-                    if obj.CanCollide and obj.Transparency >= 0.8 and obj.Position.Y > 50 then
-                        pcall(function() obj:Destroy() end)
-                    end
-                end
-                processed[obj] = true
-            end
-        end
-        task.wait()
-    end
-    wallBusy = false
+    end)
 end
 
-local function restoreWalls()
-    local mp = workspace:FindFirstChild("Map") or workspace:FindFirstChild("Level") or workspace
-    for i = 1, #stored, 25 do
-        for j = i, math.min(i + 24, #stored) do
-            local p = stored[j]
-            if p then pcall(function() p.Parent = mp end) end
-        end
-        task.wait()
-    end
-    stored = {}; processed = {}
-end
+kbChangeBtn.MouseButton1Click:Connect(function()
+    listenForKey({listenUI}, kbChangeBtn, function(kc)
+        listenUI = false
+        uiKeybind = kc
+        kbChangeBtn.Text = "🔑  Click to change keybind: " .. uiKeybind.Name
+        kbStatus.Text    = "Current Keybind: " .. uiKeybind.Name
+        notify("Femboy Hub", "UI keybind changed to " .. uiKeybind.Name, 3)
+    end)
+    listenUI = true
+end)
 
-local function runWall()
-    WallDot.BackgroundColor3 = C.orange
-    WallTxt.Text = "Processing..."
-    doWallClean()
-    task.wait(0.2)
-    restoreWalls()
-    WallDot.BackgroundColor3 = C.green
-    WallTxt.Text = "Done — press " .. kn(KB.wallClean) .. " to re-run"
-    notify("Walls Removed", "Press " .. kn(KB.wallClean) .. " to fix issues", 4)
-end
-
--- FPS BOOSTER
-local fpsBusy = false
-ResBtn.MouseButton1Click:Connect(function()
-    if fpsBusy then return end
-    fpsBusy = true
-    task.spawn(function()
-        ResDot.BackgroundColor3 = C.orange
-        ResTxt.Text = "Loading FPS Booster..."
-        _G.Settings = {
-            Players = {["Ignore Me"] = true, ["Ignore Others"] = true},
-            Meshes  = {Destroy = false, LowDetail = true},
-            Images  = {Invisible = true, LowDetail = false, Destroy = false},
-            Other   = {
-                ["No Particles"]       = true,
-                ["No Camera Effects"]  = true,
-                ["No Explosions"]      = true,
-                ["No Clothes"]         = true,
-                ["Low Water Graphics"] = true,
-                ["No Shadows"]         = true,
-                ["Low Rendering"]      = true,
-                ["Low Quality Parts"]  = true,
-            },
-        }
-        local ok, err = pcall(function()
-            loadstring(game:HttpGet(
-                "https://raw.githubusercontent.com/CasperFlyModz/discord.gg-rips/main/FPSBooster.lua"
-            ))()
-        end)
-        if ok then
-            ResDot.BackgroundColor3 = C.green
-            ResTxt.Text = "FPS Booster active!"
-            notify("Boost Successful", "Khoa handsome", 5)
-        else
-            ResDot.BackgroundColor3 = C.orange
-            ResTxt.Text = "Error: " .. tostring(err):sub(1, 38)
-            notify("Boost Failed", "Check executor HttpGet support.", 4)
+eKbBtn.MouseButton1Click:Connect(function()
+    listenEdge = true
+    eKbBtn.Text             = "⌨️  Press any key..."
+    eKbBtn.BackgroundColor3 = ORANGE
+    local c; c = UserInputService.InputBegan:Connect(function(inp, gp)
+        if gp then return end
+        if inp.UserInputType == Enum.UserInputType.Keyboard then
+            edgeKeybind             = inp.KeyCode
+            eKbBtn.Text             = "⌨️  Keybind: " .. edgeKeybind.Name
+            eKbBtn.BackgroundColor3 = BLUE_BTN
+            listenEdge = false; c:Disconnect()
+            notify("Femboy Hub — Edge", "Edge keybind changed to " .. edgeKeybind.Name, 3)
         end
-        fpsBusy = false
     end)
 end)
 
--- ======================== FULL CLEANUP =========================
-local function fullCleanup()
-    boostOn = false
-    if boostConn then pcall(function() boostConn:Disconnect() end); boostConn = nil end
-    jumpOn = false
-    stopJumpGuard()
-    infOn = false
-    if infConn then pcall(function() infConn:Disconnect() end); infConn = nil end
-    ajOn = false; spHeld = false
-    flyOn = false
-    stopFly()
-    stopRecording()
-    restoreJump()
-    pcall(function() workspace.Gravity = ORIGINAL_GRAVITY end)
-    pcall(function()
-        local sky = Lighting:FindFirstChildOfClass("Sky")
-        if origSkyInst then
-            if not sky then sky = Instance.new("Sky", Lighting) end
-            for k, v in pairs(origSkyData) do sky[k] = v end
-        else
-            if sky then sky:Destroy() end
+jKbBtn.MouseButton1Click:Connect(function()
+    listenJump = true
+    jKbBtn.Text             = "⌨️  Press any key..."
+    jKbBtn.BackgroundColor3 = ORANGE
+    local c; c = UserInputService.InputBegan:Connect(function(inp, gp)
+        if gp then return end
+        if inp.UserInputType == Enum.UserInputType.Keyboard then
+            jumpKeybind             = inp.KeyCode
+            jKbBtn.Text             = "⌨️  Keybind: " .. jumpKeybind.Name
+            jKbBtn.BackgroundColor3 = BLUE_BTN
+            listenJump = false; c:Disconnect()
+            notify("Femboy Hub — Jump", "Jump keybind changed to " .. jumpKeybind.Name, 3)
         end
     end)
-    disconnectAll()
-    hideHandles()
+end)
+
+fKbBtn.MouseButton1Click:Connect(function()
+    listenFly = true
+    fKbBtn.Text             = "⌨️  Press any key..."
+    fKbBtn.BackgroundColor3 = ORANGE
+    local c; c = UserInputService.InputBegan:Connect(function(inp, gp)
+        if gp then return end
+        if inp.UserInputType == Enum.UserInputType.Keyboard then
+            flyKeybind              = inp.KeyCode
+            fKbBtn.Text             = "⌨️  Keybind: " .. flyKeybind.Name
+            fKbBtn.BackgroundColor3 = BLUE_BTN
+            listenFly = false; c:Disconnect()
+            notify("Femboy Hub — Fly", "Fly keybind changed to " .. flyKeybind.Name, 3)
+        end
+    end)
+end)
+
+espKbBtn.MouseButton1Click:Connect(function()
+    listenEsp = true
+    espKbBtn.Text             = "⌨️  Press any key..."
+    espKbBtn.BackgroundColor3 = ORANGE
+    local c; c = UserInputService.InputBegan:Connect(function(inp, gp)
+        if gp then return end
+        if inp.UserInputType == Enum.UserInputType.Keyboard then
+            espKeybind              = inp.KeyCode
+            espKbBtn.Text           = "⌨️  Keybind: " .. espKeybind.Name
+            espKbBtn.BackgroundColor3 = BLUE_BTN
+            listenEsp = false; c:Disconnect()
+            notify("Femboy Hub — ESP", "ESP keybind changed to " .. espKeybind.Name, 3)
+        end
+    end)
+end)
+
+-- =================== ANIMATION HELPERS ============
+local MF_W, MF_H = 700, 490
+local MF_OX, MF_OY = -350, -245
+
+local function tweenMF(props, time, style, dir)
+    return TweenService:Create(MF,
+        TweenInfo.new(time or 0.3, style or Enum.EasingStyle.Back, dir or Enum.EasingDirection.Out),
+        props)
 end
+
+local mainVisible = false
+local isMinimized = false
+
+local function minimizeUI()
+    if isMinimized then return end
+    isMinimized = true
+    local tw = tweenMF({
+        Size     = UDim2.new(0, MF_W, 0, 0),
+        Position = UDim2.new(0.5, MF_OX, 0.5, 0)
+    }, 0.25, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+    tw:Play()
+    tw.Completed:Connect(function()
+        MF.Visible  = false
+        MF.Size     = UDim2.new(0, MF_W, 0, MF_H)
+        MF.Position = UDim2.new(0.5, MF_OX, 0.5, MF_OY)
+        MinBar.Size     = UDim2.new(0, 0, 0, 36)
+        MinBar.Position = UDim2.new(0.5, 0, 0, 6)
+        MinBar.Visible  = true
+        TweenService:Create(MinBar,
+            TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+            {Size = UDim2.new(0, 230, 0, 36), Position = UDim2.new(0.5, -115, 0, 6)}
+        ):Play()
+    end)
+end
+
+local function expandUI()
+    if not isMinimized then return end
+    local tw = TweenService:Create(MinBar,
+        TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.In),
+        {Size = UDim2.new(0, 0, 0, 36), Position = UDim2.new(0.5, 0, 0, 6)})
+    tw:Play()
+    tw.Completed:Connect(function()
+        MinBar.Visible = false
+        isMinimized    = false
+        MF.Size        = UDim2.new(0, MF_W, 0, 0)
+        MF.Position    = UDim2.new(0.5, MF_OX, 0.5, 0)
+        MF.Visible     = true
+        tweenMF({
+            Size     = UDim2.new(0, MF_W, 0, MF_H),
+            Position = UDim2.new(0.5, MF_OX, 0.5, MF_OY)
+        }, 0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out):Play()
+    end)
+end
+
+local function showMainFrame()
+    mainVisible = true
+    MF.Size     = UDim2.new(0, MF_W, 0, 0)
+    MF.Position = UDim2.new(0.5, MF_OX, 0.5, 0)
+    MF.Visible  = true
+    tweenMF({
+        Size     = UDim2.new(0, MF_W, 0, MF_H),
+        Position = UDim2.new(0.5, MF_OX, 0.5, MF_OY)
+    }, 0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out):Play()
+end
+
+local function hideMainFrame()
+    local tw = tweenMF({
+        Size     = UDim2.new(0, MF_W, 0, 0),
+        Position = UDim2.new(0.5, MF_OX, 0.5, 0)
+    }, 0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
+    tw:Play()
+    tw.Completed:Connect(function()
+        MF.Visible  = false
+        mainVisible = false
+        MF.Size     = UDim2.new(0, MF_W, 0, MF_H)
+        MF.Position = UDim2.new(0.5, MF_OX, 0.5, MF_OY)
+    end)
+end
+
+MinBtn.MouseButton1Click:Connect(minimizeUI)
+ExpandBtn.MouseButton1Click:Connect(expandUI)
+
+-- =================== FULL RESET & CLOSE ===========
+local function fullResetAndClose()
+    -- 1. Disable Edge Boost
+    if isEdgeEnabled then
+        isEdgeEnabled = false
+        if edgeConn then edgeConn:Disconnect(); edgeConn = nil end
+        eStatus.Text             = "🔴  Edge Boost: OFF"
+        eStatus.TextColor3       = BLUE_DARK
+        eToggle.Text             = "⚡  TOGGLE EDGE BOOST  —  OFF"
+        eToggle.BackgroundColor3 = BLUE_DARK
+    end
+
+    -- 2. Disable Jump Boost & restore default jump power
+    if isJumpEnabled then
+        isJumpEnabled = false
+        if jumpPropConn then jumpPropConn:Disconnect(); jumpPropConn = nil end
+        if humanoid then pcall(function() humanoid.JumpPower = defaultJumpPower end) end
+        jStatus.Text             = "🔴  Jump Boost: OFF"
+        jStatus.TextColor3       = BLUE_DARK
+        jToggle.Text             = "🦵  TOGGLE JUMP BOOST  —  OFF"
+        jToggle.BackgroundColor3 = BLUE_DARK
+    end
+
+    -- 3. Disable Fly
+    if isFlyEnabled then
+        isFlyEnabled = false
+        disableFly()
+        fStatus.Text             = "🔴  Fly: OFF"
+        fStatus.TextColor3       = BLUE_DARK
+        fToggle.Text             = "🕊️  TOGGLE FLY  —  OFF"
+        fToggle.BackgroundColor3 = BLUE_DARK
+    end
+
+    -- 4. Disable ESP
+    if isEspEnabled then
+        isEspEnabled = false
+        removeESP()
+        espStatusLbl.Text             = "🔴  ESP: OFF"
+        espStatusLbl.TextColor3       = BLUE_DARK
+        espToggle.Text                = "👁️  TOGGLE ESP  —  OFF"
+        espToggle.BackgroundColor3    = BLUE_DARK
+    end
+
+    -- 5. Reset sky to default
+    resetSky()
+
+    -- 6. Reset sliders to default values
+    updateEdge(80)
+    updateJump(20)
+    updateFlySpeed(10)
+
+    -- 7. Hide all UI panels
+    MinBar.Visible = false
+    MF.Visible     = false
+    mainVisible    = false
+    isMinimized    = false
+
+    -- 8. Notify player
+    notify(
+        "Femboy Hub — Disconnected",
+        "Disconnected from Femboy Hub. All changes have been reverted to default.",
+        6
+    )
+end
+
+MinBarClose.MouseButton1Click:Connect(function()
+    local tw = TweenService:Create(MinBar,
+        TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.In),
+        {Size = UDim2.new(0, 0, 0, 36), Position = UDim2.new(0.5, 0, 0, 6)})
+    tw:Play()
+    tw.Completed:Connect(function()
+        fullResetAndClose()
+    end)
+end)
 
 CloseBtn.MouseButton1Click:Connect(function()
-    animOut(function()
-        fullCleanup()
-        notify("Hub Closed", "All effects removed. Game restored.", 4)
-        task.delay(0.2, function()
-            pcall(function() SG:Destroy() end)
+    if mainVisible then
+        local tw = tweenMF({
+            Size     = UDim2.new(0, MF_W, 0, 0),
+            Position = UDim2.new(0.5, MF_OX, 0.5, 0)
+        }, 0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
+        tw:Play()
+        tw.Completed:Connect(function()
+            MF.Size     = UDim2.new(0, MF_W, 0, MF_H)
+            MF.Position = UDim2.new(0.5, MF_OX, 0.5, MF_OY)
+            fullResetAndClose()
         end)
-    end)
-end)
-
--- ======================== KEYBIND HANDLER ======================
-trackConn(UserInputService.InputBegan:Connect(function(inp, gp)
-    if gp then return end
-    if recordingAction then return end
-    if inp.UserInputType ~= Enum.UserInputType.Keyboard then return end
-    local kc = inp.KeyCode
-    if kc == KB.toggleUI then
-        if uiState == "full" or uiState == "mini" then
-            hideAll()
-        else
-            showFull()
-        end
-    elseif kc == KB.boost then
-        toggleBoost()
-    elseif kc == KB.jump then
-        toggleJump()
-    elseif kc == KB.infJump then
-        toggleInf()
-    elseif kc == KB.wallClean then
-        task.spawn(runWall)
-    elseif kc == KB.fly then
-        toggleFly()
+    else
+        fullResetAndClose()
     end
-end))
-
--- ======================== STARTUP ==============================
-task.wait(1)
-playIntro()
-uiState = "full"
-
-task.delay(0.5, function()
-    notify("Welcome to Femboi Hub", "Created by KhoaProSigmaAlphaMale", 6)
 end)
 
-task.delay(4.2, function()
-    task.spawn(runWall)
+-- =================== GLOBAL KEYBINDS ==============
+UserInputService.InputBegan:Connect(function(inp, gp)
+    if gp or listenUI or listenEdge or listenJump or listenFly or listenEsp then return end
+    if inp.KeyCode == uiKeybind then
+        if isMinimized then
+            expandUI()
+        elseif mainVisible then
+            hideMainFrame()
+        else
+            showMainFrame()
+        end
+    end
+    if inp.KeyCode == edgeKeybind then toggleEdge() end
+    if inp.KeyCode == jumpKeybind  then toggleJump() end
+    if inp.KeyCode == flyKeybind   then toggleFly()  end
+    if inp.KeyCode == espKeybind   then toggleESP()  end
 end)
 
-updBoostUI()
-updJumpUI()
-updInfUI()
-updAJUI()
-updFlyUI()
+-- =================== OPEN BUTTON ==================
+WOpenBtn.MouseButton1Click:Connect(function()
+    WF:Destroy()
+    showMainFrame()
+    showPanel(MPanel)
+    selectSide(BtnMain, BtnCredits, BtnCustom)
+end)
+
+-- =================== DRAG MAIN FRAME ==============
+local dragging, dragStart, dragPos0 = false, nil, nil
+TBar.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true; dragStart = i.Position; dragPos0 = MF.Position
+    end
+end)
+TBar.InputEnded:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+end)
+UserInputService.InputChanged:Connect(function(i)
+    if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+        local d = i.Position - dragStart
+        MF.Position = UDim2.new(dragPos0.X.Scale, dragPos0.X.Offset + d.X,
+                                 dragPos0.Y.Scale, dragPos0.Y.Offset + d.Y)
+    end
+end)
+
+-- =================== CHARACTER EVENTS =============
+player.CharacterAdded:Connect(function(char)
+    character = char
+    hrp       = char:WaitForChild("HumanoidRootPart")
+    humanoid  = char:WaitForChild("Humanoid")
+    if isJumpEnabled then
+        applyJumpPower()
+        jumpPropConn = humanoid:GetPropertyChangedSignal("JumpPower"):Connect(function()
+            if isJumpEnabled then applyJumpPower() end
+        end)
+    end
+    if isFlyEnabled then
+        task.wait(0.5)
+        enableFly()
+    end
+end)
+player.CharacterRemoving:Connect(function()
+    if isFlyEnabled then disableFly() end
+end)
+
+-- =================== STARTUP ======================
+task.wait(1.5)
+notify("Femboy Hub (Beta)", "Loaded! Press " .. uiKeybind.Name .. " to toggle UI", 5)
