@@ -1,1566 +1,1714 @@
-local Players          = game:GetService("Players")
-local RunService       = game:GetService("RunService")
-local StarterGui       = game:GetService("StarterGui")
-local UserInputService = game:GetService("UserInputService")
-local TweenService     = game:GetService("TweenService")
-local Lighting         = game:GetService("Lighting")
-local InsertService    = game:GetService("InsertService")
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
-local player    = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
+local Window = Rayfield:CreateWindow({
+   Name = "Femboy Hub (Beta)",
+   LoadingTitle = "Loading...",
+   LoadingSubtitle = "Created By KhosProAlphaSigmaMale",
+   ConfigurationSaving = {Enabled = false},
+   KeySystem = false,
+})
 
--- ===================== COLORS =====================
-local BLUE         = Color3.fromRGB(90,  175, 255)
-local BLUE_BORDER  = Color3.fromRGB(0,   90,  210)
-local BLUE_BTN     = Color3.fromRGB(30,  110, 200)
-local BLUE_DARK    = Color3.fromRGB(10,  50,  140)
-local BLUE_LIGHT   = Color3.fromRGB(180, 220, 255)
-local BLUE_NEON    = Color3.fromRGB(0,   90,  210)
+-- ============================================================
+-- SERVICES
+-- ============================================================
+local Players           = game:GetService("Players")
+local RunService        = game:GetService("RunService")
+local UserInputService  = game:GetService("UserInputService")
+local InsertService     = game:GetService("InsertService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting          = game:GetService("Lighting")
 
-local WHITE      = Color3.fromRGB(255, 255, 255)
-local OFF_WHITE  = Color3.fromRGB(240, 248, 255)
-local GRAY_TEXT  = Color3.fromRGB(20,  50, 100)
-local GREEN_ON   = Color3.fromRGB(40,  180,  80)
-local ORANGE     = Color3.fromRGB(220, 100,  20)
-
--- ===================== STATE ======================
-local BOOST_POWER      = 80
-local edgePowerValue   = 80
-local jumpPowerValue   = 20
-local defaultJumpPower = 50
-local flySpeed         = 10
-
-local isEdgeEnabled = false
-local isJumpEnabled = false
-local isFlyEnabled  = false
-local isEspEnabled  = false
-
-local edgeConn       = nil
-local jumpPropConn   = nil
-local flyConn        = nil
-local espRainbowConn = nil
-
-local MIN_Y_VEL = 1.0
-
-local uiKeybind   = Enum.KeyCode.RightShift
-local edgeKeybind = Enum.KeyCode.U
-local jumpKeybind = Enum.KeyCode.J
-local flyKeybind  = Enum.KeyCode.F
-local espKeybind  = Enum.KeyCode.E
-
-local listenUI    = false
-local listenEdge  = false
-local listenJump  = false
-local listenFly   = false
-local listenEsp   = false
-
-local character, hrp, humanoid
-local flyBodyVel, flyBodyGyro
-local espHolder
-
-local spawnedMap = nil
-
-local function getChar()
-    character = player.Character or player.CharacterAdded:Wait()
-    hrp       = character:WaitForChild("HumanoidRootPart")
-    humanoid  = character:WaitForChild("Humanoid")
-end
-getChar()
-
--- ===================== NOTIFY =====================
-local function notify(title, text, dur)
-    pcall(function()
-        StarterGui:SetCore("SendNotification", {Title = title, Text = text, Duration = dur or 4})
-    end)
+-- ============================================================
+-- NOTIFY HELPER
+-- ============================================================
+local function Notify(title, content, duration)
+    Rayfield:Notify({
+        Title    = title,
+        Content  = content,
+        Duration = duration or 3,
+        Image    = 4483362458,
+    })
 end
 
--- =================== EDGE LOGIC ===================
-local bounceKw = {"bounce", "boost", "launch", "jump", "pad", "ramp", "platform"}
-local function isBouncePart(p)
-    local n = p.Name:lower()
-    for _, k in pairs(bounceKw) do if n:find(k) then return true end end
-    if p.Parent and (p.Parent:IsA("Model") or p.Parent:IsA("Folder")) then
-        local pn = p.Parent.Name:lower()
-        for _, k in pairs(bounceKw) do if pn:find(k) then return true end end
+-- ============================================================
+-- CONNECTIONS LIST
+-- ============================================================
+local AllConnections = {}
+
+-- ============================================================
+-- PLAYER & CHARACTER
+-- ============================================================
+local player = Players.LocalPlayer
+
+local function getCharacterAndHrp()
+    local character = player.Character or player.CharacterAdded:Wait()
+    local hrp       = character:WaitForChild("HumanoidRootPart")
+    local humanoid  = character:WaitForChild("Humanoid")
+    return character, hrp, humanoid
+end
+
+local character, hrp, humanoid = getCharacterAndHrp()
+
+-- ============================================================
+-- HELPER: sync number input → slider + callback
+-- ============================================================
+local function syncInput(rawValue, minVal, maxVal, sliderObj, callback)
+    local clean = tostring(rawValue):gsub("[^%-%d%.]+", "")
+    local v = tonumber(clean)
+    if not v then return end
+    v = math.clamp(math.floor(v + 0.5), minVal, maxVal)
+    if sliderObj and sliderObj.Set then sliderObj:Set(v) end
+    callback(v)
+end
+
+-- ============================================================
+-- KILL UI POPUP DIALOG
+-- ============================================================
+local function showKillUIDialog(onConfirm)
+    local sg = Instance.new("ScreenGui")
+    sg.Name           = "FemboyKillUIDialog"
+    sg.ResetOnSpawn   = false
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    sg.DisplayOrder   = 9999
+    pcall(function() sg.Parent = game:GetService("CoreGui") end)
+    if not sg.Parent or not sg.Parent:IsA("CoreGui") then
+        sg.Parent = player:WaitForChild("PlayerGui")
+    end
+
+    local backdrop = Instance.new("Frame")
+    backdrop.Size                   = UDim2.fromScale(1,1)
+    backdrop.BackgroundColor3       = Color3.fromRGB(0,0,0)
+    backdrop.BackgroundTransparency = 0.45
+    backdrop.BorderSizePixel        = 0
+    backdrop.ZIndex                 = 10
+    backdrop.Parent                 = sg
+
+    local dialog = Instance.new("Frame")
+    dialog.Size            = UDim2.fromOffset(290,168)
+    dialog.Position        = UDim2.fromScale(0.5,0.5)
+    dialog.AnchorPoint     = Vector2.new(0.5,0.5)
+    dialog.BackgroundColor3 = Color3.fromRGB(22,22,28)
+    dialog.BorderSizePixel = 0
+    dialog.ZIndex          = 11
+    dialog.Parent          = sg
+    Instance.new("UICorner", dialog).CornerRadius = UDim.new(0,14)
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1,0,0,38); title.Position = UDim2.new(0,0,0,8)
+    title.BackgroundTransparency = 1; title.Text = "Close Window"
+    title.TextColor3 = Color3.fromRGB(255,255,255); title.Font = Enum.Font.GothamBold
+    title.TextSize = 17; title.ZIndex = 12; title.Parent = dialog
+
+    local desc = Instance.new("TextLabel")
+    desc.Size = UDim2.new(1,-24,0,52); desc.Position = UDim2.new(0,12,0,46)
+    desc.BackgroundTransparency = 1
+    desc.Text = "Do you want to close this window?\nYou will not be able to open it again."
+    desc.TextColor3 = Color3.fromRGB(175,175,185); desc.Font = Enum.Font.Gotham
+    desc.TextSize = 13; desc.TextWrapped = true
+    desc.TextXAlignment = Enum.TextXAlignment.Center; desc.ZIndex = 12; desc.Parent = dialog
+
+    local cancelBtn = Instance.new("TextButton")
+    cancelBtn.Size = UDim2.new(0.45,0,0,38); cancelBtn.Position = UDim2.new(0.03,0,1,-48)
+    cancelBtn.BackgroundColor3 = Color3.fromRGB(50,52,62); cancelBtn.Text = "Cancel"
+    cancelBtn.TextColor3 = Color3.fromRGB(230,230,230); cancelBtn.Font = Enum.Font.GothamBold
+    cancelBtn.TextSize = 14; cancelBtn.BorderSizePixel = 0; cancelBtn.ZIndex = 12; cancelBtn.Parent = dialog
+    Instance.new("UICorner", cancelBtn).CornerRadius = UDim.new(0,9)
+
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0.45,0,0,38); closeBtn.Position = UDim2.new(0.52,0,1,-48)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(185,28,28); closeBtn.Text = "Close Window"
+    closeBtn.TextColor3 = Color3.fromRGB(255,255,255); closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 14; closeBtn.BorderSizePixel = 0; closeBtn.ZIndex = 12; closeBtn.Parent = dialog
+    Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0,9)
+
+    cancelBtn.MouseButton1Click:Connect(function() sg:Destroy() end)
+    closeBtn.MouseButton1Click:Connect(function() sg:Destroy(); onConfirm() end)
+end
+
+-- ============================================================
+-- EDGE BOOST
+-- ============================================================
+local BOOST_POWER = 80; local MIN_Y_VEL = 1.0
+local isEnabled = false; local Connection = nil; local BoostSliderObj = nil
+
+local function isBouncePart(part)
+    local kw = {"bounce","boost","launch","jump","pad","ramp","platform"}
+    local name = string.lower(part.Name)
+    for _, k in pairs(kw) do if name:find(k) then return true end end
+    if part.Parent and (part.Parent:IsA("Model") or part.Parent:IsA("Folder")) then
+        local pn = string.lower(part.Parent.Name)
+        for _, k in pairs(kw) do if pn:find(k) then return true end end
     end
     return false
 end
-local function applyEdge()
-    if not isEdgeEnabled or not hrp or not humanoid or humanoid.Health <= 0 then return end
-    local vel = hrp.AssemblyLinearVelocity
-    if vel.Y < -MIN_Y_VEL then
-        local parts = hrp:GetTouchingParts()
-        if #parts > 0 then
-            for _, p in pairs(parts) do if isBouncePart(p) then return end end
-            hrp.AssemblyLinearVelocity = Vector3.new(vel.X, 0, vel.Z) + Vector3.new(0, BOOST_POWER, 0)
+
+local function applyEdgeBoost()
+    if not isEnabled or not hrp or not humanoid or humanoid.Health <= 0 then return end
+    if hrp.AssemblyLinearVelocity.Y < -MIN_Y_VEL then
+        local tp = hrp:GetTouchingParts(); local bounce = false
+        for _, p in pairs(tp) do if isBouncePart(p) then bounce = true; break end end
+        if not bounce and #tp > 0 then
+            hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X,0,hrp.AssemblyLinearVelocity.Z) + Vector3.new(0,BOOST_POWER,0)
         end
     end
 end
 
--- =================== FLY LOGIC ====================
+local function enableEdgeBoost()
+    character, hrp, humanoid = getCharacterAndHrp(); isEnabled = true
+    if Connection then Connection:Disconnect() end
+    Connection = RunService.Stepped:Connect(applyEdgeBoost)
+    Notify("Edge Boost","✅ Edge Boost ON",3)
+end
+local function disableEdgeBoost()
+    isEnabled = false; if Connection then Connection:Disconnect(); Connection = nil end
+    Notify("Edge Boost","❌ Edge Boost OFF",3)
+end
+
+-- ============================================================
+-- FLY
+-- ============================================================
+local isFlyEnabled = false; local flySpeed = 50
+local flyBodyVel = nil; local flyBodyGyro = nil; local flyConn = nil; local FlySpeedSliderObj = nil
+
 local function enableFly()
     if not hrp or not humanoid then return end
-    humanoid.PlatformStand = true
-    flyBodyVel = Instance.new("BodyVelocity")
-    flyBodyVel.Velocity  = Vector3.new(0, 0, 0)
-    flyBodyVel.MaxForce  = Vector3.new(9e9, 9e9, 9e9)
-    flyBodyVel.Parent    = hrp
-    flyBodyGyro = Instance.new("BodyGyro")
-    flyBodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-    flyBodyGyro.P         = 9e4
-    flyBodyGyro.CFrame    = hrp.CFrame
-    flyBodyGyro.Parent    = hrp
+    isFlyEnabled = true; humanoid.PlatformStand = true
+    flyBodyVel = Instance.new("BodyVelocity"); flyBodyVel.Velocity = Vector3.new(0,0,0)
+    flyBodyVel.MaxForce = Vector3.new(9e9,9e9,9e9); flyBodyVel.Parent = hrp
+    flyBodyGyro = Instance.new("BodyGyro"); flyBodyGyro.MaxTorque = Vector3.new(9e9,9e9,9e9)
+    flyBodyGyro.P = 9e4; flyBodyGyro.CFrame = hrp.CFrame; flyBodyGyro.Parent = hrp
     flyConn = RunService.Heartbeat:Connect(function()
         if not isFlyEnabled or not hrp or not flyBodyVel then return end
-        local cam = workspace.CurrentCamera
-        local dir = Vector3.new(0, 0, 0)
-        local spd = flySpeed * 12
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir = dir + cam.CFrame.LookVector   end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir = dir - cam.CFrame.LookVector   end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir = dir - cam.CFrame.RightVector  end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir = dir + cam.CFrame.RightVector  end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space)     then dir = dir + Vector3.new(0, 1, 0) end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then dir = dir - Vector3.new(0, 1, 0) end
-        flyBodyVel.Velocity = if dir.Magnitude > 0 then dir.Unit * spd else Vector3.new(0, 0, 0)
+        local cam = workspace.CurrentCamera; local dir = Vector3.new(0,0,0); local spd = flySpeed*12
+        if UserInputService:IsKeyDown(Enum.KeyCode.W)         then dir = dir + cam.CFrame.LookVector  end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S)         then dir = dir - cam.CFrame.LookVector  end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A)         then dir = dir - cam.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D)         then dir = dir + cam.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space)     then dir = dir + Vector3.new(0,1,0)     end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then dir = dir - Vector3.new(0,1,0)     end
+        flyBodyVel.Velocity = if dir.Magnitude > 0 then dir.Unit*spd else Vector3.new(0,0,0)
         flyBodyGyro.CFrame  = cam.CFrame
     end)
+    Notify("Fly","✅ Fly ON",3)
 end
-
 local function disableFly()
-    if flyConn     then flyConn:Disconnect();    flyConn    = nil end
-    if flyBodyVel  then flyBodyVel:Destroy();    flyBodyVel  = nil end
-    if flyBodyGyro then flyBodyGyro:Destroy();   flyBodyGyro = nil end
-    if humanoid    then humanoid.PlatformStand = false end
+    isFlyEnabled = false
+    if flyConn then flyConn:Disconnect(); flyConn = nil end
+    if flyBodyVel then flyBodyVel:Destroy(); flyBodyVel = nil end
+    if flyBodyGyro then flyBodyGyro:Destroy(); flyBodyGyro = nil end
+    if humanoid then humanoid.PlatformStand = false end
+    if hrp then pcall(function() hrp.AssemblyLinearVelocity = Vector3.new(0,0,0) end) end
+    Notify("Fly","❌ Fly OFF",3)
 end
 
--- =================== ESP LOGIC ====================
+-- ============================================================
+-- ESP
+-- ============================================================
+local isEspEnabled = false; local espHolder = nil; local espRainbowConn = nil
+local WHITE = Color3.fromRGB(255,255,255); local BLUE_BORDER = Color3.fromRGB(0,120,255)
 local rainbowHue = 0
+local EspToggleObj = nil
+
 local function createESP()
     if espHolder then espHolder:Destroy() end
-    espHolder      = Instance.new("Folder")
-    espHolder.Name = "FemboyESP"
-    espHolder.Parent = game.CoreGui
-
+    espHolder = Instance.new("Folder"); espHolder.Name = "FemboyESP"; espHolder.Parent = game.CoreGui
     local function setupChar(v)
         if not v.Character then return end
-        local folder = espHolder:FindFirstChild(v.Name)
-        if not folder then return end
+        local folder = espHolder:FindFirstChild(v.Name); if not folder then return end
         folder:ClearAllChildren()
-        local char = v.Character
-        local head = char:FindFirstChild("Head")
-        if not head then return end
-        local box = Instance.new("SelectionBox")
-        box.Name                = "ESPBox"
-        box.Adornee             = char
-        box.Color3              = BLUE_BORDER
-        box.LineThickness       = 0.07
-        box.SurfaceTransparency = 0.9
-        box.SurfaceColor3       = WHITE
-        box.Parent              = folder
-        local bill = Instance.new("BillboardGui")
-        bill.AlwaysOnTop = true
-        bill.Size        = UDim2.new(0, 200, 0, 55)
-        bill.StudsOffset = Vector3.new(0, 3.2, 0)
-        bill.Adornee     = head
-        bill.Parent      = folder
-        local nameLbl = Instance.new("TextLabel")
-        nameLbl.Size                   = UDim2.new(1, 0, 0.5, 0)
-        nameLbl.BackgroundTransparency = 1
-        nameLbl.Text                   = v.Name
-        nameLbl.TextColor3             = WHITE
-        nameLbl.TextStrokeTransparency = 0
-        nameLbl.TextStrokeColor3       = Color3.fromRGB(0, 0, 0)
-        nameLbl.Font                   = Enum.Font.GothamBold
-        nameLbl.TextSize               = 14
-        nameLbl.Parent                 = bill
-        local hpLbl = Instance.new("TextLabel")
-        hpLbl.Size                   = UDim2.new(1, 0, 0.5, 0)
-        hpLbl.Position               = UDim2.new(0, 0, 0.5, 0)
-        hpLbl.BackgroundTransparency = 1
-        hpLbl.TextColor3             = Color3.fromRGB(100, 255, 120)
-        hpLbl.TextStrokeTransparency = 0
-        hpLbl.TextStrokeColor3       = Color3.fromRGB(0, 0, 0)
-        hpLbl.Font                   = Enum.Font.GothamBold
-        hpLbl.TextSize               = 12
-        hpLbl.Parent                 = bill
-        local function updateHP()
-            local hum = char:FindFirstChild("Humanoid")
-            if hum then
-                local pct = math.floor((hum.Health / math.max(hum.MaxHealth, 1)) * 100)
-                hpLbl.Text = pct .. "% HP"
-            end
+        local char = v.Character; local head = char:FindFirstChild("Head"); if not head then return end
+        local box = Instance.new("SelectionBox"); box.Name="ESPBox"; box.Adornee=char
+        box.Color3=BLUE_BORDER; box.LineThickness=0.07; box.SurfaceTransparency=0.9
+        box.SurfaceColor3=WHITE; box.Parent=folder
+        local bill=Instance.new("BillboardGui"); bill.AlwaysOnTop=true
+        bill.Size=UDim2.new(0,200,0,55); bill.StudsOffset=Vector3.new(0,3.2,0)
+        bill.Adornee=head; bill.Parent=folder
+        local nL=Instance.new("TextLabel"); nL.Size=UDim2.new(1,0,0.5,0)
+        nL.BackgroundTransparency=1; nL.Text=v.Name; nL.TextColor3=WHITE
+        nL.TextStrokeTransparency=0; nL.TextStrokeColor3=Color3.fromRGB(0,0,0)
+        nL.Font=Enum.Font.GothamBold; nL.TextSize=14; nL.Parent=bill
+        local hL=Instance.new("TextLabel"); hL.Size=UDim2.new(1,0,0.5,0)
+        hL.Position=UDim2.new(0,0,0.5,0); hL.BackgroundTransparency=1
+        hL.TextColor3=Color3.fromRGB(100,255,120); hL.TextStrokeTransparency=0
+        hL.TextStrokeColor3=Color3.fromRGB(0,0,0); hL.Font=Enum.Font.GothamBold
+        hL.TextSize=12; hL.Parent=bill
+        local function updHP()
+            local hum=char:FindFirstChild("Humanoid")
+            if hum then hL.Text=math.floor((hum.Health/math.max(hum.MaxHealth,1))*100).."% HP" end
         end
-        updateHP()
-        local hum = char:FindFirstChild("Humanoid")
-        if hum then hum.Changed:Connect(updateHP) end
+        updHP()
+        local hum=char:FindFirstChild("Humanoid"); if hum then hum.Changed:Connect(updHP) end
     end
-
     local function setupPlayer(v)
-        if v == player then return end
-        local folder = Instance.new("Folder")
-        folder.Name  = v.Name
-        folder.Parent = espHolder
-        setupChar(v)
-        v.CharacterAdded:Connect(function() task.wait(0.5); setupChar(v) end)
+        if v==player then return end
+        local folder=Instance.new("Folder"); folder.Name=v.Name; folder.Parent=espHolder
+        setupChar(v); v.CharacterAdded:Connect(function() task.wait(0.5); setupChar(v) end)
     end
-
-    for _, v in pairs(Players:GetPlayers()) do task.spawn(setupPlayer, v) end
+    for _,v in pairs(Players:GetPlayers()) do task.spawn(setupPlayer,v) end
     Players.PlayerAdded:Connect(setupPlayer)
     Players.PlayerRemoving:Connect(function(v)
+        if espHolder then local f=espHolder:FindFirstChild(v.Name); if f then f:Destroy() end end
+    end)
+    espRainbowConn=RunService.Heartbeat:Connect(function(dt)
+        rainbowHue=(rainbowHue+dt*0.5)%1
+        local col=Color3.fromHSV(rainbowHue,1,1)
         if espHolder then
-            local f = espHolder:FindFirstChild(v.Name)
-            if f then f:Destroy() end
+            for _,folder in pairs(espHolder:GetChildren()) do
+                local box=folder:FindFirstChild("ESPBox"); if box then box.Color3=col end
+            end
         end
     end)
+end
+local function removeESP()
+    if espRainbowConn then espRainbowConn:Disconnect(); espRainbowConn=nil end
+    if espHolder then espHolder:Destroy(); espHolder=nil end
+end
+local function enableESP()  isEspEnabled=true;  createESP(); Notify("ESP","✅ ESP ON",3) end
+local function disableESP() isEspEnabled=false; removeESP();  Notify("ESP","❌ ESP OFF",3) end
 
-    espRainbowConn = RunService.Heartbeat:Connect(function(dt)
-        rainbowHue = (rainbowHue + dt * 0.5) % 1
-        local col  = Color3.fromHSV(rainbowHue, 1, 1)
-        if espHolder then
-            for _, folder in pairs(espHolder:GetChildren()) do
-                local box = folder:FindFirstChild("ESPBox")
-                if box then box.Color3 = col end
+-- ============================================================
+-- JUMP BOOST
+-- ============================================================
+local isJumpBoostEnabled=false; local jumpBoostPower=50; local ORIGINAL_JUMP=20; local JumpSliderObj=nil
+local JumpBoostToggleObj=nil
+
+local function enableJumpBoost()
+    isJumpBoostEnabled=true
+    pcall(function() if humanoid then humanoid.UseJumpPower=true; humanoid.JumpPower=jumpBoostPower end end)
+    Notify("Jump Boost","✅ Jump Boost ON  ("..jumpBoostPower..")",3)
+end
+local function disableJumpBoost()
+    isJumpBoostEnabled=false
+    pcall(function() if humanoid then humanoid.UseJumpPower=true; humanoid.JumpPower=ORIGINAL_JUMP end end)
+    Notify("Jump Boost","❌ Jump Boost OFF — restored to "..ORIGINAL_JUMP,3)
+end
+
+-- ============================================================
+-- GRAVITY  (Fixed: RunService loop to maintain override)
+-- ============================================================
+local ORIGINAL_GRAVITY=workspace.Gravity; local isGravityEnabled=false
+local currentGravityValue=0; local GravityToggleObj=nil; local GravSliderObj=nil
+local gravityConn=nil  -- RunService connection for persistent override
+
+local function enableGravity()
+    isGravityEnabled=true
+    -- Use a Stepped loop so the server cannot reset gravity
+    if gravityConn then gravityConn:Disconnect() end
+    gravityConn=RunService.Stepped:Connect(function()
+        if isGravityEnabled then
+            pcall(function() workspace.Gravity=currentGravityValue end)
+        end
+    end)
+    Notify("Gravity","✅ Gravity Override ON — "..math.round(currentGravityValue),3)
+end
+local function disableGravity()
+    isGravityEnabled=false
+    if gravityConn then gravityConn:Disconnect(); gravityConn=nil end
+    pcall(function() workspace.Gravity=ORIGINAL_GRAVITY end)
+    currentGravityValue=0
+    if GravSliderObj and GravSliderObj.Set then GravSliderObj:Set(0) end
+    Notify("Gravity","❌ Gravity OFF — restored to default ("..math.round(ORIGINAL_GRAVITY)..")",3)
+end
+
+-- ============================================================
+-- INF JUMP
+-- ============================================================
+local isInfJumpEnabled=false; local infJumpPower=80; local infJumpConn=nil; local InfSliderObj=nil
+local InfJumpToggleObj=nil
+
+local function enableInfJump()
+    isInfJumpEnabled=true
+    if infJumpConn then infJumpConn:Disconnect() end
+    infJumpConn=UserInputService.InputBegan:Connect(function(input,gpe)
+        if gpe then return end
+        if input.KeyCode==Enum.KeyCode.Space and hrp and humanoid and humanoid.Health>0 then
+            hrp.AssemblyLinearVelocity=Vector3.new(hrp.AssemblyLinearVelocity.X,infJumpPower,hrp.AssemblyLinearVelocity.Z)
+        end
+    end)
+    Notify("Inf Jump","✅ Inf Jump ON",3)
+end
+local function disableInfJump()
+    isInfJumpEnabled=false
+    if infJumpConn then infJumpConn:Disconnect(); infJumpConn=nil end
+    if hrp then
+        pcall(function() hrp.AssemblyLinearVelocity=Vector3.new(hrp.AssemblyLinearVelocity.X,math.min(hrp.AssemblyLinearVelocity.Y,0),hrp.AssemblyLinearVelocity.Z) end)
+    end
+    Notify("Inf Jump","❌ Inf Jump OFF",3)
+end
+
+-- ============================================================
+-- AUTO JUMP  (25ms steps)
+-- ============================================================
+local isAutoJumpEnabled=false; local autoJumpConn=nil
+local autoJumpDelay=0.300; local lastAutoJumpTime=0; local AutoJumpToggleObj=nil
+
+local function buildAutoJumpLoop()
+    if autoJumpConn then autoJumpConn:Disconnect(); autoJumpConn=nil end
+    lastAutoJumpTime=0
+    autoJumpConn=RunService.Heartbeat:Connect(function()
+        if not isAutoJumpEnabled or not humanoid or not hrp then return end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+            if humanoid.FloorMaterial~=Enum.Material.Air then
+                local now=tick()
+                if now-lastAutoJumpTime>=autoJumpDelay then
+                    lastAutoJumpTime=now; humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
+            end
+        end
+    end)
+end
+local function enableAutoJump()
+    isAutoJumpEnabled=true; buildAutoJumpLoop()
+    Notify("Auto Jump","✅ Auto Jump ON  |  Delay: "..math.round(autoJumpDelay*1000).."ms",3)
+end
+local function disableAutoJump()
+    isAutoJumpEnabled=false
+    if autoJumpConn then autoJumpConn:Disconnect(); autoJumpConn=nil end
+    if humanoid then pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.Running) end) end
+    Notify("Auto Jump","❌ Auto Jump OFF",3)
+end
+
+-- ============================================================
+-- TAS
+-- ============================================================
+local tasRunning=false; local tasFrames={}; local tasTimeStart=tick()
+
+local function tasGetChar()
+    return player.Character or (player.CharacterAdded:Wait() and player.Character)
+end
+local function tasStartRecord()
+    tasFrames={}; tasRunning=true; tasTimeStart=tick()
+    Notify("TAS","🔴 Recording started...",3)
+    task.spawn(function()
+        while tasRunning do
+            RunService.Heartbeat:Wait()
+            local c=tasGetChar()
+            if c and c:FindFirstChild("HumanoidRootPart") and c:FindFirstChild("Humanoid") then
+                table.insert(tasFrames,{c.HumanoidRootPart.CFrame,c.Humanoid:GetState().Value,tick()-tasTimeStart})
+            end
+        end
+    end)
+end
+local function tasStopRecord()
+    tasRunning=false; Notify("TAS","⏹️ Recording stopped — "..#tasFrames.." frames saved.",4)
+end
+local function tasPlay()
+    if #tasFrames==0 then Notify("TAS","⚠️ No recording. Record first!",3); return end
+    local c=tasGetChar(); if not c then return end
+    local timePlay=tick(); local frameCount=#tasFrames; local oldFrame=1
+    Notify("TAS","▶️ Playing TAS — "..frameCount.." frames",3)
+    local tasLoop
+    tasLoop=RunService.Heartbeat:Connect(function()
+        local ct=tick()
+        if (ct-timePlay)>=tasFrames[frameCount][3] then
+            tasLoop:Disconnect(); Notify("TAS","✅ Playback complete!",3); return
+        end
+        local nf=math.min(oldFrame+60,frameCount)
+        for i=oldFrame,nf do
+            local f=tasFrames[i]
+            if f and f[3]<=ct-timePlay then
+                oldFrame=i
+                local ch=player.Character
+                if ch then
+                    if ch:FindFirstChild("HumanoidRootPart") then ch.HumanoidRootPart.CFrame=f[1] end
+                    if ch:FindFirstChild("Humanoid") then pcall(function() ch.Humanoid:ChangeState(f[2]) end) end
+                end
             end
         end
     end)
 end
 
-local function removeESP()
-    if espRainbowConn then espRainbowConn:Disconnect(); espRainbowConn = nil end
-    if espHolder       then espHolder:Destroy();        espHolder       = nil end
-end
-
--- =================== SKY LOGIC ====================
-local function applySky(assetId)
-    local sky = Lighting:FindFirstChildOfClass("Sky")
-    if not sky then
-        sky = Instance.new("Sky")
-        sky.Parent = Lighting
-    end
-    sky.SkyboxBk = assetId
-    sky.SkyboxDn = assetId
-    sky.SkyboxFt = assetId
-    sky.SkyboxLf = assetId
-    sky.SkyboxRt = assetId
-    sky.SkyboxUp = assetId
-end
-
-local function resetSky()
-    local sky = Lighting:FindFirstChildOfClass("Sky")
-    if sky then sky:Destroy() end
-end
-
--- =================== UI HELPERS ===================
-local function corner(r, p)
-    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, r); c.Parent = p
-end
-local function stroke(col, thick, p)
-    local s = Instance.new("UIStroke"); s.Color = col; s.Thickness = thick; s.Parent = p
-end
-local function uiPad(a, p)
-    local u = Instance.new("UIPadding")
-    u.PaddingTop = UDim.new(0, a); u.PaddingBottom = UDim.new(0, a)
-    u.PaddingLeft = UDim.new(0, a); u.PaddingRight  = UDim.new(0, a)
-    u.Parent = p
-end
-local function listLayout(gap, p)
-    local l = Instance.new("UIListLayout")
-    l.Padding   = UDim.new(0, gap)
-    l.SortOrder = Enum.SortOrder.LayoutOrder
-    l.Parent    = p
-    return l
-end
-local function mkLabel(parent, text, h, col, align)
-    local l = Instance.new("TextLabel")
-    l.Size                   = UDim2.new(1, 0, 0, h or 22)
-    l.BackgroundTransparency = 1
-    l.Text                   = text
-    l.TextColor3             = col or GRAY_TEXT
-    l.Font                   = Enum.Font.GothamBold
-    l.TextSize               = 15
-    l.TextXAlignment         = align or Enum.TextXAlignment.Left
-    l.TextWrapped            = true
-    l.Parent                 = parent
-    return l
-end
-
-local function mkBtn(parent, text, bg, tc, h)
-    local b = Instance.new("TextButton")
-    b.Size                   = UDim2.new(1, 0, 0, h or 36)
-    b.BackgroundColor3       = bg or BLUE_BTN
-    b.BorderSizePixel        = 0
-    b.Text                   = text
-    b.TextColor3             = tc or WHITE
-    b.TextStrokeColor3       = BLUE_DARK
-    b.TextStrokeTransparency = 0.3
-    b.Font                   = Enum.Font.GothamBold
-    b.TextSize               = 15
-    b.AutoButtonColor        = true
-    b.Parent                 = parent
-    corner(8, b); stroke(BLUE_DARK, 2, b)
-    return b
-end
-
-local function mkSection(parent, titleText, order)
-    local wrap = Instance.new("Frame")
-    wrap.Size             = UDim2.new(1, 0, 0, 0)
-    wrap.AutomaticSize    = Enum.AutomaticSize.Y
-    wrap.BackgroundColor3 = BLUE
-    wrap.BorderSizePixel  = 0
-    wrap.LayoutOrder      = order or 0
-    wrap.Parent           = parent
-    corner(10, wrap); stroke(BLUE_BORDER, 3, wrap)
-
-    local inner = Instance.new("Frame")
-    inner.Size                   = UDim2.new(1, 0, 0, 0)
-    inner.AutomaticSize          = Enum.AutomaticSize.Y
-    inner.BackgroundTransparency = 1
-    inner.Parent                 = wrap
-    listLayout(8, inner); uiPad(10, inner)
-
-    local secTitleLbl = nil
-    if titleText then
-        local hdr = Instance.new("Frame")
-        hdr.Size             = UDim2.new(1, -20, 0, 34)
-        hdr.BackgroundColor3 = BLUE_BTN
-        hdr.BorderSizePixel  = 0
-        hdr.LayoutOrder      = 0
-        hdr.Parent           = inner
-        corner(7, hdr); stroke(BLUE_DARK, 2, hdr)
-        secTitleLbl = Instance.new("TextLabel")
-        secTitleLbl.Size                   = UDim2.new(1, -14, 1, 0)
-        secTitleLbl.Position               = UDim2.new(0, 10, 0, 0)
-        secTitleLbl.BackgroundTransparency = 1
-        secTitleLbl.Text                   = titleText
-        secTitleLbl.TextColor3             = WHITE
-        secTitleLbl.TextStrokeColor3       = BLUE_DARK
-        secTitleLbl.TextStrokeTransparency = 0.3
-        secTitleLbl.Font                   = Enum.Font.GothamBold
-        secTitleLbl.TextSize               = 15
-        secTitleLbl.TextXAlignment         = Enum.TextXAlignment.Left
-        secTitleLbl.Parent                 = hdr
-    end
-    return wrap, inner, secTitleLbl
-end
-
-local function mkSlider(parent, minV, maxV, curV)
-    local bg = Instance.new("Frame")
-    bg.Size             = UDim2.new(1, 0, 0, 18)
-    bg.BackgroundColor3 = Color3.fromRGB(230, 200, 245)
-    bg.BorderSizePixel  = 0
-    bg.Parent           = parent
-    corner(9, bg); stroke(BLUE_BORDER, 2, bg)
-    local fill = Instance.new("Frame")
-    fill.Size             = UDim2.new((curV - minV) / (maxV - minV), 0, 1, 0)
-    fill.BackgroundColor3 = BLUE_BTN
-    fill.BorderSizePixel  = 0
-    fill.Parent           = bg
-    corner(9, fill)
-    local knob = Instance.new("Frame")
-    knob.Size             = UDim2.new(0, 18, 0, 18)
-    knob.Position         = UDim2.new(fill.Size.X.Scale, -9, 0.5, -9)
-    knob.BackgroundColor3 = WHITE
-    knob.BorderSizePixel  = 0
-    knob.Parent           = bg
-    corner(9, knob); stroke(BLUE_DARK, 2, knob)
-    return bg, fill, knob
-end
-
-local function mkPresetBtn(parent, text)
-    local pb = Instance.new("TextButton")
-    pb.Size                   = UDim2.new(0, 72, 0, 30)
-    pb.BackgroundColor3       = BLUE_BTN
-    pb.BorderSizePixel        = 0
-    pb.Text                   = text
-    pb.TextColor3             = WHITE
-    pb.TextStrokeColor3       = BLUE_DARK
-    pb.TextStrokeTransparency = 0.3
-    pb.Font                   = Enum.Font.GothamBold
-    pb.TextSize               = 14
-    pb.AutoButtonColor        = true
-    pb.Parent                 = parent
-    corner(7, pb); stroke(BLUE_BORDER, 2, pb)
-    return pb
-end
-
--- =================== SCREENGUI ====================
-local old = playerGui:FindFirstChild("FemboyHub")
-if old then old:Destroy() end
-
-local Gui = Instance.new("ScreenGui")
-Gui.Name           = "FemboyHub"
-Gui.ResetOnSpawn   = false
-Gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-Gui.DisplayOrder   = 9999
-Gui.IgnoreGuiInset = true
-Gui.Parent         = playerGui
-
--- =================== WELCOME FRAME ================
-local WF = Instance.new("Frame")
-WF.Name             = "WelcomeFrame"
-WF.Size             = UDim2.new(0, 370, 0, 195)
-WF.Position         = UDim2.new(0.5, -185, 0.5, -97)
-WF.BackgroundColor3 = BLUE
-WF.BorderSizePixel  = 0
-WF.ZIndex           = 10
-WF.Parent           = Gui
-corner(14, WF); stroke(BLUE_BORDER, 4, WF)
-
-local WRow = Instance.new("Frame")
-WRow.Size                   = UDim2.new(1, -24, 0, 42)
-WRow.Position               = UDim2.new(0, 12, 0, 16)
-WRow.BackgroundTransparency = 1
-WRow.ZIndex                 = 11
-WRow.Parent                 = WF
-
-local WIco = Instance.new("TextLabel")
-WIco.Size                   = UDim2.new(0, 32, 1, 0)
-WIco.BackgroundTransparency = 1
-WIco.Text                   = "⚡"
-WIco.TextColor3             = WHITE
-WIco.TextStrokeColor3       = BLUE_DARK
-WIco.TextStrokeTransparency = 0.3
-WIco.Font                   = Enum.Font.GothamBold
-WIco.TextSize               = 28
-WIco.ZIndex                 = 11
-WIco.Parent                 = WRow
-
-local WTit = Instance.new("TextLabel")
-WTit.Size                   = UDim2.new(1, -40, 1, 0)
-WTit.Position               = UDim2.new(0, 40, 0, 0)
-WTit.BackgroundTransparency = 1
-WTit.Text                   = "Welcome!"
-WTit.TextColor3             = WHITE
-WTit.TextStrokeColor3       = BLUE_DARK
-WTit.TextStrokeTransparency = 0.3
-WTit.Font                   = Enum.Font.GothamBold
-WTit.TextSize               = 26
-WTit.TextXAlignment         = Enum.TextXAlignment.Left
-WTit.ZIndex                 = 11
-WTit.Parent                 = WRow
-
-local WMsg = Instance.new("TextLabel")
-WMsg.Size                   = UDim2.new(1, -24, 0, 46)
-WMsg.Position               = UDim2.new(0, 12, 0, 68)
-WMsg.BackgroundTransparency = 1
-WMsg.Text                   = "Welcome To Femboy Hub (Beta)"
-WMsg.TextColor3             = WHITE
-WMsg.TextStrokeColor3       = BLUE_DARK
-WMsg.TextStrokeTransparency = 0.4
-WMsg.Font                   = Enum.Font.GothamBold
-WMsg.TextSize               = 18
-WMsg.TextXAlignment         = Enum.TextXAlignment.Left
-WMsg.TextWrapped            = true
-WMsg.ZIndex                 = 11
-WMsg.Parent                 = WF
-
-local WDiv = Instance.new("Frame")
-WDiv.Size             = UDim2.new(1, -24, 0, 2)
-WDiv.Position         = UDim2.new(0, 12, 0, 122)
-WDiv.BackgroundColor3 = BLUE_LIGHT
-WDiv.BorderSizePixel  = 0
-WDiv.ZIndex           = 11
-WDiv.Parent           = WF
-
-local WOpenBtn = Instance.new("TextButton")
-WOpenBtn.Size                   = UDim2.new(0, 135, 0, 38)
-WOpenBtn.Position               = UDim2.new(1, -147, 1, -52)
-WOpenBtn.BackgroundColor3       = BLUE_BTN
-WOpenBtn.BorderSizePixel        = 0
-WOpenBtn.Text                   = "→   Open"
-WOpenBtn.TextColor3             = WHITE
-WOpenBtn.TextStrokeColor3       = BLUE_DARK
-WOpenBtn.TextStrokeTransparency = 0.3
-WOpenBtn.Font                   = Enum.Font.GothamBold
-WOpenBtn.TextSize               = 17
-WOpenBtn.AutoButtonColor        = true
-WOpenBtn.ZIndex                 = 12
-WOpenBtn.Parent                 = WF
-corner(10, WOpenBtn); stroke(BLUE_DARK, 2, WOpenBtn)
-
--- =================== MAIN FRAME ===================
-local MF = Instance.new("Frame")
-MF.Name             = "MainFrame"
-MF.Size             = UDim2.new(0, 700, 0, 490)
-MF.Position         = UDim2.new(0.5, -350, 0.5, -245)
-MF.BackgroundColor3 = BLUE
-MF.BorderSizePixel  = 0
-MF.Visible          = false
-MF.ZIndex           = 5
-MF.Parent           = Gui
-corner(14, MF); stroke(BLUE_BORDER, 4, MF)
-
-local TBar = Instance.new("Frame")
-TBar.Size             = UDim2.new(1, 0, 0, 46)
-TBar.BackgroundColor3 = BLUE_BTN
-TBar.BorderSizePixel  = 0
-TBar.ZIndex           = 6
-TBar.Parent           = MF
-corner(12, TBar)
-
-local TFix = Instance.new("Frame")
-TFix.Size             = UDim2.new(1, 0, 0.5, 0)
-TFix.Position         = UDim2.new(0, 0, 0.5, 0)
-TFix.BackgroundColor3 = BLUE_BTN
-TFix.BorderSizePixel  = 0
-TFix.ZIndex           = 6
-TFix.Parent           = TBar
-
-local TInnerBorder = Instance.new("Frame")
-TInnerBorder.Size                   = UDim2.new(1, -8, 1, -6)
-TInnerBorder.Position               = UDim2.new(0, 4, 0, 3)
-TInnerBorder.BackgroundTransparency = 1
-TInnerBorder.BorderSizePixel        = 0
-TInnerBorder.ZIndex                 = 7
-TInnerBorder.Parent                 = TBar
-corner(8, TInnerBorder)
-stroke(BLUE_LIGHT, 1.5, TInnerBorder)
-
-local TIco = Instance.new("TextLabel")
-TIco.Size                   = UDim2.new(0, 32, 1, 0)
-TIco.Position               = UDim2.new(0, 10, 0, 0)
-TIco.BackgroundTransparency = 1
-TIco.Text                   = "⚡"
-TIco.TextColor3             = WHITE
-TIco.Font                   = Enum.Font.GothamBold
-TIco.TextSize               = 22
-TIco.ZIndex                 = 8
-TIco.Parent                 = TBar
-
-local TTit = Instance.new("TextLabel")
-TTit.Size                   = UDim2.new(0, 560, 0, 26)
-TTit.Position               = UDim2.new(0, 46, 0.5, -13)
-TTit.BackgroundTransparency = 1
-TTit.Text                   = "Femboy Hub (Beta)  ·  Evade Supported | v1.1 BETA  🟢 Active"
-TTit.TextColor3             = WHITE
-TTit.TextStrokeColor3       = BLUE_DARK
-TTit.TextStrokeTransparency = 0.3
-TTit.Font                   = Enum.Font.GothamBold
-TTit.TextSize               = 16
-TTit.TextXAlignment         = Enum.TextXAlignment.Left
-TTit.ZIndex                 = 8
-TTit.Parent                 = TBar
-
-local MinBtn = Instance.new("TextButton")
-MinBtn.Size             = UDim2.new(0, 30, 0, 30)
-MinBtn.Position         = UDim2.new(1, -76, 0.5, -15)
-MinBtn.BackgroundColor3 = BLUE_DARK
-MinBtn.BorderSizePixel  = 0
-MinBtn.Text             = "—"
-MinBtn.TextColor3       = WHITE
-MinBtn.Font             = Enum.Font.GothamBold
-MinBtn.TextSize         = 14
-MinBtn.AutoButtonColor  = true
-MinBtn.ZIndex           = 9
-MinBtn.Parent           = TBar
-corner(7, MinBtn); stroke(WHITE, 1, MinBtn)
-
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size             = UDim2.new(0, 30, 0, 30)
-CloseBtn.Position         = UDim2.new(1, -40, 0.5, -15)
-CloseBtn.BackgroundColor3 = BLUE_DARK
-CloseBtn.BorderSizePixel  = 0
-CloseBtn.Text             = "X"
-CloseBtn.TextColor3       = WHITE
-CloseBtn.Font             = Enum.Font.GothamBold
-CloseBtn.TextSize         = 14
-CloseBtn.AutoButtonColor  = true
-CloseBtn.ZIndex           = 9
-CloseBtn.Parent           = TBar
-corner(7, CloseBtn); stroke(WHITE, 1, CloseBtn)
-
--- =================== MINIMIZED BAR ================
-local MinBar = Instance.new("Frame")
-MinBar.Name             = "MinimizedBar"
-MinBar.Size             = UDim2.new(0, 230, 0, 36)
-MinBar.Position         = UDim2.new(0.5, -115, 0, 6)
-MinBar.BackgroundColor3 = BLUE
-MinBar.BorderSizePixel  = 0
-MinBar.Visible          = false
-MinBar.ZIndex           = 10
-MinBar.Parent           = Gui
-corner(12, MinBar); stroke(BLUE_NEON, 3, MinBar)
-
-local MinBarIco = Instance.new("TextLabel")
-MinBarIco.Size                   = UDim2.new(0, 24, 1, 0)
-MinBarIco.Position               = UDim2.new(0, 8, 0, 0)
-MinBarIco.BackgroundTransparency = 1
-MinBarIco.Text                   = "⚡"
-MinBarIco.TextColor3             = WHITE
-MinBarIco.TextStrokeColor3       = BLUE_DARK
-MinBarIco.TextStrokeTransparency = 0.2
-MinBarIco.Font                   = Enum.Font.GothamBold
-MinBarIco.TextSize               = 15
-MinBarIco.ZIndex                 = 11
-MinBarIco.Parent                 = MinBar
-
-local MinBarTitle = Instance.new("TextLabel")
-MinBarTitle.Size                   = UDim2.new(0, 110, 1, 0)
-MinBarTitle.Position               = UDim2.new(0, 34, 0, 0)
-MinBarTitle.BackgroundTransparency = 1
-MinBarTitle.Text                   = "Femboy Hub"
-MinBarTitle.TextColor3             = WHITE
-MinBarTitle.TextStrokeColor3       = BLUE_DARK
-MinBarTitle.TextStrokeTransparency = 0.2
-MinBarTitle.Font                   = Enum.Font.GothamBold
-MinBarTitle.TextSize               = 13
-MinBarTitle.TextXAlignment         = Enum.TextXAlignment.Left
-MinBarTitle.ZIndex                 = 11
-MinBarTitle.Parent                 = MinBar
-
-local ExpandBtn = Instance.new("TextButton")
-ExpandBtn.Size             = UDim2.new(0, 28, 0, 26)
-ExpandBtn.Position         = UDim2.new(1, -62, 0.5, -13)
-ExpandBtn.BackgroundColor3 = BLUE_BTN
-ExpandBtn.BorderSizePixel  = 0
-ExpandBtn.Text             = "▲"
-ExpandBtn.TextColor3       = WHITE
-ExpandBtn.Font             = Enum.Font.GothamBold
-ExpandBtn.TextSize         = 11
-ExpandBtn.AutoButtonColor  = true
-ExpandBtn.ZIndex           = 12
-ExpandBtn.Parent           = MinBar
-corner(6, ExpandBtn); stroke(BLUE_NEON, 2, ExpandBtn)
-
-local MinBarClose = Instance.new("TextButton")
-MinBarClose.Size             = UDim2.new(0, 28, 0, 26)
-MinBarClose.Position         = UDim2.new(1, -30, 0.5, -13)
-MinBarClose.BackgroundColor3 = BLUE_BTN
-MinBarClose.BorderSizePixel  = 0
-MinBarClose.Text             = "X"
-MinBarClose.TextColor3       = WHITE
-MinBarClose.Font             = Enum.Font.GothamBold
-MinBarClose.TextSize         = 11
-MinBarClose.AutoButtonColor  = true
-MinBarClose.ZIndex           = 12
-MinBarClose.Parent           = MinBar
-corner(6, MinBarClose); stroke(BLUE_NEON, 2, MinBarClose)
-
--- =================== CONTENT AREA =================
-local ContentArea = Instance.new("Frame")
-ContentArea.Size                   = UDim2.new(1, 0, 1, -50)
-ContentArea.Position               = UDim2.new(0, 0, 0, 50)
-ContentArea.BackgroundTransparency = 1
-ContentArea.ZIndex                 = 6
-ContentArea.Parent                 = MF
-
-local SideOuter = Instance.new("Frame")
-SideOuter.Size             = UDim2.new(0, 165, 1, -10)
-SideOuter.Position         = UDim2.new(0, 5, 0, 5)
-SideOuter.BackgroundColor3 = BLUE
-SideOuter.BorderSizePixel  = 0
-SideOuter.ZIndex           = 7
-SideOuter.Parent           = ContentArea
-corner(10, SideOuter); stroke(BLUE_BORDER, 5, SideOuter)
-
-local SideScroll = Instance.new("ScrollingFrame")
-SideScroll.Size                   = UDim2.new(1, -8, 1, -8)
-SideScroll.Position               = UDim2.new(0, 4, 0, 4)
-SideScroll.BackgroundTransparency = 1
-SideScroll.BorderSizePixel        = 0
-SideScroll.ScrollBarThickness     = 4
-SideScroll.ScrollBarImageColor3   = BLUE_BORDER
-SideScroll.AutomaticCanvasSize    = Enum.AutomaticSize.Y
-SideScroll.CanvasSize             = UDim2.new(0, 0, 0, 0)
-SideScroll.ZIndex                 = 8
-SideScroll.Parent                 = SideOuter
-listLayout(8, SideScroll); uiPad(6, SideScroll)
-
-local function mkSideBtn(text, order)
-    local b = Instance.new("TextButton")
-    b.Size                   = UDim2.new(1, 0, 0, 44)
-    b.BackgroundColor3       = BLUE_BTN
-    b.BorderSizePixel        = 0
-    b.Text                   = text
-    b.TextColor3             = WHITE
-    b.TextStrokeColor3       = BLUE_DARK
-    b.TextStrokeTransparency = 0.4
-    b.Font                   = Enum.Font.GothamBold
-    b.TextSize               = 14
-    b.LayoutOrder            = order
-    b.AutoButtonColor        = false
-    b.ZIndex                 = 9
-    b.Parent                 = SideScroll
-    corner(8, b); stroke(BLUE_DARK, 4, b)
-    return b
-end
-
-local BtnCredits = mkSideBtn("📋  Credits", 1)
-local BtnMain    = mkSideBtn("⚡  Main",    2)
-local BtnCustom  = mkSideBtn("🎨  Custom",  3)
-
-local RScroll = Instance.new("ScrollingFrame")
-RScroll.Size                  = UDim2.new(1, -182, 1, -10)
-RScroll.Position              = UDim2.new(0, 178, 0, 5)
-RScroll.BackgroundColor3      = OFF_WHITE
-RScroll.BorderSizePixel       = 0
-RScroll.ScrollBarThickness    = 6
-RScroll.ScrollBarImageColor3  = BLUE_BORDER
-RScroll.AutomaticCanvasSize   = Enum.AutomaticSize.Y
-RScroll.CanvasSize            = UDim2.new(0, 0, 0, 0)
-RScroll.ZIndex                = 7
-RScroll.Parent                = ContentArea
-corner(10, RScroll); stroke(BLUE_BORDER, 3, RScroll)
-listLayout(12, RScroll); uiPad(10, RScroll)
-
--- =================== CREDITS PANEL ================
-local CPanel = Instance.new("Frame")
-CPanel.Size                   = UDim2.new(1, 0, 0, 0)
-CPanel.AutomaticSize          = Enum.AutomaticSize.Y
-CPanel.BackgroundTransparency = 1
-CPanel.Visible                = false
-CPanel.LayoutOrder            = 1
-CPanel.ZIndex                 = 8
-CPanel.Parent                 = RScroll
-listLayout(12, CPanel)
-
-local _, cIn = mkSection(CPanel, "📋  Credits", 1)
-mkLabel(cIn, "•  Created by  KhoaProSigmaAlphaMale", 28, GRAY_TEXT)
-mkLabel(cIn, "•  Idea from another Script",           24, GRAY_TEXT)
-mkLabel(cIn, "•  Swis loves Femboy",                  24, GRAY_TEXT)
-mkLabel(cIn, "•  Supported game: Evade",              24, GRAY_TEXT)
-
-local _, kbIn = mkSection(CPanel, "🔑  UI Toggle Keybind", 2)
-local kbStatus    = mkLabel(kbIn, "Current Keybind: " .. uiKeybind.Name, 24, GRAY_TEXT)
-local kbChangeBtn = mkBtn(kbIn, "🔑  Click to change keybind: " .. uiKeybind.Name, BLUE_BTN)
-
--- =================== MAIN PANEL ===================
-local MPanel = Instance.new("Frame")
-MPanel.Size                   = UDim2.new(1, 0, 0, 0)
-MPanel.AutomaticSize          = Enum.AutomaticSize.Y
-MPanel.BackgroundTransparency = 1
-MPanel.Visible                = false
-MPanel.LayoutOrder            = 2
-MPanel.ZIndex                 = 8
-MPanel.Parent                 = RScroll
-listLayout(14, MPanel)
-
--- ======= EDGE BOOST SECTION =======
-local _, eIn, eTitleLbl = mkSection(MPanel, "⚡  Edge Boost  (Power: 80)", 1)
-local eStatus = mkLabel(eIn, "🔴  Edge Boost: OFF", 26, BLUE_DARK)
-eStatus.LayoutOrder = 1
-
-local eKbBtn = mkBtn(eIn, "⌨️  Keybind: " .. edgeKeybind.Name, BLUE_BTN)
-eKbBtn.LayoutOrder = 2
-
-local ePwrLbl = mkLabel(eIn, "Boost Power: 80", 22, GRAY_TEXT)
-ePwrLbl.LayoutOrder = 3
-
-local eSliderWrap = Instance.new("Frame")
-eSliderWrap.Size                   = UDim2.new(1, 0, 0, 22)
-eSliderWrap.BackgroundTransparency = 1
-eSliderWrap.LayoutOrder            = 4
-eSliderWrap.Parent                 = eIn
-local eSBg, eSFill, eSKnob = mkSlider(eSliderWrap, 0, 400, 80)
-eSBg.Size = UDim2.new(1, 0, 0, 18)
-
-local ePresets = Instance.new("Frame")
-ePresets.Size                   = UDim2.new(1, 0, 0, 80)
-ePresets.BackgroundTransparency = 1
-ePresets.LayoutOrder            = 5
-ePresets.Parent                 = eIn
-local eg = Instance.new("UIGridLayout")
-eg.CellSize    = UDim2.new(0, 72, 0, 30)
-eg.CellPadding = UDim2.new(0, 6, 0, 6)
-eg.Parent      = ePresets
-
-local function updateEdge(val)
-    edgePowerValue  = math.clamp(math.floor(val), 0, 400)
-    BOOST_POWER     = edgePowerValue
-    local pct       = edgePowerValue / 400
-    eSFill.Size     = UDim2.new(pct, 0, 1, 0)
-    eSKnob.Position = UDim2.new(pct, -9, 0.5, -9)
-    ePwrLbl.Text    = "Boost Power: " .. edgePowerValue
-    if eTitleLbl then eTitleLbl.Text = "⚡  Edge Boost  (Power: " .. edgePowerValue .. ")" end
-end
-
-for _, v in pairs({80, 120, 160, 200, 240, 260, 280, 300, 400}) do
-    local pb = mkPresetBtn(ePresets, tostring(v))
-    pb.MouseButton1Click:Connect(function() updateEdge(v) end)
-end
-
-local eToggle = mkBtn(eIn, "⚡  TOGGLE EDGE BOOST  —  OFF", BLUE_DARK)
-eToggle.LayoutOrder = 6
-
--- ======= JUMP BOOST SECTION =======
-local _, jIn, jTitleLbl = mkSection(MPanel, "🦵  Jump Boost  (Power: 20)", 2)
-local jStatus = mkLabel(jIn, "🔴  Jump Boost: OFF", 26, BLUE_DARK)
-jStatus.LayoutOrder = 1
-
-local jKbBtn = mkBtn(jIn, "⌨️  Keybind: " .. jumpKeybind.Name, BLUE_BTN)
-jKbBtn.LayoutOrder = 2
-
-local jPwrLbl = mkLabel(jIn, "Jump Power: 20", 22, GRAY_TEXT)
-jPwrLbl.LayoutOrder = 3
-
-local jSliderWrap = Instance.new("Frame")
-jSliderWrap.Size                   = UDim2.new(1, 0, 0, 22)
-jSliderWrap.BackgroundTransparency = 1
-jSliderWrap.LayoutOrder            = 4
-jSliderWrap.Parent                 = jIn
-local jSBg, jSFill, jSKnob = mkSlider(jSliderWrap, 0, 400, 20)
-jSBg.Size = UDim2.new(1, 0, 0, 18)
-
-local jPresets = Instance.new("Frame")
-jPresets.Size                   = UDim2.new(1, 0, 0, 80)
-jPresets.BackgroundTransparency = 1
-jPresets.LayoutOrder            = 5
-jPresets.Parent                 = jIn
-local jg = Instance.new("UIGridLayout")
-jg.CellSize    = UDim2.new(0, 72, 0, 30)
-jg.CellPadding = UDim2.new(0, 6, 0, 6)
-jg.Parent      = jPresets
-
-local function applyJumpPower()
-    if humanoid then pcall(function() humanoid.JumpPower = jumpPowerValue end) end
-end
-
-local function updateJump(val)
-    jumpPowerValue  = math.clamp(math.floor(val), 0, 400)
-    local pct       = jumpPowerValue / 400
-    jSFill.Size     = UDim2.new(pct, 0, 1, 0)
-    jSKnob.Position = UDim2.new(pct, -9, 0.5, -9)
-    jPwrLbl.Text    = "Jump Power: " .. jumpPowerValue
-    if jTitleLbl then jTitleLbl.Text = "🦵  Jump Boost  (Power: " .. jumpPowerValue .. ")" end
-    if isJumpEnabled then applyJumpPower() end
-end
-
-for _, v in pairs({20, 60, 100, 150, 200, 220, 250, 280, 300}) do
-    local pb = mkPresetBtn(jPresets, tostring(v))
-    pb.MouseButton1Click:Connect(function() updateJump(v) end)
-end
-
-local jResetBtn = mkBtn(jIn, "↩️  Reset to Default Jump (" .. defaultJumpPower .. ")", BLUE_BTN)
-jResetBtn.LayoutOrder = 6
-local jToggle = mkBtn(jIn, "🦵  TOGGLE JUMP BOOST  —  OFF", BLUE_DARK)
-jToggle.LayoutOrder = 7
-
--- ======= FLY SECTION =======
-local _, fIn, fTitleLbl = mkSection(MPanel, "🕊️  Fly  (Speed: 10)", 3)
-local fStatus = mkLabel(fIn, "🔴  Fly: OFF", 26, BLUE_DARK)
-fStatus.LayoutOrder = 1
-
-local fKbBtn = mkBtn(fIn, "⌨️  Keybind: " .. flyKeybind.Name, BLUE_BTN)
-fKbBtn.LayoutOrder = 2
-
-local fSpeedLbl = mkLabel(fIn, "Speed: 10   |   WASD + Space (up) + LShift (down)", 22, GRAY_TEXT)
-fSpeedLbl.LayoutOrder = 3
-
-local fSliderWrap = Instance.new("Frame")
-fSliderWrap.Size                   = UDim2.new(1, 0, 0, 22)
-fSliderWrap.BackgroundTransparency = 1
-fSliderWrap.LayoutOrder            = 4
-fSliderWrap.Parent                 = fIn
-local fSBg, fSFill, fSKnob = mkSlider(fSliderWrap, 0, 20, 10)
-fSBg.Size = UDim2.new(1, 0, 0, 18)
-
-local function updateFlySpeed(val)
-    flySpeed        = math.clamp(math.floor(val * 10) / 10, 0, 20)
-    local pct       = flySpeed / 20
-    fSFill.Size     = UDim2.new(pct, 0, 1, 0)
-    fSKnob.Position = UDim2.new(pct, -9, 0.5, -9)
-    fSpeedLbl.Text  = "Speed: " .. flySpeed .. "   |   WASD + Space (up) + LShift (down)"
-    if fTitleLbl then fTitleLbl.Text = "🕊️  Fly  (Speed: " .. flySpeed .. ")" end
-end
-
-local fToggle = mkBtn(fIn, "🕊️  TOGGLE FLY  —  OFF", BLUE_DARK)
-fToggle.LayoutOrder = 5
-
--- ======= ESP SECTION =======
-local _, espIn, espTitleLbl = mkSection(MPanel, "👁️  ESP Players", 4)
-local espStatusLbl = mkLabel(espIn, "🔴  ESP: OFF", 26, BLUE_DARK)
-espStatusLbl.LayoutOrder = 1
-
-local espKbBtn = mkBtn(espIn, "⌨️  Keybind: " .. espKeybind.Name, BLUE_BTN)
-espKbBtn.LayoutOrder = 2
-
-mkLabel(espIn, "Rainbow border  •  Name & HP%", 22, GRAY_TEXT).LayoutOrder = 3
-
-local espToggle = mkBtn(espIn, "👁️  TOGGLE ESP  —  OFF", BLUE_DARK)
-espToggle.LayoutOrder = 4
-
--- =================== CUSTOM PANEL =================
-local CustomPanel = Instance.new("Frame")
-CustomPanel.Size                   = UDim2.new(1, 0, 0, 0)
-CustomPanel.AutomaticSize          = Enum.AutomaticSize.Y
-CustomPanel.BackgroundTransparency = 1
-CustomPanel.Visible                = false
-CustomPanel.LayoutOrder            = 3
-CustomPanel.ZIndex                 = 8
-CustomPanel.Parent                 = RScroll
-listLayout(12, CustomPanel)
-
--- ======= SKY CHANGE =======
-local _, skyIn, _ = mkSection(CustomPanel, "🌌  Sky Change", 1)
-
--- FIX 1: Dùng AutomaticSize thay vì height cố định để xóa khoảng trống
-local skyGrid = Instance.new("Frame")
-skyGrid.Size                   = UDim2.new(1, 0, 0, 0)
-skyGrid.AutomaticSize          = Enum.AutomaticSize.Y
-skyGrid.BackgroundTransparency = 1
-skyGrid.LayoutOrder            = 1
-skyGrid.Parent                 = skyIn
-
-local skyGridLayout = Instance.new("UIGridLayout")
-skyGridLayout.CellSize    = UDim2.new(0, 88, 0, 34)
-skyGridLayout.CellPadding = UDim2.new(0, 8, 0, 8)
-skyGridLayout.Parent      = skyGrid
-
-local skyPresets = {
-    {name = "Gray",    id = "rbxassetid://130547382131410"},
-    {name = "Night",   id = "rbxassetid://128839006185497"},
-    {name = "Anime1",  id = "rbxassetid://125641870562571"},
-    {name = "Anime2",  id = "rbxassetid://127770372529424"},
-    {name = "Anime3",  id = "rbxassetid://110570238374062"},
-    {name = "Anime4",  id = "rbxassetid://138349252564540"},
-    {name = "Femboy1", id = "rbxassetid://82666462942145"},
-    {name = "Femboy2", id = "rbxassetid://95142505890749"},
-    {name = "Femboy3", id = "rbxassetid://110326016107832"},
-    {name = "Femboy4", id = "rbxassetid://123826538827500"},
+-- ============================================================
+-- AUTO FARM
+-- ============================================================
+local isAutoFarmEnabled = false
+local autoFarmConn      = nil
+local autoFarmPhase     = 1
+local autoFarmYTriggered= false
+
+-- Teleport destinations for each phase
+-- Phase 1 → (3000, 7000,  3000)
+-- Phase 2 → (3000, 7000, -3000)
+-- Phase 3 → (-3000, 7000, 3000)
+-- Phase 4 → (-3000, 7000, -3000) → loop back to Phase 1
+local farmDestinations = {
+    Vector3.new( 3000, 7000,  3000),
+    Vector3.new( 3000, 7000, -3000),
+    Vector3.new(-3000, 7000,  3000),
+    Vector3.new(-3000, 7000, -3000),
 }
 
-for _, preset in pairs(skyPresets) do
-    local pb = Instance.new("TextButton")
-    pb.Size                   = UDim2.new(0, 88, 0, 34)
-    pb.BackgroundColor3       = BLUE_BTN
-    pb.BorderSizePixel        = 0
-    pb.Text                   = preset.name
-    pb.TextColor3             = WHITE
-    pb.TextStrokeColor3       = BLUE_DARK
-    pb.TextStrokeTransparency = 0.3
-    pb.Font                   = Enum.Font.GothamBold
-    pb.TextSize               = 14
-    pb.AutoButtonColor        = true
-    pb.Parent                 = skyGrid
-    corner(8, pb); stroke(BLUE_BORDER, 2, pb)
-    local id = preset.id
-    local nm = preset.name
-    pb.MouseButton1Click:Connect(function()
-        applySky(id)
-        notify("Femboy Hub — Sky", "Sky changed to " .. nm, 3)
-    end)
+local function autoFarmTP()
+    local char = player.Character; if not char then return end
+    local hrpAF = char:FindFirstChild("HumanoidRootPart"); if not hrpAF then return end
+    hrpAF.CFrame = CFrame.new(farmDestinations[autoFarmPhase])
+    autoFarmYTriggered = false
 end
 
-local skyDiv = Instance.new("Frame")
-skyDiv.Size             = UDim2.new(1, 0, 0, 2)
-skyDiv.BackgroundColor3 = BLUE_LIGHT
-skyDiv.BorderSizePixel  = 0
-skyDiv.LayoutOrder      = 2
-skyDiv.Parent           = skyIn
+local function startAutoFarm()
+    isAutoFarmEnabled = true
+    autoFarmPhase     = 1
+    autoFarmTP()  -- immediately teleport to Phase 1 destination
 
-local skyInputLabel = mkLabel(skyIn, "Custom Sky AssetID:", 22, GRAY_TEXT)
-skyInputLabel.LayoutOrder = 3
+    if autoFarmConn then autoFarmConn:Disconnect() end
+    autoFarmConn = RunService.Heartbeat:Connect(function()
+        if not isAutoFarmEnabled then return end
+        local char = player.Character; if not char then return end
+        local hrpAF = char:FindFirstChild("HumanoidRootPart"); if not hrpAF then return end
 
--- FIX 2 & 3: TextBox chữ trắng viền xanh dương, border xanh đậm dày hơn
-local skyTextBox = Instance.new("TextBox")
-skyTextBox.Size                   = UDim2.new(1, 0, 0, 36)
-skyTextBox.BackgroundColor3       = WHITE
-skyTextBox.BorderSizePixel        = 0
-skyTextBox.Text                   = ""
-skyTextBox.PlaceholderText        = "Type..."
-skyTextBox.TextColor3             = WHITE                          -- FIX: chữ trắng
-skyTextBox.PlaceholderColor3      = WHITE
-skyTextBox.TextStrokeColor3       = BLUE_BORDER                    -- FIX: viền chữ xanh dương
-skyTextBox.TextStrokeTransparency = 0                              -- FIX: viền chữ rõ hoàn toàn
-skyTextBox.Font                   = Enum.Font.GothamBold
-skyTextBox.TextSize               = 14
-skyTextBox.ClearTextOnFocus       = false
-skyTextBox.LayoutOrder            = 4
-skyTextBox.Parent                 = skyIn
-corner(8, skyTextBox)
-stroke(BLUE_DARK, 4, skyTextBox)                                   -- FIX: viền box xanh đậm dày
-
-local skyExampleLbl = mkLabel(skyIn, "Example: rbxassetid://130547382131410", 18, Color3.fromRGB(130, 60, 160))
-skyExampleLbl.LayoutOrder = 5
-skyExampleLbl.TextSize    = 12
-
-local skyApplyBtn = mkBtn(skyIn, "✔  Apply Sky", BLUE_BTN)
-skyApplyBtn.LayoutOrder = 6
-
-local skyResetBtn = mkBtn(skyIn, "🔄  Reset Sky to Default", BLUE_DARK)
-skyResetBtn.LayoutOrder = 7
-
-skyApplyBtn.MouseButton1Click:Connect(function()
-    local txt = skyTextBox.Text
-    if txt and txt ~= "" then
-        if not txt:lower():find("rbxassetid://") then
-            txt = "rbxassetid://" .. txt
-        end
-        applySky(txt)
-        notify("Femboy Hub — Sky", "Sky changed successfully!", 3)
-    else
-        notify("Femboy Hub — Sky", "Please enter an Asset ID!", 3)
-    end
-end)
-
-skyResetBtn.MouseButton1Click:Connect(function()
-    resetSky()
-    notify("Femboy Hub — Sky", "Sky reset to game default!", 3)
-end)
-
--- ======= IMPORT MAP =======
-local _, mapIn, _ = mkSection(CustomPanel, "🗺️  Import Map", 2)
-
-mkLabel(mapIn, "Load a map into the workspace via Asset ID.", 22, GRAY_TEXT).LayoutOrder = 1
-
--- FIX 2 & 3: MapTextBox chữ trắng viền xanh dương, border xanh đậm dày hơn
-local mapTextBox = Instance.new("TextBox")
-mapTextBox.Size                   = UDim2.new(1, 0, 0, 36)
-mapTextBox.BackgroundColor3       = WHITE
-mapTextBox.BorderSizePixel        = 0
-mapTextBox.Text                   = ""
-mapTextBox.PlaceholderText        = "Enter Map Asset ID..."
-mapTextBox.TextColor3             = WHITE                          -- FIX: chữ trắng
-mapTextBox.PlaceholderColor3      = WHITE
-mapTextBox.TextStrokeColor3       = BLUE_BORDER                    -- FIX: viền chữ xanh dương
-mapTextBox.TextStrokeTransparency = 0                              -- FIX: viền chữ rõ hoàn toàn
-mapTextBox.Font                   = Enum.Font.GothamBold
-mapTextBox.TextSize               = 14
-mapTextBox.ClearTextOnFocus       = false
-mapTextBox.LayoutOrder            = 2
-mapTextBox.Parent                 = mapIn
-corner(8, mapTextBox)
-stroke(BLUE_DARK, 4, mapTextBox)                                   -- FIX: viền box xanh đậm dày
-
-local mapExLbl = mkLabel(mapIn, "Example: 12345678  (numbers only or full rbxassetid://)", 18, Color3.fromRGB(130, 60, 160))
-mapExLbl.LayoutOrder = 3
-mapExLbl.TextSize    = 12
-
-local mapSpawnBtn = mkBtn(mapIn, "📥  Import Map", BLUE_BTN)
-mapSpawnBtn.LayoutOrder = 4
-
-local mapRemoveBtn = mkBtn(mapIn, "🗑️  Remove Imported Map", BLUE_DARK)
-mapRemoveBtn.LayoutOrder = 5
-
-mapSpawnBtn.MouseButton1Click:Connect(function()
-    local raw = mapTextBox.Text
-    if not raw or raw == "" then
-        notify("Femboy Hub — Map", "Please enter a valid Asset ID!", 3)
-        return
-    end
-    local idStr = raw:gsub("rbxassetid://", ""):match("^%s*(.-)%s*$")
-    local numId = tonumber(idStr)
-    if not numId then
-        notify("Femboy Hub — Map", "Invalid Asset ID! Numbers only.", 4)
-        return
-    end
-    if spawnedMap and spawnedMap.Parent then
-        spawnedMap:Destroy()
-        spawnedMap = nil
-    end
-    local success, result = pcall(function()
-        return game:GetObjects("rbxassetid://" .. idStr)[1]
-    end)
-    if not success or not result then
-        notify("Femboy Hub — Map", "Failed to load map! Make sure the asset is public.", 5)
-        return
-    end
-    result.Parent = workspace
-    spawnedMap = result
-    local char = player.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    if root then
-        local spawnCF = root.CFrame * CFrame.new(0, 0, -20)
-        if result.PrimaryPart then
-            result:SetPrimaryPartCFrame(spawnCF)
-        else
-            local bp = result:FindFirstChildWhichIsA("BasePart")
-            if bp then bp.CFrame = spawnCF end
-        end
-    end
-    notify("Femboy Hub — Map", "Map imported successfully! (ID: " .. idStr .. ")", 4)
-end)
-
-mapRemoveBtn.MouseButton1Click:Connect(function()
-    if spawnedMap and spawnedMap.Parent then
-        spawnedMap:Destroy()
-        spawnedMap = nil
-        notify("Femboy Hub — Map", "Imported map removed!", 3)
-    else
-        notify("Femboy Hub — Map", "No imported map to remove!", 3)
-    end
-end)
-
--- =================== PANEL SWITCH =================
-local function showPanel(p)
-    CPanel.Visible      = false
-    MPanel.Visible      = false
-    CustomPanel.Visible = false
-    p.Visible           = true
-end
-
-local function selectSide(active, ...)
-    local inactives = {...}
-    active.BackgroundColor3 = BLUE_DARK
-    active.TextColor3       = WHITE
-    for _, b in pairs(inactives) do
-        b.BackgroundColor3 = BLUE_BTN
-        b.TextColor3       = WHITE
-    end
-end
-
-BtnCredits.MouseButton1Click:Connect(function() showPanel(CPanel);      selectSide(BtnCredits, BtnMain, BtnCustom) end)
-BtnMain.MouseButton1Click:Connect(function()    showPanel(MPanel);       selectSide(BtnMain, BtnCredits, BtnCustom) end)
-BtnCustom.MouseButton1Click:Connect(function()  showPanel(CustomPanel);  selectSide(BtnCustom, BtnMain, BtnCredits) end)
-
--- =================== TOGGLE FUNCTIONS =============
-local function toggleEdge()
-    if isEdgeEnabled then
-        isEdgeEnabled = false
-        if edgeConn then edgeConn:Disconnect(); edgeConn = nil end
-        eStatus.Text             = "🔴  Edge Boost: OFF"
-        eStatus.TextColor3       = BLUE_DARK
-        eToggle.Text             = "⚡  TOGGLE EDGE BOOST  —  OFF"
-        eToggle.BackgroundColor3 = BLUE_DARK
-        notify("Femboy Hub — Edge Boost", "Edge Boost disabled!", 3)
-    else
-        isEdgeEnabled = true
-        edgeConn = RunService.Stepped:Connect(applyEdge)
-        eStatus.Text             = "🟢  Edge Boost: ON"
-        eStatus.TextColor3       = GREEN_ON
-        eToggle.Text             = "⚡  TOGGLE EDGE BOOST  —  ON"
-        eToggle.BackgroundColor3 = GREEN_ON
-        notify("Femboy Hub — Edge Boost", "Edge Boost activated! Power: " .. BOOST_POWER, 4)
-    end
-end
-
-local function toggleJump()
-    if isJumpEnabled then
-        isJumpEnabled = false
-        if jumpPropConn then jumpPropConn:Disconnect(); jumpPropConn = nil end
-        if humanoid then pcall(function() humanoid.JumpPower = defaultJumpPower end) end
-        jStatus.Text             = "🔴  Jump Boost: OFF"
-        jStatus.TextColor3       = BLUE_DARK
-        jToggle.Text             = "🦵  TOGGLE JUMP BOOST  —  OFF"
-        jToggle.BackgroundColor3 = BLUE_DARK
-        notify("Femboy Hub — Jump", "Jump Boost disabled!", 3)
-    else
-        isJumpEnabled = true
-        applyJumpPower()
-        if humanoid then
-            jumpPropConn = humanoid:GetPropertyChangedSignal("JumpPower"):Connect(function()
-                if isJumpEnabled then applyJumpPower() end
+        -- When character falls below Y=6000 (dropped from Y=7000), advance phase
+        if hrpAF.Position.Y < 6000 and not autoFarmYTriggered then
+            autoFarmYTriggered = true
+            autoFarmPhase = (autoFarmPhase % 4) + 1
+            task.spawn(function()
+                task.wait(0.05)
+                autoFarmTP()
             end)
         end
-        jStatus.Text             = "🟢  Jump Boost: ON"
-        jStatus.TextColor3       = GREEN_ON
-        jToggle.Text             = "🦵  TOGGLE JUMP BOOST  —  ON"
-        jToggle.BackgroundColor3 = GREEN_ON
-        notify("Femboy Hub — Jump", "Jump Boost activated! Power: " .. jumpPowerValue, 4)
-    end
+    end)
+
+    Notify("Auto Farm","✅ Auto Farm ON — Phase "..autoFarmPhase.." started",4)
 end
 
-local function toggleFly()
-    if isFlyEnabled then
-        isFlyEnabled = false
-        disableFly()
-        fStatus.Text             = "🔴  Fly: OFF"
-        fStatus.TextColor3       = BLUE_DARK
-        fToggle.Text             = "🕊️  TOGGLE FLY  —  OFF"
-        fToggle.BackgroundColor3 = BLUE_DARK
-        notify("Femboy Hub — Fly", "Fly disabled!", 3)
+local function stopAutoFarm()
+    isAutoFarmEnabled = false
+    if autoFarmConn then autoFarmConn:Disconnect(); autoFarmConn = nil end
+    autoFarmPhase = 1
+    Notify("Auto Farm","❌ Auto Farm OFF",3)
+end
+
+-- ============================================================
+-- WORLD TRANSPARENCY
+-- ============================================================
+local worldTransLevel=0; local affectedWorldParts={}
+
+local function isCharacterPart(obj)
+    for _,plr in pairs(Players:GetPlayers()) do
+        local c=plr.Character; if c and obj:IsDescendantOf(c) then return true end
+    end
+    return false
+end
+local function applyWorldTransparency(level)
+    for _,data in pairs(affectedWorldParts) do
+        pcall(function() if data.part and data.part.Parent then data.part.Transparency=data.origTrans end end)
+    end
+    affectedWorldParts={}; worldTransLevel=level
+    if level==0 then Notify("World Transparency","✅ World restored to fully visible",3); return end
+    local alpha=level/100; local count=0
+    for _,obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("BasePart") and not isCharacterPart(obj) then
+            local orig=obj.Transparency
+            table.insert(affectedWorldParts,{part=obj,origTrans=orig})
+            pcall(function() obj.Transparency=alpha; obj.LocalTransparencyModifier=0 end)
+            count=count+1
+        end
+    end
+    pcall(function()
+        local t=workspace:FindFirstChildOfClass("Terrain")
+        if t then table.insert(affectedWorldParts,{part=t,origTrans=t.Transparency}); t.Transparency=alpha end
+    end)
+    Notify("World Transparency","✅ World "..level.."% transparent  ("..count.." parts)\nCanCollide preserved.",4)
+end
+
+-- ============================================================
+-- STRETCH FOV  (Horizontal + Vertical for Evade)
+-- ============================================================
+local originalFOVBase = 70
+local hStretch        = 100   -- Horizontal stretch %: 50-200, 100 = normal
+local vStretch        = 100   -- Vertical   stretch %: 50-200, 100 = normal
+local isStretchActive = false
+local stretchConn     = nil
+local HStretchSlider  = nil
+local VStretchSlider  = nil
+
+pcall(function() originalFOVBase = workspace.CurrentCamera.FieldOfView end)
+
+-- Computes the camera FOV to simulate a stretched resolution.
+-- hStretch > 100  → wider horizontal view (objects look thinner)
+-- vStretch > 100  → taller vertical view  (objects look shorter)
+local function computeStretchFOV()
+    local cam = workspace.CurrentCamera
+    local vp  = cam.ViewportSize
+    if vp.X == 0 or vp.Y == 0 then return originalFOVBase end
+
+    local realAspect = vp.X / vp.Y
+    -- Simulate a stretched aspect ratio based on H/V multipliers
+    local simAspect  = realAspect * (hStretch / 100) / (vStretch / 100)
+
+    -- Roblox camera uses vertical FOV internally.
+    -- 1) Compute vertical FOV from the base horizontal FOV at simulated aspect.
+    local hFovRad  = math.rad(originalFOVBase)
+    local vFovRad  = 2 * math.atan(math.tan(hFovRad / 2) / simAspect)
+    -- 2) Convert that vertical FOV back to what Roblox needs for the real aspect.
+    local resultVFov = 2 * math.atan(math.tan(vFovRad / 2) * realAspect)
+    return math.clamp(math.deg(resultVFov), 1, 120)
+end
+
+local function applyStretchLoop()
+    if not isStretchActive then return end
+    pcall(function() workspace.CurrentCamera.FieldOfView = computeStretchFOV() end)
+end
+
+local function enableStretch()
+    isStretchActive = true
+    if stretchConn then stretchConn:Disconnect() end
+    -- RenderStepped keeps FOV locked even when the game tries to reset it
+    stretchConn = RunService.RenderStepped:Connect(applyStretchLoop)
+    Notify("Stretch FOV","✅ Stretch FOV ON",3)
+end
+
+local function disableStretch()
+    isStretchActive = false
+    if stretchConn then stretchConn:Disconnect(); stretchConn = nil end
+    pcall(function() workspace.CurrentCamera.FieldOfView = originalFOVBase end)
+    Notify("Stretch FOV","🔄 FOV restored to "..originalFOVBase,3)
+end
+
+local function resetStretch()
+    hStretch = 100; vStretch = 100
+    if HStretchSlider and HStretchSlider.Set then HStretchSlider:Set(100) end
+    if VStretchSlider and VStretchSlider.Set then VStretchSlider:Set(100) end
+    if isStretchActive then
+        pcall(function() workspace.CurrentCamera.FieldOfView = computeStretchFOV() end)
+    end
+    Notify("Stretch FOV","🔄 Stretch reset to 100% / 100%",3)
+end
+
+-- ============================================================
+-- FULLBRIGHT
+-- ============================================================
+local isFullbrightEnabled=false; local origLightingProps={}
+
+local function enableFullbright()
+    isFullbrightEnabled=true
+    pcall(function()
+        origLightingProps={
+            Brightness=Lighting.Brightness, ClockTime=Lighting.ClockTime,
+            FogEnd=Lighting.FogEnd, GlobalShadows=Lighting.GlobalShadows,
+            Ambient=Lighting.Ambient, OutdoorAmbient=Lighting.OutdoorAmbient,
+        }
+        Lighting.Brightness=3; Lighting.ClockTime=14; Lighting.FogEnd=100000
+        Lighting.GlobalShadows=false; Lighting.Ambient=Color3.fromRGB(178,178,178)
+        Lighting.OutdoorAmbient=Color3.fromRGB(178,178,178)
+    end)
+    Notify("Full Bright","✅ Full Bright ON",3)
+end
+local function disableFullbright()
+    isFullbrightEnabled=false
+    pcall(function()
+        if origLightingProps.Brightness~=nil then
+            Lighting.Brightness=origLightingProps.Brightness; Lighting.ClockTime=origLightingProps.ClockTime
+            Lighting.FogEnd=origLightingProps.FogEnd; Lighting.GlobalShadows=origLightingProps.GlobalShadows
+            Lighting.Ambient=origLightingProps.Ambient; Lighting.OutdoorAmbient=origLightingProps.OutdoorAmbient
+        end
+    end)
+    Notify("Full Bright","❌ Full Bright OFF — lighting restored",3)
+end
+
+-- ============================================================
+-- WALL REMOVER  (manual)
+-- ============================================================
+local storedParts={}; local processedParts={}; local isProcessing=false
+local wallRepairKeywords={"stair","step","ramp","trimp","platform","invisibleplatform","floor","ground","pad","road","path","bridge"}
+
+local function isGameplayPart(name)
+    name=string.lower(name)
+    for _,kw in pairs(wallRepairKeywords) do if string.find(name,kw,1,true) then return true end end
+    return false
+end
+local function wallDestroyAndStore()
+    if isProcessing then return 0,0 end
+    isProcessing=true; local destroyed,stored=0,0; local parts={}
+    for _,obj in pairs(workspace:GetDescendants()) do
+        if (obj:IsA("BasePart") or obj:IsA("MeshPart")) and not processedParts[obj] then table.insert(parts,obj) end
+    end
+    for i=1,#parts,50 do
+        for j=i,math.min(i+49,#parts) do
+            local obj=parts[j]
+            if obj and obj.Parent then
+                local name=string.lower(obj.Name)
+                if isGameplayPart(name) then
+                    if obj.CanCollide then local np=obj:Clone(); np.Parent=nil; table.insert(storedParts,np); pcall(function() obj:Destroy() end); stored=stored+1 end
+                else
+                    if obj.CanCollide and obj.Transparency>=0.8 and obj.Position.Y>50 then pcall(function() obj:Destroy(); destroyed=destroyed+1 end) end
+                end
+                processedParts[obj]=true
+            end
+        end
+        task.wait()
+    end
+    isProcessing=false; return stored,destroyed
+end
+local function wallRestoreStoredParts()
+    local restored=0; local mapParent=workspace:FindFirstChild("Map") or workspace:FindFirstChild("Level") or workspace
+    for i=1,#storedParts,25 do
+        for j=i,math.min(i+24,#storedParts) do
+            local part=storedParts[j]
+            if part then pcall(function() part.Parent=mapParent; restored=restored+1 end) end
+        end
+        task.wait()
+    end
+    storedParts={}; processedParts={}; return restored
+end
+local function runWallRemover()
+    Notify("Wall Remover","🔍 Scanning & removing invisible walls...",4)
+    task.spawn(function()
+        local stored,destroyed=wallDestroyAndStore(); task.wait(0.2)
+        local restored=wallRestoreStoredParts()
+        if destroyed>0 or stored>0 then
+            Notify("Wall Remover","✅ Done!  Saved: "..stored.."  |  Removed: "..destroyed.."  |  Restored: "..restored,6)
+        else Notify("Wall Remover","✅ No invisible walls found.",3) end
+    end)
+end
+
+-- ============================================================
+-- IMPORT MAP
+-- ============================================================
+local importedMapModel=nil
+
+local function importMap(assetIdRaw)
+    local idStr=tostring(assetIdRaw):match("%d+")
+    if not idStr or idStr=="" then Notify("Import Map","❌ Invalid Asset ID!",4); return end
+    local id=tonumber(idStr)
+    if importedMapModel then pcall(function() importedMapModel:Destroy() end); importedMapModel=nil end
+    local ok,result=pcall(function() return InsertService:LoadAsset(id) end)
+    if ok and result then
+        result.Name="FemboyImportedMap"; result.Parent=workspace; importedMapModel=result
+        Notify("Import Map","✅ Map loaded! (ID: "..id..")",4)
     else
-        isFlyEnabled = true
-        enableFly()
-        fStatus.Text             = "🟢  Fly: ON"
-        fStatus.TextColor3       = GREEN_ON
-        fToggle.Text             = "🕊️  TOGGLE FLY  —  ON"
-        fToggle.BackgroundColor3 = GREEN_ON
-        notify("Femboy Hub — Fly", "Fly activated! WASD + Space / LShift to move.", 4)
-    end
-end
-
-local function toggleESP()
-    if isEspEnabled then
-        isEspEnabled = false
-        removeESP()
-        espStatusLbl.Text             = "🔴  ESP: OFF"
-        espStatusLbl.TextColor3       = BLUE_DARK
-        espToggle.Text                = "👁️  TOGGLE ESP  —  OFF"
-        espToggle.BackgroundColor3    = BLUE_DARK
-        notify("Femboy Hub — ESP", "ESP disabled!", 3)
-    else
-        isEspEnabled = true
-        createESP()
-        espStatusLbl.Text             = "🟢  ESP: ON"
-        espStatusLbl.TextColor3       = GREEN_ON
-        espToggle.Text                = "👁️  TOGGLE ESP  —  ON"
-        espToggle.BackgroundColor3    = GREEN_ON
-        notify("Femboy Hub — ESP", "ESP activated! Rainbow box enabled.", 4)
-    end
-end
-
-eToggle.MouseButton1Click:Connect(toggleEdge)
-jToggle.MouseButton1Click:Connect(toggleJump)
-fToggle.MouseButton1Click:Connect(toggleFly)
-espToggle.MouseButton1Click:Connect(toggleESP)
-
-jResetBtn.MouseButton1Click:Connect(function()
-    updateJump(defaultJumpPower)
-    if humanoid then pcall(function() humanoid.JumpPower = defaultJumpPower end) end
-    notify("Femboy Hub — Jump", "Reset to default jump power (" .. defaultJumpPower .. ")", 3)
-end)
-
--- =================== SLIDERS ======================
-local eDrag, jDrag, fDrag = false, false, false
-eSBg.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then eDrag = true  end end)
-eSBg.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then eDrag = false end end)
-jSBg.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then jDrag = true  end end)
-jSBg.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then jDrag = false end end)
-fSBg.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then fDrag = true  end end)
-fSBg.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then fDrag = false end end)
-
-UserInputService.InputEnded:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then
-        eDrag = false; jDrag = false; fDrag = false
-    end
-end)
-UserInputService.InputChanged:Connect(function(i)
-    if i.UserInputType ~= Enum.UserInputType.MouseMovement then return end
-    if eDrag then
-        local r = math.clamp((i.Position.X - eSBg.AbsolutePosition.X) / eSBg.AbsoluteSize.X, 0, 1)
-        updateEdge(r * 400)
-    end
-    if jDrag then
-        local r = math.clamp((i.Position.X - jSBg.AbsolutePosition.X) / jSBg.AbsoluteSize.X, 0, 1)
-        updateJump(r * 400)
-    end
-    if fDrag then
-        local r = math.clamp((i.Position.X - fSBg.AbsolutePosition.X) / fSBg.AbsoluteSize.X, 0, 1)
-        updateFlySpeed(r * 20)
-    end
-end)
-
--- =================== KEYBIND CHANGERS =============
-local function listenForKey(flagRef, btn, onDone)
-    if flagRef[1] then return end
-    flagRef[1] = true
-    btn.Text             = "⌨️  Press any key..."
-    btn.BackgroundColor3 = ORANGE
-    local c; c = UserInputService.InputBegan:Connect(function(inp, gp)
-        if gp then return end
-        if inp.UserInputType == Enum.UserInputType.Keyboard then
-            flagRef[1] = false
-            btn.BackgroundColor3 = BLUE_BTN
-            c:Disconnect()
-            onDone(inp.KeyCode)
-        end
-    end)
-end
-
-kbChangeBtn.MouseButton1Click:Connect(function()
-    listenForKey({listenUI}, kbChangeBtn, function(kc)
-        listenUI = false
-        uiKeybind = kc
-        kbChangeBtn.Text = "🔑  Click to change keybind: " .. uiKeybind.Name
-        kbStatus.Text    = "Current Keybind: " .. uiKeybind.Name
-        notify("Femboy Hub", "UI keybind changed to " .. uiKeybind.Name, 3)
-    end)
-    listenUI = true
-end)
-
-eKbBtn.MouseButton1Click:Connect(function()
-    listenEdge = true
-    eKbBtn.Text             = "⌨️  Press any key..."
-    eKbBtn.BackgroundColor3 = ORANGE
-    local c; c = UserInputService.InputBegan:Connect(function(inp, gp)
-        if gp then return end
-        if inp.UserInputType == Enum.UserInputType.Keyboard then
-            edgeKeybind             = inp.KeyCode
-            eKbBtn.Text             = "⌨️  Keybind: " .. edgeKeybind.Name
-            eKbBtn.BackgroundColor3 = BLUE_BTN
-            listenEdge = false; c:Disconnect()
-            notify("Femboy Hub — Edge", "Edge keybind changed to " .. edgeKeybind.Name, 3)
-        end
-    end)
-end)
-
-jKbBtn.MouseButton1Click:Connect(function()
-    listenJump = true
-    jKbBtn.Text             = "⌨️  Press any key..."
-    jKbBtn.BackgroundColor3 = ORANGE
-    local c; c = UserInputService.InputBegan:Connect(function(inp, gp)
-        if gp then return end
-        if inp.UserInputType == Enum.UserInputType.Keyboard then
-            jumpKeybind             = inp.KeyCode
-            jKbBtn.Text             = "⌨️  Keybind: " .. jumpKeybind.Name
-            jKbBtn.BackgroundColor3 = BLUE_BTN
-            listenJump = false; c:Disconnect()
-            notify("Femboy Hub — Jump", "Jump keybind changed to " .. jumpKeybind.Name, 3)
-        end
-    end)
-end)
-
-fKbBtn.MouseButton1Click:Connect(function()
-    listenFly = true
-    fKbBtn.Text             = "⌨️  Press any key..."
-    fKbBtn.BackgroundColor3 = ORANGE
-    local c; c = UserInputService.InputBegan:Connect(function(inp, gp)
-        if gp then return end
-        if inp.UserInputType == Enum.UserInputType.Keyboard then
-            flyKeybind              = inp.KeyCode
-            fKbBtn.Text             = "⌨️  Keybind: " .. flyKeybind.Name
-            fKbBtn.BackgroundColor3 = BLUE_BTN
-            listenFly = false; c:Disconnect()
-            notify("Femboy Hub — Fly", "Fly keybind changed to " .. flyKeybind.Name, 3)
-        end
-    end)
-end)
-
-espKbBtn.MouseButton1Click:Connect(function()
-    listenEsp = true
-    espKbBtn.Text             = "⌨️  Press any key..."
-    espKbBtn.BackgroundColor3 = ORANGE
-    local c; c = UserInputService.InputBegan:Connect(function(inp, gp)
-        if gp then return end
-        if inp.UserInputType == Enum.UserInputType.Keyboard then
-            espKeybind              = inp.KeyCode
-            espKbBtn.Text           = "⌨️  Keybind: " .. espKeybind.Name
-            espKbBtn.BackgroundColor3 = BLUE_BTN
-            listenEsp = false; c:Disconnect()
-            notify("Femboy Hub — ESP", "ESP keybind changed to " .. espKeybind.Name, 3)
-        end
-    end)
-end)
-
--- =================== ANIMATION HELPERS ============
-local MF_W, MF_H = 700, 490
-local MF_OX, MF_OY = -350, -245
-
-local function tweenMF(props, time, style, dir)
-    return TweenService:Create(MF,
-        TweenInfo.new(time or 0.3, style or Enum.EasingStyle.Back, dir or Enum.EasingDirection.Out),
-        props)
-end
-
-local mainVisible = false
-local isMinimized = false
-
-local function minimizeUI()
-    if isMinimized then return end
-    isMinimized = true
-    local tw = tweenMF({
-        Size     = UDim2.new(0, MF_W, 0, 0),
-        Position = UDim2.new(0.5, MF_OX, 0.5, 0)
-    }, 0.25, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-    tw:Play()
-    tw.Completed:Connect(function()
-        MF.Visible  = false
-        MF.Size     = UDim2.new(0, MF_W, 0, MF_H)
-        MF.Position = UDim2.new(0.5, MF_OX, 0.5, MF_OY)
-        MinBar.Size     = UDim2.new(0, 0, 0, 36)
-        MinBar.Position = UDim2.new(0.5, 0, 0, 6)
-        MinBar.Visible  = true
-        TweenService:Create(MinBar,
-            TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-            {Size = UDim2.new(0, 230, 0, 36), Position = UDim2.new(0.5, -115, 0, 6)}
-        ):Play()
-    end)
-end
-
-local function expandUI()
-    if not isMinimized then return end
-    local tw = TweenService:Create(MinBar,
-        TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.In),
-        {Size = UDim2.new(0, 0, 0, 36), Position = UDim2.new(0.5, 0, 0, 6)})
-    tw:Play()
-    tw.Completed:Connect(function()
-        MinBar.Visible = false
-        isMinimized    = false
-        MF.Size        = UDim2.new(0, MF_W, 0, 0)
-        MF.Position    = UDim2.new(0.5, MF_OX, 0.5, 0)
-        MF.Visible     = true
-        tweenMF({
-            Size     = UDim2.new(0, MF_W, 0, MF_H),
-            Position = UDim2.new(0.5, MF_OX, 0.5, MF_OY)
-        }, 0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out):Play()
-    end)
-end
-
-local function showMainFrame()
-    mainVisible = true
-    MF.Size     = UDim2.new(0, MF_W, 0, 0)
-    MF.Position = UDim2.new(0.5, MF_OX, 0.5, 0)
-    MF.Visible  = true
-    tweenMF({
-        Size     = UDim2.new(0, MF_W, 0, MF_H),
-        Position = UDim2.new(0.5, MF_OX, 0.5, MF_OY)
-    }, 0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out):Play()
-end
-
-local function hideMainFrame()
-    local tw = tweenMF({
-        Size     = UDim2.new(0, MF_W, 0, 0),
-        Position = UDim2.new(0.5, MF_OX, 0.5, 0)
-    }, 0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
-    tw:Play()
-    tw.Completed:Connect(function()
-        MF.Visible  = false
-        mainVisible = false
-        MF.Size     = UDim2.new(0, MF_W, 0, MF_H)
-        MF.Position = UDim2.new(0.5, MF_OX, 0.5, MF_OY)
-    end)
-end
-
-MinBtn.MouseButton1Click:Connect(minimizeUI)
-ExpandBtn.MouseButton1Click:Connect(expandUI)
-
--- =================== FULL RESET & CLOSE ===========
-local function fullResetAndClose()
-    -- 1. Disable Edge Boost
-    if isEdgeEnabled then
-        isEdgeEnabled = false
-        if edgeConn then edgeConn:Disconnect(); edgeConn = nil end
-        eStatus.Text             = "🔴  Edge Boost: OFF"
-        eStatus.TextColor3       = BLUE_DARK
-        eToggle.Text             = "⚡  TOGGLE EDGE BOOST  —  OFF"
-        eToggle.BackgroundColor3 = BLUE_DARK
-    end
-
-    -- 2. Disable Jump Boost & restore default jump power
-    if isJumpEnabled then
-        isJumpEnabled = false
-        if jumpPropConn then jumpPropConn:Disconnect(); jumpPropConn = nil end
-        if humanoid then pcall(function() humanoid.JumpPower = defaultJumpPower end) end
-        jStatus.Text             = "🔴  Jump Boost: OFF"
-        jStatus.TextColor3       = BLUE_DARK
-        jToggle.Text             = "🦵  TOGGLE JUMP BOOST  —  OFF"
-        jToggle.BackgroundColor3 = BLUE_DARK
-    end
-
-    -- 3. Disable Fly
-    if isFlyEnabled then
-        isFlyEnabled = false
-        disableFly()
-        fStatus.Text             = "🔴  Fly: OFF"
-        fStatus.TextColor3       = BLUE_DARK
-        fToggle.Text             = "🕊️  TOGGLE FLY  —  OFF"
-        fToggle.BackgroundColor3 = BLUE_DARK
-    end
-
-    -- 4. Disable ESP
-    if isEspEnabled then
-        isEspEnabled = false
-        removeESP()
-        espStatusLbl.Text             = "🔴  ESP: OFF"
-        espStatusLbl.TextColor3       = BLUE_DARK
-        espToggle.Text                = "👁️  TOGGLE ESP  —  OFF"
-        espToggle.BackgroundColor3    = BLUE_DARK
-    end
-
-    -- 5. Reset sky to default
-    resetSky()
-
-    -- 6. Reset sliders to default values
-    updateEdge(80)
-    updateJump(20)
-    updateFlySpeed(10)
-
-    -- 7. Hide all UI panels
-    MinBar.Visible = false
-    MF.Visible     = false
-    mainVisible    = false
-    isMinimized    = false
-
-    -- 8. Notify player
-    notify(
-        "Femboy Hub — Disconnected",
-        "Disconnected from Femboy Hub. All changes have been reverted to default.",
-        6
-    )
-end
-
-MinBarClose.MouseButton1Click:Connect(function()
-    local tw = TweenService:Create(MinBar,
-        TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.In),
-        {Size = UDim2.new(0, 0, 0, 36), Position = UDim2.new(0.5, 0, 0, 6)})
-    tw:Play()
-    tw.Completed:Connect(function()
-        fullResetAndClose()
-    end)
-end)
-
-CloseBtn.MouseButton1Click:Connect(function()
-    if mainVisible then
-        local tw = tweenMF({
-            Size     = UDim2.new(0, MF_W, 0, 0),
-            Position = UDim2.new(0.5, MF_OX, 0.5, 0)
-        }, 0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.In)
-        tw:Play()
-        tw.Completed:Connect(function()
-            MF.Size     = UDim2.new(0, MF_W, 0, MF_H)
-            MF.Position = UDim2.new(0.5, MF_OX, 0.5, MF_OY)
-            fullResetAndClose()
+        local ok2,r2=pcall(function()
+            local m=game:GetObjects("rbxassetid://"..id)
+            if m and m[1] then local c=Instance.new("Model"); c.Name="FemboyImportedMap"; for _,o in pairs(m) do o.Parent=c end; c.Parent=workspace; return c end
         end)
-    else
-        fullResetAndClose()
+        if ok2 and r2 then importedMapModel=r2; Notify("Import Map","✅ Map loaded!",4)
+        else Notify("Import Map","❌ Failed — may be private/invalid.",5) end
     end
-end)
+end
+local function removeImportedMap()
+    if importedMapModel then pcall(function() importedMapModel:Destroy() end); importedMapModel=nil; Notify("Import Map","🗑️ Imported map removed.",3)
+    else Notify("Import Map","⚠️ No imported map to remove.",3) end
+end
 
--- =================== GLOBAL KEYBINDS ==============
-UserInputService.InputBegan:Connect(function(inp, gp)
-    if gp or listenUI or listenEdge or listenJump or listenFly or listenEsp then return end
-    if inp.KeyCode == uiKeybind then
-        if isMinimized then
-            expandUI()
-        elseif mainVisible then
-            hideMainFrame()
-        else
-            showMainFrame()
+-- ============================================================
+-- SKYBOX
+-- ============================================================
+local currentSkybox=nil
+local SKY_FACES={"SkyboxBk","SkyboxDn","SkyboxFt","SkyboxLf","SkyboxRt","SkyboxUp"}
+
+local function applySkybox(assetIdRaw)
+    local idStr=tostring(assetIdRaw):match("%d+")
+    if not idStr or idStr=="" then Notify("Sky Change","❌ Invalid Sky Asset ID!",4); return end
+    local id="rbxassetid://"..idStr
+    if currentSkybox then pcall(function() currentSkybox:Destroy() end); currentSkybox=nil end
+    for _,c in pairs(Lighting:GetChildren()) do if c:IsA("Sky") then c:Destroy() end end
+    local ok,sky=pcall(function()
+        local objs=game:GetObjects(id)
+        if objs then for _,o in pairs(objs) do if o:IsA("Sky") then return o end; for _,c in pairs(o:GetDescendants()) do if c:IsA("Sky") then return c end end end end
+    end)
+    if ok and sky then sky.Parent=Lighting; currentSkybox=sky
+    else local ns=Instance.new("Sky"); for _,f in pairs(SKY_FACES) do pcall(function() ns[f]=id end) end; ns.Parent=Lighting; currentSkybox=ns end
+    Notify("Sky Change","✅ Skybox applied! (ID: "..idStr..")",4)
+end
+local function resetSkybox()
+    if currentSkybox then pcall(function() currentSkybox:Destroy() end); currentSkybox=nil end
+    for _,c in pairs(Lighting:GetChildren()) do if c:IsA("Sky") then c:Destroy() end end
+    Notify("Sky Change","🔄 Skybox reset to default.",3)
+end
+
+-- ============================================================
+-- EMOTE CHANGER  (Rebuilt from Visual Emote Changer V4)
+-- ============================================================
+local EC_player        = player
+local EC_RS            = ReplicatedStorage
+local EC_currentTag    = nil
+local EC_remoteSignal  = nil
+
+local ec_currentEmotes = {}
+local ec_selectEmotes  = {}
+local ec_normalCache   = {}
+local ec_nameCache     = {}
+local ec_emoteEnabled2 = false
+local ec_listenerReady = false
+
+local ec_emoteModelScript  = nil
+local ec_originalEmoteData = {}
+local ec_replacementEnabled= false
+local ec_emoteDataSaved    = false
+local ec_emoteFrame        = nil
+
+local ec_swappedPairs  = {}
+local ec_swapCurrent   = {}
+local ec_swapSelect    = {}
+local ec_pendingSwaps  = {}
+local ec_pendingApply  = false
+
+local ec_respawnInProgress = false
+local ec_lastRespawnTime   = 0
+local ec_reapplyThread     = nil
+
+-- Selected slot index for dropdown-based UI
+local ec_selectedSlot     = 1
+local ec_selectedSwapSlot = 1
+
+for i=1,12 do
+    ec_currentEmotes[i]=""; ec_selectEmotes[i]=""
+    ec_swapCurrent[i]="";   ec_swapSelect[i]=""
+end
+
+local function ec_normalize(text)
+    if not text then return "" end
+    if not ec_normalCache[text] then ec_normalCache[text]=string.lower(text:gsub("%s+","")) end
+    return ec_normalCache[text]
+end
+
+local function ec_readTag(folder)
+    if not folder then return nil end
+    local a=folder:GetAttribute("Tag"); if a~=nil then return a end
+    local o=folder:FindFirstChild("Tag"); if o and o:IsA("ValueBase") then return o.Value end
+    return nil
+end
+
+local function ec_resolveRemotes()
+    local Events=EC_RS:FindFirstChild("Events")
+    local CharFolder=Events and Events:FindFirstChild("Character")
+    local PassChar=CharFolder and CharFolder:FindFirstChild("PassCharacterInfo")
+    EC_remoteSignal=PassChar and PassChar.OnClientEvent
+end
+ec_resolveRemotes()
+
+local function ec_fireSelect(emoteName)
+    if not EC_currentTag or not emoteName or emoteName=="" then return end
+    local b=tonumber(EC_currentTag)
+    if not b or b<0 or b>255 then return end
+    local buf=buffer.create(2); buffer.writeu8(buf,0,b); buffer.writeu8(buf,1,17)
+    if EC_remoteSignal then pcall(function() firesignal(EC_remoteSignal,buf,{emoteName}) end) end
+end
+
+local function ec_resolveTag()
+    EC_currentTag=nil
+    task.spawn(function()
+        local t0=tick()
+        while tick()-t0<10 do
+            local gf=workspace:FindFirstChild("Game")
+            if gf and gf:FindFirstChild("Players") then
+                local pf=gf.Players:FindFirstChild(EC_player.Name)
+                if pf then
+                    EC_currentTag=ec_readTag(pf)
+                    if EC_currentTag then
+                        local b=tonumber(EC_currentTag)
+                        if b and b>=0 and b<=255 then break else EC_currentTag=nil end
+                    end
+                end
+            end
+            task.wait(0.1)
+        end
+    end)
+end
+
+local function ec_setupHumanoidListeners(char)
+    if not char then return end
+    local isR15=char:GetAttribute("R15")==true
+    local humanoidObj
+    if isR15 then
+        local r15=char:WaitForChild("R15Visual",5)
+        if r15 then humanoidObj=r15:WaitForChild("Visual_Humanoid",5) end
+    end
+    if not humanoidObj then humanoidObj=char:WaitForChild("Humanoid",5) end
+    if not humanoidObj then return end
+
+    humanoidObj.AnimationPlayed:Connect(function(track)
+        if not ec_emoteEnabled2 then return end
+        local anim=track.Animation
+        local emotesFolder=EC_RS:FindFirstChild("Items") and EC_RS.Items:FindFirstChild("Emotes")
+        if not emotesFolder or not anim then return end
+        if not anim:IsDescendantOf(emotesFolder) then return end
+        local emoteModule=anim:FindFirstAncestorWhichIsA("ModuleScript")
+        if not emoteModule then return end
+        local playingName=ec_normalize(emoteModule.Name)
+        for i=1,12 do
+            if ec_currentEmotes[i]~="" and ec_selectEmotes[i]~="" then
+                if ec_normalize(ec_currentEmotes[i])==playingName then
+                    ec_fireSelect(ec_selectEmotes[i]); break
+                end
+            end
+        end
+    end)
+end
+
+local function ec_getEmoteFrame()
+    local pg=EC_player.PlayerGui; if not pg then return nil end
+    local shared=pg:FindFirstChild("Shared"); local hud=shared and shared:FindFirstChild("HUD")
+    local interactors=hud and hud:FindFirstChild("Interactors")
+    local popups=interactors and interactors:FindFirstChild("Popups")
+    return popups and popups:FindFirstChild("Emote")
+end
+
+local function ec_findEmoteModelScript()
+    if ec_emoteModelScript then return ec_emoteModelScript end
+    for _,s in pairs(EC_player.PlayerScripts:GetDescendants()) do
+        if s.Name=="EmoteModel" then ec_emoteModelScript=s; return s end
+    end
+    for _,s in pairs(EC_RS:GetDescendants()) do
+        if s.Name=="EmoteModel" then ec_emoteModelScript=s; return s end
+    end
+    return nil
+end
+
+local function ec_findModuleByDisplayName(displayName)
+    if displayName=="NONE" or not displayName then return nil end
+    if ec_nameCache[displayName]~=nil then return ec_nameCache[displayName] end
+    local emotesFolder=EC_RS:FindFirstChild("Items"); if not emotesFolder then ec_nameCache[displayName]=nil; return nil end
+    emotesFolder=emotesFolder:FindFirstChild("Emotes"); if not emotesFolder then ec_nameCache[displayName]=nil; return nil end
+    local norm=ec_normalize(displayName)
+    for _,m in pairs(emotesFolder:GetChildren()) do
+        local ok,data=pcall(require,m)
+        if ok and data then
+            local dn=data.AppearanceInfo and (data.AppearanceInfo.NameShorted or data.AppearanceInfo.Name)
+            if dn and ec_normalize(dn)==norm then ec_nameCache[displayName]=m.Name; return m.Name end
         end
     end
-    if inp.KeyCode == edgeKeybind then toggleEdge() end
-    if inp.KeyCode == jumpKeybind  then toggleJump() end
-    if inp.KeyCode == flyKeybind   then toggleFly()  end
-    if inp.KeyCode == espKeybind   then toggleESP()  end
-end)
+    ec_nameCache[displayName]=nil; return nil
+end
 
--- =================== OPEN BUTTON ==================
-WOpenBtn.MouseButton1Click:Connect(function()
-    WF:Destroy()
-    showMainFrame()
-    showPanel(MPanel)
-    selectSide(BtnMain, BtnCredits, BtnCustom)
-end)
-
--- =================== DRAG MAIN FRAME ==============
-local dragging, dragStart, dragPos0 = false, nil, nil
-TBar.InputBegan:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true; dragStart = i.Position; dragPos0 = MF.Position
+local function ec_saveOriginalEmoteData(frame)
+    if not frame then return end
+    ec_originalEmoteData={}
+    local function saveSlot(slot, key)
+        if not slot then return end
+        local tl=slot:FindFirstChild("TextLabel")
+        if tl then ec_originalEmoteData[key]={displayText=tl.Text, emoteName=ec_findModuleByDisplayName(tl.Text) or tl.Text} end
     end
-end)
-TBar.InputEnded:Connect(function(i)
-    if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
-end)
-UserInputService.InputChanged:Connect(function(i)
-    if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
-        local d = i.Position - dragStart
-        MF.Position = UDim2.new(dragPos0.X.Scale, dragPos0.X.Offset + d.X,
-                                 dragPos0.Y.Scale, dragPos0.Y.Offset + d.Y)
-    end
-end)
+    local w1=frame:FindFirstChild("Wheel"); local w2=frame:FindFirstChild("Wheel2")
+    if w1 then for i=1,6 do saveSlot(w1:FindFirstChild("Emote"..i),"Wheel_Emote"..i) end end
+    if w2 then for i=1,6 do saveSlot(w2:FindFirstChild("Emote"..i),"Wheel2_Emote"..i) end end
+    ec_emoteDataSaved=true
+end
 
--- =================== CHARACTER EVENTS =============
-player.CharacterAdded:Connect(function(char)
-    character = char
-    hrp       = char:WaitForChild("HumanoidRootPart")
-    humanoid  = char:WaitForChild("Humanoid")
-    if isJumpEnabled then
-        applyJumpPower()
-        jumpPropConn = humanoid:GetPropertyChangedSignal("JumpPower"):Connect(function()
-            if isJumpEnabled then applyJumpPower() end
+local function ec_restoreOriginalEmotes()
+    if not ec_emoteModelScript then ec_findEmoteModelScript() end
+    if not ec_emoteModelScript or not ec_emoteFrame then return end
+    local emf=require(ec_emoteModelScript)
+    local function processSlot(slot, key)
+        if not slot then return end
+        local tl=slot:FindFirstChild("TextLabel"); local vf=slot:FindFirstChild("ViewportFrame")
+        if tl and vf then
+            local orig=ec_originalEmoteData[key]
+            if orig then
+                if vf:FindFirstChild("WorldModel") then vf.WorldModel:Destroy() end
+                if orig.displayText~="NONE" and orig.emoteName then
+                    local em=EC_RS.Items.Emotes:FindFirstChild(orig.emoteName)
+                    if em then emf(vf,orig.emoteName) end
+                    tl.Text=orig.displayText
+                else tl.Text="NONE" end
+            end
+        end
+    end
+    local w1=ec_emoteFrame:FindFirstChild("Wheel"); local w2=ec_emoteFrame:FindFirstChild("Wheel2")
+    if w1 then for i=1,6 do processSlot(w1:FindFirstChild("Emote"..i),"Wheel_Emote"..i) end end
+    if w2 then for i=1,6 do processSlot(w2:FindFirstChild("Emote"..i),"Wheel2_Emote"..i) end end
+end
+
+local function ec_replaceEmotesFrame()
+    if not ec_replacementEnabled or not ec_emoteDataSaved or not ec_emoteFrame then return end
+    if not ec_emoteModelScript then ec_findEmoteModelScript() end
+    if not ec_emoteModelScript then return end
+    local emf=require(ec_emoteModelScript)
+    local function processSlot(slot, wheelName, i)
+        if not slot then return end
+        local tl=slot:FindFirstChild("TextLabel"); if not tl then return end
+        local norm=ec_normalize(tl.Text)
+        for j=1,12 do
+            if ec_currentEmotes[j]~="" and ec_selectEmotes[j]~="" then
+                if norm==ec_normalize(ec_currentEmotes[j]) then
+                    local vf=slot.ViewportFrame
+                    if vf then
+                        local rm=EC_RS.Items.Emotes:FindFirstChild(ec_selectEmotes[j])
+                        if rm then
+                            local key=wheelName.."_Emote"..i
+                            if not ec_originalEmoteData[key] then
+                                ec_originalEmoteData[key]={displayText=tl.Text, emoteName=ec_findModuleByDisplayName(tl.Text) or tl.Text}
+                            end
+                            if vf:FindFirstChild("WorldModel") then vf.WorldModel:Destroy() end
+                            local ok,td=pcall(require,rm)
+                            if ok and td then
+                                local dn=td.AppearanceInfo and (td.AppearanceInfo.NameShorted or td.AppearanceInfo.Name)
+                                emf(vf,ec_selectEmotes[j]); tl.Text=dn or ec_selectEmotes[j]
+                            end
+                        end
+                    end
+                    break
+                end
+            end
+        end
+    end
+    local w1=ec_emoteFrame:FindFirstChild("Wheel"); local w2=ec_emoteFrame:FindFirstChild("Wheel2")
+    if w1 then for i=1,6 do processSlot(w1:FindFirstChild("Emote"..i),"Wheel",i) end end
+    if w2 then for i=1,6 do processSlot(w2:FindFirstChild("Emote"..i),"Wheel2",i) end end
+end
+
+local function ec_swapNames(curr, sel)
+    local ef=EC_RS:FindFirstChild("Items"); if not ef then return false end
+    ef=ef:FindFirstChild("Emotes"); if not ef then return false end
+    local co=ef:FindFirstChild(curr); local so=ef:FindFirstChild(sel)
+    if co and so then
+        local tmp=sel.."_FemboyTemp"
+        while ef:FindFirstChild(tmp) do tmp=tmp.."_" end
+        co.Name=tmp; so.Name=curr; co.Name=sel; return true
+    end
+    return false
+end
+local function ec_resetSwappedNames()
+    local ef=EC_RS:FindFirstChild("Items"); if not ef then return false end
+    ef=ef:FindFirstChild("Emotes"); if not ef then return false end
+    for curr,sel in pairs(ec_swappedPairs) do
+        local co=ef:FindFirstChild(sel); local so=ef:FindFirstChild(curr)
+        if co and so then
+            local tmp=curr.."_FemboyTemp"
+            while ef:FindFirstChild(tmp) do tmp=tmp.."_" end
+            co.Name=tmp; so.Name=sel; co.Name=curr
+        end
+    end
+    return true
+end
+
+local function ec_handleRespawn()
+    local now=tick()
+    if ec_respawnInProgress and (now-ec_lastRespawnTime)<2 then return end
+    ec_respawnInProgress=true; ec_lastRespawnTime=now
+    EC_currentTag=nil; ec_emoteFrame=nil
+    if ec_reapplyThread then task.cancel(ec_reapplyThread); ec_reapplyThread=nil end
+
+    task.spawn(function()
+        local t0=tick()
+        while tick()-t0<10 do
+            local gf=workspace:FindFirstChild("Game")
+            if gf and gf:FindFirstChild("Players") then
+                local pf=gf.Players:FindFirstChild(EC_player.Name)
+                if pf then
+                    EC_currentTag=ec_readTag(pf)
+                    if EC_currentTag then
+                        local b=tonumber(EC_currentTag)
+                        if b and b>=0 and b<=255 then break else EC_currentTag=nil end
+                    end
+                end
+            end
+            task.wait(0.1)
+        end
+        ec_respawnInProgress=false
+    end)
+
+    if ec_replacementEnabled and ec_emoteDataSaved then
+        ec_reapplyThread=task.delay(1.5,function()
+            if not ec_replacementEnabled then return end
+            for attempt=1,30 do
+                ec_emoteFrame=ec_getEmoteFrame()
+                if ec_emoteFrame then
+                    ec_saveOriginalEmoteData(ec_emoteFrame)
+                    ec_restoreOriginalEmotes(); ec_replaceEmotesFrame(); break
+                end
+                task.wait(0.1)
+            end
         end)
     end
-    if isFlyEnabled then
+end
+
+local function ec_isValidEmote(name)
+    if name=="" then return false,"" end
+    local norm=ec_normalize(name)
+    local ef=EC_RS:FindFirstChild("Items"); if not ef then return false,"" end
+    ef=ef:FindFirstChild("Emotes"); if not ef then return false,"" end
+    for _,m in ipairs(ef:GetChildren()) do
+        if m:IsA("ModuleScript") and ec_normalize(m.Name)==norm then return true,m.Name end
+    end
+    return false,""
+end
+
+local function ec_installListeners()
+    if ec_listenerReady then return end
+    if EC_player.Character then ec_setupHumanoidListeners(EC_player.Character) end
+    EC_player.CharacterAdded:Connect(function(newChar)
+        task.wait(0.5); ec_setupHumanoidListeners(newChar); ec_handleRespawn()
+    end)
+    if EC_player.Character then task.spawn(ec_handleRespawn) end
+    pcall(function()
+        local gf=workspace:FindFirstChild("Game")
+        if gf and gf:FindFirstChild("Players") then
+            gf.Players.ChildAdded:Connect(function(child)
+                if child.Name==EC_player.Name then task.wait(0.5); ec_handleRespawn() end
+            end)
+            gf.Players.ChildRemoved:Connect(function(child)
+                if child.Name==EC_player.Name then EC_currentTag=nil; ec_emoteFrame=nil end
+            end)
+        end
+    end)
+    EC_player.CharacterRemoving:Connect(function()
+        if next(ec_swappedPairs) then ec_resetSwappedNames() end
+    end)
+    EC_player.CharacterAdded:Connect(function()
+        task.wait(1)
+        if next(ec_swappedPairs) then
+            for curr,sel in pairs(ec_swappedPairs) do ec_swapNames(curr,sel) end
+        end
+        if ec_pendingApply and #ec_pendingSwaps>0 then
+            for _,pair in ipairs(ec_pendingSwaps) do
+                if ec_swapNames(pair[1],pair[2]) then ec_swappedPairs[pair[1]]=pair[2] end
+            end
+            ec_pendingSwaps={}; ec_pendingApply=false
+        end
+    end)
+    ec_listenerReady=true
+end
+
+-- ============================================================
+-- CHARACTER ADDED HANDLER
+-- ============================================================
+player.CharacterAdded:Connect(function()
+    character, hrp, humanoid = getCharacterAndHrp()
+    task.wait(0.5)
+    if isJumpBoostEnabled then pcall(function() humanoid.UseJumpPower=true; humanoid.JumpPower=jumpBoostPower end) end
+    if isGravityEnabled then pcall(function() workspace.Gravity=currentGravityValue end) end
+    -- Restart Auto Farm from Phase 1 on respawn
+    if isAutoFarmEnabled then
         task.wait(0.5)
-        enableFly()
+        autoFarmPhase = 1
+        autoFarmTP()
     end
 end)
-player.CharacterRemoving:Connect(function()
-    if isFlyEnabled then disableFly() end
-end)
 
--- =================== STARTUP ======================
-task.wait(1.5)
-notify("Femboy Hub (Beta)", "Loaded! Press " .. uiKeybind.Name .. " to toggle UI", 5)
+-- ============================================================
+-- KILL UI
+-- ============================================================
+local function doKillUI()
+    if isEnabled      then isEnabled=false; if Connection then Connection:Disconnect(); Connection=nil end end
+    if isFlyEnabled   then disableFly() end
+    if isEspEnabled   then removeESP() end
+    if isJumpBoostEnabled then
+        isJumpBoostEnabled=false
+        pcall(function() if humanoid then humanoid.UseJumpPower=true; humanoid.JumpPower=ORIGINAL_JUMP end end)
+    end
+    if isGravityEnabled then
+        isGravityEnabled=false
+        if gravityConn then gravityConn:Disconnect(); gravityConn=nil end
+        pcall(function() workspace.Gravity=ORIGINAL_GRAVITY end)
+    end
+    if isInfJumpEnabled  then isInfJumpEnabled=false;  if infJumpConn  then infJumpConn:Disconnect();  infJumpConn=nil  end end
+    if isAutoJumpEnabled then isAutoJumpEnabled=false; if autoJumpConn then autoJumpConn:Disconnect(); autoJumpConn=nil end end
+    if isAutoFarmEnabled then stopAutoFarm() end
+    tasRunning=false; ec_emoteEnabled2=false; ec_replacementEnabled=false
+    if isFullbrightEnabled then disableFullbright() end
+    if isStretchActive then disableStretch() end
+    applyWorldTransparency(0)
+    if next(ec_swappedPairs) then pcall(ec_resetSwappedNames) end
+    if #storedParts>0 then pcall(function() wallRestoreStoredParts() end) end
+    for _,c in pairs(AllConnections) do pcall(function() c:Disconnect() end) end
+    task.wait(0.3); pcall(function() Rayfield:Destroy() end)
+end
+local function killUI() showKillUIDialog(doKillUI) end
+
+-- ============================================================
+-- TABS
+-- ============================================================
+local CreditTab  = Window:CreateTab("Credit",     4483362458)
+local ChangeLog  = Window:CreateTab("Change Log", 4483362458)
+local MainTab    = Window:CreateTab("Main",       4483362458)
+local CustomTab  = Window:CreateTab("Custom",     4483362458)
+local AutoFarmTab= Window:CreateTab("Auto Farm",  4483362458)
+local SettingTab = Window:CreateTab("Settings",   4483362458)
+
+-- ============================================================
+-- CREDIT TAB
+-- ============================================================
+CreditTab:CreateSection("Credit Femboy Hub")
+CreditTab:CreateLabel("Femboy Hub (Beta) - Supported for Evade  |  v1.1.3")
+CreditTab:CreateLabel("Created by KhoaProSigmaAlphaMale")
+CreditTab:CreateLabel("Idea inspired from other scripts")
+CreditTab:CreateLabel("Why wouldn't you love a Femboy 😡😡")
+CreditTab:CreateLabel("UI powered by Rayfield")
+CreditTab:CreateLabel("Khoa loves Arec 💕")
+
+-- ============================================================
+-- CHANGE LOG TAB
+-- ============================================================
+ChangeLog:CreateSection("Change Log")
+ChangeLog:CreateLabel("v1.1.3 (Beta)")
+ChangeLog:CreateLabel("- REMOVED: Speed from Main (can cause unfair advantage)")
+ChangeLog:CreateLabel("- FIXED: Gravity now uses RunService loop — server can no longer reset it")
+ChangeLog:CreateLabel("- Auto Jump: added range hints (0-699ms / 700ms / 700-1000ms)")
+ChangeLog:CreateLabel("- Emote Changer: replaced 12 individual sections with dropdown slot selector")
+ChangeLog:CreateLabel("- Emote Changer: added usage guide under Part 3")
+ChangeLog:CreateLabel("- FOV replaced with Stretch H/V system (simulates Evade stretched resolution)")
+ChangeLog:CreateLabel("- NEW TAB: Auto Farm with 4-point teleport loop, survives respawn")
+ChangeLog:CreateLabel("---")
+ChangeLog:CreateLabel("v1.1.2 (Beta)")
+ChangeLog:CreateLabel("- Auto Jump Delay: 25ms steps, Speed in Main, Emote Changer V4 rebuild")
+ChangeLog:CreateLabel("- FOV slider (90-300), Full Bright, Kill UI confirmation popup")
+
+-- ============================================================
+-- MAIN  –  EDGE BOOST
+-- ============================================================
+MainTab:CreateSection("Edge Boost")
+BoostSliderObj = MainTab:CreateSlider({
+    Name="Boost Power", Range={0,400}, Increment=1, Suffix="", CurrentValue=BOOST_POWER, Flag="BoostSlider",
+    Callback=function(v) BOOST_POWER=v end,
+})
+MainTab:CreateInput({
+    Name="Custom Value (0–400)", PlaceholderText="e.g. 120", NumbersOnly=true, OnEnter=true, Flag="BoostInput",
+    Callback=function(v) syncInput(v,0,400,BoostSliderObj,function(val) BOOST_POWER=val; Notify("Edge Boost","⚡ Boost → "..val,2) end) end,
+})
+MainTab:CreateDropdown({
+    Name="Quick Preset", Options={"0","40","80","120","160","200","240","280","320","360","400"},
+    CurrentOption={"80"}, Flag="BoostPreset",
+    Callback=function(v) local val=tonumber(v[1] or v); if val then BOOST_POWER=val; if BoostSliderObj then BoostSliderObj:Set(val) end; Notify("Edge Boost","⚡ Preset → "..val,2) end end,
+})
+local EdgeBoostToggleObj = MainTab:CreateToggle({
+    Name="Enable Edge Boost", CurrentValue=false, Flag="EdgeBoostToggle",
+    Callback=function(v) if v then enableEdgeBoost() else disableEdgeBoost() end end,
+})
+MainTab:CreateKeybind({
+    Name="Edge Boost Keybind", CurrentKeybind="U", HoldToInteract=false, Flag="EdgeBoostKeybind",
+    Callback=function() if EdgeBoostToggleObj then EdgeBoostToggleObj:Set(not isEnabled) end end,
+})
+
+-- ============================================================
+-- MAIN  –  FLY
+-- ============================================================
+MainTab:CreateSection("Fly")
+FlySpeedSliderObj = MainTab:CreateSlider({
+    Name="Fly Speed", Range={1,200}, Increment=1, Suffix="", CurrentValue=flySpeed, Flag="FlySpeedSlider",
+    Callback=function(v) flySpeed=v end,
+})
+MainTab:CreateInput({
+    Name="Custom Value (1–200)", PlaceholderText="e.g. 75", NumbersOnly=true, OnEnter=true, Flag="FlySpeedInput",
+    Callback=function(v) syncInput(v,1,200,FlySpeedSliderObj,function(val) flySpeed=val; Notify("Fly","⚡ Fly Speed → "..val,2) end) end,
+})
+MainTab:CreateDropdown({
+    Name="Quick Preset", Options={"10","25","50","75","100","125","150","175","200"},
+    CurrentOption={"50"}, Flag="FlySpeedPreset",
+    Callback=function(v) local val=tonumber(v[1] or v); if val then flySpeed=val; if FlySpeedSliderObj then FlySpeedSliderObj:Set(val) end; Notify("Fly","⚡ Speed → "..val,2) end end,
+})
+local FlyToggleObj = MainTab:CreateToggle({
+    Name="Enable Fly", CurrentValue=false, Flag="FlyToggle",
+    Callback=function(v) if v then enableFly() else disableFly() end end,
+})
+MainTab:CreateKeybind({
+    Name="Fly Keybind", CurrentKeybind="F", HoldToInteract=false, Flag="FlyKeybind",
+    Callback=function() if FlyToggleObj then FlyToggleObj:Set(not isFlyEnabled) end end,
+})
+
+-- ============================================================
+-- MAIN  –  ESP
+-- ============================================================
+MainTab:CreateSection("ESP")
+EspToggleObj = MainTab:CreateToggle({
+    Name="Enable ESP", CurrentValue=false, Flag="EspToggle",
+    Callback=function(v) if v then enableESP() else disableESP() end end,
+})
+MainTab:CreateKeybind({
+    Name="ESP Keybind", CurrentKeybind="E", HoldToInteract=false, Flag="EspKeybind",
+    Callback=function() if EspToggleObj then EspToggleObj:Set(not isEspEnabled) end end,
+})
+
+-- ============================================================
+-- MAIN  –  JUMP BOOST
+-- ============================================================
+MainTab:CreateSection("Jump Boost")
+MainTab:CreateLabel("Disabling restores to Evade default (20).")
+JumpSliderObj = MainTab:CreateSlider({
+    Name="Jump Power", Range={0,400}, Increment=1, Suffix="", CurrentValue=jumpBoostPower, Flag="JumpPowerSlider",
+    Callback=function(v) jumpBoostPower=v; if isJumpBoostEnabled and humanoid then pcall(function() humanoid.UseJumpPower=true; humanoid.JumpPower=jumpBoostPower end) end end,
+})
+MainTab:CreateInput({
+    Name="Custom Value (0–400)", PlaceholderText="e.g. 150", NumbersOnly=true, OnEnter=true, Flag="JumpPowerInput",
+    Callback=function(v)
+        syncInput(v,0,400,JumpSliderObj,function(val)
+            jumpBoostPower=val; if isJumpBoostEnabled and humanoid then pcall(function() humanoid.UseJumpPower=true; humanoid.JumpPower=val end) end
+            Notify("Jump Boost","⚡ Jump Power → "..val,2)
+        end)
+    end,
+})
+MainTab:CreateDropdown({
+    Name="Quick Preset", Options={"0","20","40","60","100","150","200","250","300","350","400"},
+    CurrentOption={"50"}, Flag="JumpPreset",
+    Callback=function(v)
+        local val=tonumber(v[1] or v)
+        if val then jumpBoostPower=val; if JumpSliderObj then JumpSliderObj:Set(val) end
+            if isJumpBoostEnabled and humanoid then pcall(function() humanoid.UseJumpPower=true; humanoid.JumpPower=val end) end
+            Notify("Jump Boost","⚡ Preset → "..val,2) end
+    end,
+})
+JumpBoostToggleObj = MainTab:CreateToggle({
+    Name="Enable Jump Boost", CurrentValue=false, Flag="JumpBoostToggle",
+    Callback=function(v) if v then enableJumpBoost() else disableJumpBoost() end end,
+})
+MainTab:CreateKeybind({
+    Name="Jump Boost Keybind", CurrentKeybind="J", HoldToInteract=false, Flag="JumpBoostKeybind",
+    Callback=function() if JumpBoostToggleObj then JumpBoostToggleObj:Set(not isJumpBoostEnabled) end end,
+})
+
+-- ============================================================
+-- MAIN  –  GRAVITY
+-- ============================================================
+MainTab:CreateSection("Gravity")
+MainTab:CreateLabel("Tip: -400=Float  |  0=None  |  196=Default  |  400=Heavy")
+MainTab:CreateLabel("Fixed: Uses RunService loop — gravity stays even if server resets it.")
+GravSliderObj = MainTab:CreateSlider({
+    Name="Gravity Value", Range={-400,400}, Increment=1, Suffix="", CurrentValue=0, Flag="GravitySlider",
+    Callback=function(v) currentGravityValue=v; if isGravityEnabled then pcall(function() workspace.Gravity=v end) end end,
+})
+MainTab:CreateInput({
+    Name="Custom Value (-400–400)", PlaceholderText="e.g. -200 or 300",
+    NumbersOnly=false, OnEnter=true, Flag="GravityInput",
+    Callback=function(v)
+        syncInput(v,-400,400,GravSliderObj,function(val)
+            currentGravityValue=val; if isGravityEnabled then pcall(function() workspace.Gravity=val end) end
+            Notify("Gravity","🌍 Gravity → "..val..(isGravityEnabled and "" or "  (toggle OFF)"),2)
+        end)
+    end,
+})
+MainTab:CreateDropdown({
+    Name="Quick Preset",
+    Options={"-400 (Float)","-200 (Light)","0 (None)","100 (Low)","196 (Default)","300 (Heavy)","400 (Max)"},
+    CurrentOption={"196 (Default)"}, Flag="GravityPreset",
+    Callback=function(v)
+        local raw=tostring(v[1] or v); local val=tonumber(raw:match("^%-?%d+"))
+        if val then currentGravityValue=val; if GravSliderObj then GravSliderObj:Set(val) end
+            if isGravityEnabled then pcall(function() workspace.Gravity=val end) end
+            Notify("Gravity","🌍 Gravity → "..val..(isGravityEnabled and "" or "  (toggle OFF)"),2) end
+    end,
+})
+GravityToggleObj = MainTab:CreateToggle({
+    Name="Enable Gravity Override", CurrentValue=false, Flag="GravityToggle",
+    Callback=function(v) if v then enableGravity() else disableGravity() end end,
+})
+MainTab:CreateButton({
+    Name="🔄  Reset & Disable Gravity Override",
+    Callback=function() if GravityToggleObj then GravityToggleObj:Set(false) end; disableGravity() end,
+})
+
+-- ============================================================
+-- MAIN  –  INF JUMP
+-- ============================================================
+MainTab:CreateSection("Infinity Jump")
+MainTab:CreateLabel("Press Space in the air. Spam to fly upward.")
+InfSliderObj = MainTab:CreateSlider({
+    Name="Inf Jump Power", Range={10,200}, Increment=1, Suffix="", CurrentValue=infJumpPower, Flag="InfJumpSlider",
+    Callback=function(v) infJumpPower=v end,
+})
+MainTab:CreateInput({
+    Name="Custom Value (10–200)", PlaceholderText="e.g. 120", NumbersOnly=true, OnEnter=true, Flag="InfJumpInput",
+    Callback=function(v) syncInput(v,10,200,InfSliderObj,function(val) infJumpPower=val; Notify("Inf Jump","⚡ Power → "..val,2) end) end,
+})
+MainTab:CreateDropdown({
+    Name="Quick Preset", Options={"20","40","60","80","100","120","150","180","200"},
+    CurrentOption={"80"}, Flag="InfJumpPreset",
+    Callback=function(v) local val=tonumber(v[1] or v); if val then infJumpPower=val; if InfSliderObj then InfSliderObj:Set(val) end; Notify("Inf Jump","⚡ Power → "..val,2) end end,
+})
+InfJumpToggleObj = MainTab:CreateToggle({
+    Name="Enable Inf Jump", CurrentValue=false, Flag="InfJumpToggle",
+    Callback=function(v) if v then enableInfJump() else disableInfJump() end end,
+})
+MainTab:CreateKeybind({
+    Name="Inf Jump Keybind", CurrentKeybind="I", HoldToInteract=false, Flag="InfJumpKeybind",
+    Callback=function() if InfJumpToggleObj then InfJumpToggleObj:Set(not isInfJumpEnabled) end end,
+})
+
+-- ============================================================
+-- MAIN  –  AUTO JUMP  (25ms steps 100–1000ms)
+-- ============================================================
+MainTab:CreateSection("Auto Jump")
+MainTab:CreateLabel("Hold Space to jump repeatedly. Ground only.")
+-- Range hints for delay selection:
+MainTab:CreateLabel("0 - 699ms: Good for acceleration / speed boost")
+MainTab:CreateLabel("700ms: Good for bhop (bunny hop rhythm)")
+MainTab:CreateLabel("700 - 1000ms: Realistic / natural jump rate")
+local autoJumpDelayOptions={}
+for ms=100,1000,25 do table.insert(autoJumpDelayOptions,ms.."ms") end
+MainTab:CreateDropdown({
+    Name="Jump Delay", Options=autoJumpDelayOptions, CurrentOption={"300ms"}, Flag="AutoJumpDelay",
+    Callback=function(v)
+        local raw=tostring(v[1] or v); local ms=tonumber(raw:match("%d+"))
+        if ms then autoJumpDelay=ms/1000; Notify("Auto Jump","⏱️ Delay → "..ms.."ms",2); if isAutoJumpEnabled then buildAutoJumpLoop() end end
+    end,
+})
+AutoJumpToggleObj = MainTab:CreateToggle({
+    Name="Enable Auto Jump", CurrentValue=false, Flag="AutoJumpToggle",
+    Callback=function(v) if v then enableAutoJump() else disableAutoJump() end end,
+})
+
+-- ============================================================
+-- MAIN  –  TAS
+-- ============================================================
+MainTab:CreateSection("TAS (Tool-Assisted Speedrun)")
+MainTab:CreateLabel("Record your movement then replay it exactly.")
+MainTab:CreateButton({ Name="🔴  Start Recording", Callback=function() tasStartRecord() end })
+MainTab:CreateButton({ Name="⏹️  Stop Recording",  Callback=function() tasStopRecord() end })
+MainTab:CreateButton({ Name="▶️  Play TAS",         Callback=function() tasPlay() end })
+MainTab:CreateKeybind({ Name="Start Recording Keybind", CurrentKeybind="", HoldToInteract=false, Flag="TASStartBind", Callback=function() tasStartRecord() end })
+MainTab:CreateKeybind({ Name="Stop Recording Keybind",  CurrentKeybind="", HoldToInteract=false, Flag="TASStopBind",  Callback=function() tasStopRecord() end })
+MainTab:CreateKeybind({ Name="Play TAS Keybind",        CurrentKeybind="", HoldToInteract=false, Flag="TASPlayBind",  Callback=function() tasPlay() end })
+
+-- ============================================================
+-- CUSTOM  –  WORLD TRANSPARENCY
+-- ============================================================
+CustomTab:CreateSection("World Transparency")
+CustomTab:CreateLabel("Makes ALL world objects transparent. CanCollide never changed.")
+CustomTab:CreateLabel("Character models are excluded.")
+CustomTab:CreateDropdown({
+    Name="Transparency Level",
+    Options={"0%  — Fully Visible","25% — Slightly Transparent","50% — Half Transparent","75% — Mostly Invisible","100% — Fully Invisible"},
+    CurrentOption={"0%  — Fully Visible"}, Flag="WorldTransDropdown",
+    Callback=function(v)
+        local s=v[1] or v; local level=0
+        if s:find("^0") then level=0 elseif s:find("^25") then level=25
+        elseif s:find("^50") then level=50 elseif s:find("^75") then level=75
+        elseif s:find("^100") then level=100 end
+        task.spawn(function() applyWorldTransparency(level) end)
+    end,
+})
+CustomTab:CreateButton({ Name="🔄  Restore World Visibility", Callback=function() applyWorldTransparency(0) end })
+
+-- ============================================================
+-- CUSTOM  –  STRETCH FOV  (Horizontal + Vertical for Evade)
+-- ============================================================
+CustomTab:CreateSection("Stretch FOV (Evade)")
+CustomTab:CreateLabel("Simulates stretched resolution like 4:3 Stretched in Evade.")
+CustomTab:CreateLabel("H-Stretch >100% = wider view (objects appear thinner / stretched sideways).")
+CustomTab:CreateLabel("V-Stretch >100% = taller view (objects appear shorter / compressed vertically).")
+CustomTab:CreateLabel("Enable the toggle first, then adjust sliders in real-time.")
+
+HStretchSlider = CustomTab:CreateSlider({
+    Name="Horizontal Stretch %", Range={50,200}, Increment=1, Suffix="%",
+    CurrentValue=100, Flag="HStretchSlider",
+    Callback=function(v)
+        hStretch=v
+        if isStretchActive then pcall(function() workspace.CurrentCamera.FieldOfView=computeStretchFOV() end) end
+    end,
+})
+VStretchSlider = CustomTab:CreateSlider({
+    Name="Vertical Stretch %", Range={50,200}, Increment=1, Suffix="%",
+    CurrentValue=100, Flag="VStretchSlider",
+    Callback=function(v)
+        vStretch=v
+        if isStretchActive then pcall(function() workspace.CurrentCamera.FieldOfView=computeStretchFOV() end) end
+    end,
+})
+CustomTab:CreateDropdown({
+    Name="Quick Stretch Preset",
+    Options={"Normal (100/100)","4:3 Stretched (133/100)","Wide (150/90)","Cinematic (150/75)","Ultra Wide (200/100)"},
+    CurrentOption={"Normal (100/100)"}, Flag="StretchPreset",
+    Callback=function(v)
+        local s=v[1] or v
+        if s:find("Normal")     then hStretch=100; vStretch=100
+        elseif s:find("4:3")    then hStretch=133; vStretch=100
+        elseif s:find("Wide")   then hStretch=150; vStretch=90
+        elseif s:find("Cine")   then hStretch=150; vStretch=75
+        elseif s:find("Ultra")  then hStretch=200; vStretch=100 end
+        if HStretchSlider then HStretchSlider:Set(hStretch) end
+        if VStretchSlider then VStretchSlider:Set(vStretch) end
+        if isStretchActive then pcall(function() workspace.CurrentCamera.FieldOfView=computeStretchFOV() end) end
+        Notify("Stretch FOV","⚡ Preset → H:"..hStretch.."% / V:"..vStretch.."%",3)
+    end,
+})
+CustomTab:CreateToggle({
+    Name="Enable Stretch FOV", CurrentValue=false, Flag="StretchFOVToggle",
+    Callback=function(v) if v then enableStretch() else disableStretch() end end,
+})
+CustomTab:CreateButton({ Name="🔄  Reset Stretch to Normal (100/100)", Callback=function() resetStretch() end })
+
+-- ============================================================
+-- CUSTOM  –  FULL BRIGHT
+-- ============================================================
+CustomTab:CreateSection("Full Bright")
+CustomTab:CreateLabel("Increases ambient lighting. Subtle — not blinding.")
+CustomTab:CreateToggle({
+    Name="Enable Full Bright", CurrentValue=false, Flag="FullBrightToggle",
+    Callback=function(v) if v then enableFullbright() else disableFullbright() end end,
+})
+
+-- ============================================================
+-- CUSTOM  –  EMOTE CHANGER  (Rebuilt — Dropdown-based slots)
+-- ============================================================
+CustomTab:CreateSection("Emote Changer (Beta)")
+CustomTab:CreateLabel("Requires firesignal support in your executor.")
+
+-- ── Part 1: Emote Intercept ──────────────────────────────────
+CustomTab:CreateSection("Part 1 — Emote Intercept (AnimationPlayed)")
+-- Slot selector via dropdown instead of 12 individual sections
+CustomTab:CreateDropdown({
+    Name="Select Slot (1–12)",
+    Options={"1","2","3","4","5","6","7","8","9","10","11","12"},
+    CurrentOption={"1"}, Flag="ECSlotSelector",
+    Callback=function(v)
+        ec_selectedSlot=tonumber(v[1] or v) or 1
+        Notify("Emote Changer",
+            "📌 Slot "..ec_selectedSlot.." loaded\n"..
+            "Trigger: '"..ec_currentEmotes[ec_selectedSlot].."'\n"..
+            "Replace: '"..ec_selectEmotes[ec_selectedSlot].."'", 4)
+    end,
+})
+CustomTab:CreateInput({
+    Name="Trigger Emote — exact ModuleScript name (e.g. Wave)",
+    PlaceholderText="Type emote name you will PLAY in-game",
+    NumbersOnly=false, OnEnter=true, Flag="ECTriggerShared",
+    Callback=function(v)
+        ec_currentEmotes[ec_selectedSlot]=v:gsub("^%s*(.-)%s*$","%1")
+        Notify("Emote Changer","✅ Slot "..ec_selectedSlot.." Trigger = '"..ec_currentEmotes[ec_selectedSlot].."'",3)
+    end,
+})
+CustomTab:CreateInput({
+    Name="Replace With — exact ModuleScript name (e.g. Dance)",
+    PlaceholderText="Type emote name the SERVER will receive",
+    NumbersOnly=false, OnEnter=true, Flag="ECReplaceShared",
+    Callback=function(v)
+        ec_selectEmotes[ec_selectedSlot]=v:gsub("^%s*(.-)%s*$","%1")
+        Notify("Emote Changer","✅ Slot "..ec_selectedSlot.." Replace = '"..ec_selectEmotes[ec_selectedSlot].."'",3)
+    end,
+})
+
+CustomTab:CreateSection("Emote Intercept Controls")
+CustomTab:CreateToggle({
+    Name="Enable Emote Intercept (All 12 Slots)", CurrentValue=false, Flag="ECInterceptMaster",
+    Callback=function(v)
+        ec_installListeners()
+        ec_emoteEnabled2=v
+        if v then Notify("Emote Changer","✅ Emote Intercept ON — all active slots running",4)
+        else Notify("Emote Changer","❌ Emote Intercept OFF",3) end
+    end,
+})
+CustomTab:CreateButton({
+    Name="🔍  Validate All Slots",
+    Callback=function()
+        local msg=""
+        for i=1,12 do
+            if ec_currentEmotes[i]~="" or ec_selectEmotes[i]~="" then
+                local ok1,n1=ec_isValidEmote(ec_currentEmotes[i])
+                local ok2,n2=ec_isValidEmote(ec_selectEmotes[i])
+                msg=msg.."Slot "..i..": "..(ok1 and "✅ "..n1 or "❌ '"..ec_currentEmotes[i].."'")
+                    .." → "..(ok2 and "✅ "..n2 or "❌ '"..ec_selectEmotes[i].."'").."\n"
+            end
+        end
+        if msg=="" then msg="All slots are empty." end
+        Notify("Emote Validation",msg,8)
+    end,
+})
+CustomTab:CreateButton({
+    Name="🗑️  Clear All Intercept Slots",
+    Callback=function()
+        for i=1,12 do ec_currentEmotes[i]=""; ec_selectEmotes[i]="" end
+        ec_nameCache={}; ec_normalCache={}
+        Notify("Emote Changer","✅ All intercept slots cleared.",3)
+    end,
+})
+
+-- ── Part 2: Visual Wheel Replacement ──────────────────────────
+CustomTab:CreateSection("Part 2 — Visual Wheel Replacement")
+CustomTab:CreateToggle({
+    Name="Enable Wheel Visual Replacement", CurrentValue=false, Flag="ECWheelReplace",
+    Callback=function(v)
+        ec_installListeners(); ec_replacementEnabled=v
+        if ec_emoteFrame and ec_emoteDataSaved then
+            ec_restoreOriginalEmotes()
+            if v then ec_replaceEmotesFrame() end
+        end
+        if v then Notify("Emote Wheel","✅ Wheel replacement ON",3)
+        else Notify("Emote Wheel","❌ Wheel replacement OFF — restored",3) end
+    end,
+})
+CustomTab:CreateButton({
+    Name="✔️  Apply Wheel Mapping",
+    Callback=function()
+        ec_installListeners()
+        ec_emoteFrame=ec_getEmoteFrame()
+        if not ec_emoteFrame then Notify("Emote Wheel","⚠️ Open your emote wheel first!",5); return end
+        ec_findEmoteModelScript()
+        ec_saveOriginalEmoteData(ec_emoteFrame)
+        ec_restoreOriginalEmotes()
+        if ec_replacementEnabled then ec_replaceEmotesFrame() end
+        Notify("Emote Wheel","✅ Wheel mapping applied!",4)
+    end,
+})
+CustomTab:CreateButton({
+    Name="🔄  Restore Wheel to Original",
+    Callback=function()
+        if ec_emoteFrame then ec_restoreOriginalEmotes(); Notify("Emote Wheel","✅ Wheel restored.",3)
+        else Notify("Emote Wheel","⚠️ No frame captured yet.",3) end
+    end,
+})
+
+-- ── Part 3: Emote Module Swapper ──────────────────────────────
+CustomTab:CreateSection("Part 3 — Emote Module Swapper")
+-- Usage guide for Part 3:
+CustomTab:CreateLabel("HOW TO USE THE SWAPPER:")
+CustomTab:CreateLabel("① Select a Swap Slot (1–12) from the dropdown.")
+CustomTab:CreateLabel("② 'Current Emote Name' — type the emote you want to REPLACE (e.g. Wave).")
+CustomTab:CreateLabel("   This is the emote name exactly as it appears in the Emotes folder.")
+CustomTab:CreateLabel("③ 'Swap With' — type the emote you want it to BECOME (e.g. Dance).")
+CustomTab:CreateLabel("   After swapping, playing 'Wave' in-game will use the 'Dance' animation.")
+CustomTab:CreateLabel("④ Click 'Apply Emote Swap' to activate. Works across respawns.")
+CustomTab:CreateLabel("⑤ Click 'Reset All Swaps' to undo everything and restore original names.")
+CustomTab:CreateLabel("Note: Names are case-sensitive. Check exact names in ReplicatedStorage > Items > Emotes.")
+
+-- Swap Slot selector via dropdown
+CustomTab:CreateDropdown({
+    Name="Select Swap Slot (1–12)",
+    Options={"1","2","3","4","5","6","7","8","9","10","11","12"},
+    CurrentOption={"1"}, Flag="ECSwapSlotSelector",
+    Callback=function(v)
+        ec_selectedSwapSlot=tonumber(v[1] or v) or 1
+        Notify("Emote Swapper",
+            "📌 Swap Slot "..ec_selectedSwapSlot.." loaded\n"..
+            "Current: '"..ec_swapCurrent[ec_selectedSwapSlot].."'\n"..
+            "Swap With: '"..ec_swapSelect[ec_selectedSwapSlot].."'", 4)
+    end,
+})
+CustomTab:CreateInput({
+    Name="Current Emote Name — the one you want to replace (e.g. Wave)",
+    PlaceholderText="Enter EXACT emote module name",
+    NumbersOnly=false, OnEnter=true, Flag="ECSwapCurrShared",
+    Callback=function(v)
+        ec_swapCurrent[ec_selectedSwapSlot]=v:gsub("^%s*(.-)%s*$","%1")
+        Notify("Emote Swapper","✅ Swap Slot "..ec_selectedSwapSlot.." Current = '"..ec_swapCurrent[ec_selectedSwapSlot].."'",3)
+    end,
+})
+CustomTab:CreateInput({
+    Name="Swap With — the replacement emote (e.g. Dance)",
+    PlaceholderText="Enter EXACT emote module name",
+    NumbersOnly=false, OnEnter=true, Flag="ECSwapSelShared",
+    Callback=function(v)
+        ec_swapSelect[ec_selectedSwapSlot]=v:gsub("^%s*(.-)%s*$","%1")
+        Notify("Emote Swapper","✅ Swap Slot "..ec_selectedSwapSlot.." Swap With = '"..ec_swapSelect[ec_selectedSwapSlot].."'",3)
+    end,
+})
+
+CustomTab:CreateSection("Swapper Controls")
+CustomTab:CreateButton({
+    Name="⚙️  Apply Emote Swap",
+    Callback=function()
+        ec_installListeners()
+        local swapped,failed=0,0
+        for i=1,12 do
+            if ec_swapCurrent[i]~="" and ec_swapSelect[i]~="" then
+                if ec_swapNames(ec_swapCurrent[i],ec_swapSelect[i]) then
+                    ec_swappedPairs[ec_swapCurrent[i]]=ec_swapSelect[i]; swapped=swapped+1
+                else failed=failed+1 end
+            end
+        end
+        local msg="✅ Swapped: "..swapped
+        if failed>0 then msg=msg.."  |  ❌ Failed: "..failed.." (names not found)" end
+        Notify("Emote Swapper",msg,4)
+    end,
+})
+CustomTab:CreateButton({
+    Name="🔄  Reset All Swaps",
+    Callback=function()
+        ec_resetSwappedNames(); ec_swappedPairs={}; ec_pendingSwaps={}; ec_pendingApply=false
+        for i=1,12 do ec_swapCurrent[i]=""; ec_swapSelect[i]="" end
+        Notify("Emote Swapper","✅ All emote module swaps reset to original.",3)
+    end,
+})
+
+-- ============================================================
+-- CUSTOM  –  IMPORT MAP  (20 presets)
+-- ============================================================
+CustomTab:CreateSection("Import Map")
+local mapNames={"Classic","City","Dahood","TSB","Winter","Sky","BloxFruit","Hidenseek","Obby","TowerObby","McDonalds","Brookhaven","NewPlanet","JJK","Racing","Classic2","DrivingEmpire","ArenaPaint","SquidGame","GoblinMap"}
+local mapIDs={"141621194","11486778910","5595565465","72569384252345","11182305499","79090364524804","11721319853","9857032925","17185279655","79328502404130","10254568133","14985811598","73308013616318","15009598974","135653057769513","12889628588","8640311613","115159842494251","8106950117","897595038"}
+CustomTab:CreateSection("Quick Map Presets (20 Maps)")
+CustomTab:CreateDropdown({
+    Name="Select Map & Load", Options=mapNames, CurrentOption={mapNames[1]}, Flag="MapPresetDropdown",
+    Callback=function(v) local sel=v[1] or v; for i,n in ipairs(mapNames) do if n==sel then Notify("Import Map","⏳ Loading "..n.."...",3); task.spawn(function() importMap(mapIDs[i]) end); break end end end,
+})
+CustomTab:CreateSection("Custom Asset ID")
+local customMapAssetID=""
+CustomTab:CreateInput({ Name="Enter Map Asset ID", PlaceholderText="e.g. 12345678", NumbersOnly=true, OnEnter=true, Flag="CustomMapAssetIDInput", Callback=function(v) customMapAssetID=tostring(v):match("%d+") or "" end })
+CustomTab:CreateButton({ Name="📥  Import Custom Map", Callback=function()
+    if customMapAssetID=="" then Notify("Import Map","⚠️ Please enter an Asset ID first.",3); return end
+    Notify("Import Map","⏳ Loading map ID: "..customMapAssetID.."...",3); task.spawn(function() importMap(customMapAssetID) end)
+end })
+CustomTab:CreateButton({ Name="🗑️  Remove Imported Map", Callback=function() removeImportedMap() end })
+
+-- ============================================================
+-- CUSTOM  –  SKYBOX  (20 presets)
+-- ============================================================
+CustomTab:CreateSection("Sky Change")
+local skyNames={"Gray","Night","Anime1","Anime2","Anime3","Anime4","Femboy1","Femboy2","Femboy3","Femboy4","Aesthetic","CakeUpNight","NightVibe","Rain","Fire","Brookhaven","Space","Cloud","Space2","Space3"}
+local skyIDs={"130547382131410","128839006185497","125641870562571","127770372529424","110570238374062","138349252564540","82666462942145","95142505890749","110326016107832","123826538827500","7108851308","15983996673","15983996673","12376964583","6900508449","10594723714","11675661848","116402178504134","16262385808","11336743666"}
+CustomTab:CreateSection("Quick Sky Presets (20 Skies)")
+CustomTab:CreateDropdown({
+    Name="Select Sky & Apply", Options=skyNames, CurrentOption={skyNames[1]}, Flag="SkyPresetDropdown",
+    Callback=function(v) local sel=v[1] or v; for i,n in ipairs(skyNames) do if n==sel then Notify("Sky Change","⏳ Applying "..n.."...",2); task.spawn(function() applySkybox(skyIDs[i]) end); break end end end,
+})
+CustomTab:CreateSection("Custom Sky AssetID")
+local customSkyID=""
+CustomTab:CreateInput({ Name="Custom Sky AssetID", PlaceholderText="e.g. rbxassetid://130547382131410", NumbersOnly=false, OnEnter=true, Flag="CustomSkyInput", Callback=function(v) customSkyID=tostring(v) end })
+CustomTab:CreateButton({ Name="✔️  Apply Custom Sky", Callback=function()
+    if customSkyID=="" then Notify("Sky Change","⚠️ Please enter a Sky Asset ID first.",3); return end
+    Notify("Sky Change","⏳ Applying custom sky...",2); task.spawn(function() applySkybox(customSkyID) end)
+end })
+CustomTab:CreateButton({ Name="🔄  Reset Sky to Default", Callback=function() resetSkybox() end })
+
+-- ============================================================
+-- AUTO FARM TAB
+-- ============================================================
+AutoFarmTab:CreateSection("Auto Farm — Evade TP Loop")
+AutoFarmTab:CreateLabel("Instantly teleports you to a high point and loops 4 positions.")
+AutoFarmTab:CreateLabel("TP 1: (3000, 7000,  3000)  →  falls to Y<6000  →  next")
+AutoFarmTab:CreateLabel("TP 2: (3000, 7000, -3000)  →  falls to Y<6000  →  next")
+AutoFarmTab:CreateLabel("TP 3: (-3000, 7000,  3000)  →  falls to Y<6000  →  next")
+AutoFarmTab:CreateLabel("TP 4: (-3000, 7000, -3000)  →  falls to Y<6000  →  back to TP 1")
+AutoFarmTab:CreateLabel("Loop continues infinitely. Restarts from TP 1 after respawn.")
+AutoFarmTab:CreateSection("Controls")
+AutoFarmTab:CreateToggle({
+    Name="Enable Auto Farm", CurrentValue=false, Flag="AutoFarmToggle",
+    Callback=function(v)
+        if v then startAutoFarm() else stopAutoFarm() end
+    end,
+})
+AutoFarmTab:CreateButton({
+    Name="🔄  Reset to Phase 1 (Manual)",
+    Callback=function()
+        if isAutoFarmEnabled then
+            autoFarmPhase=1; autoFarmTP()
+            Notify("Auto Farm","🔄 Manually reset to Phase 1",3)
+        else Notify("Auto Farm","⚠️ Auto Farm is not active.",3) end
+    end,
+})
+AutoFarmTab:CreateSection("Status")
+AutoFarmTab:CreateButton({
+    Name="📍  Show Current Phase",
+    Callback=function()
+        if isAutoFarmEnabled then
+            local dest=farmDestinations[autoFarmPhase]
+            Notify("Auto Farm","Phase "..autoFarmPhase.."\nTarget: ("..dest.X..", "..dest.Y..", "..dest.Z..")",4)
+        else Notify("Auto Farm","Auto Farm is OFF",3) end
+    end,
+})
+
+-- ============================================================
+-- SETTINGS TAB
+-- ============================================================
+SettingTab:CreateSection("Wall Remover")
+SettingTab:CreateLabel("Removes invisible collision walls. Press to run manually.")
+SettingTab:CreateButton({ Name="🧱  Run Wall Remover", Callback=function() processedParts={}; runWallRemover() end })
+
+SettingTab:CreateSection("FPS Boost")
+SettingTab:CreateLabel("Lowers visual load to improve FPS. One-time activation.")
+SettingTab:CreateLabel("⚠️ Cannot be undone without rejoining.")
+SettingTab:CreateButton({ Name="🚀  Enable FPS Boost", Callback=function()
+    Notify("FPS Boost","⏳ Applying FPS optimizations...",3)
+    task.spawn(function()
+        _G.Settings={
+            Players={["Ignore Me"]=true,["Ignore Others"]=true},
+            Meshes={Destroy=false,LowDetail=true},
+            Images={Invisible=true,LowDetail=false,Destroy=false},
+            Other={["No Particles"]=true,["No Camera Effects"]=true,["No Explosions"]=true,["No Clothes"]=true,["Low Water Graphics"]=true,["No Shadows"]=true,["Low Rendering"]=true,["Low Quality Parts"]=true},
+        }
+        local ok,err=pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/CasperFlyModz/discord.gg-rips/main/FPSBooster.lua"))() end)
+        if ok then Notify("FPS Boost","✅ FPS Boost applied!",5) else Notify("FPS Boost","❌ Failed: "..tostring(err),5) end
+    end)
+end })
+
+SettingTab:CreateSection("Kill UI")
+SettingTab:CreateLabel("⚠️ Destroys the hub and restores all game defaults.")
+SettingTab:CreateLabel("A confirmation popup will appear before closing.")
+SettingTab:CreateButton({ Name="💀  Kill UI (Destroy Hub)", Callback=function() killUI() end })
