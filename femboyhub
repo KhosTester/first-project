@@ -2,11 +2,11 @@
 -- FEMBOY HUB  v2.5.0  |  Fluent Edition
 -- by KhoaProSigmaAlphaMale
 -- Changelog v2.5.0:
---   * GRAVITY: Chú thích nằm trên ô riêng, không chèn vào thanh kéo
---   * PLAYER: Tất cả stat (Streak/Ticket/Token/Point/DisplayName)
---     dùng SetAttribute + Data folder — không còn phụ thuộc leaderstats
---   * KEYBIND: Thêm keybind cho tất cả toggle ở Main tab
---     (mặc định None, chỉ kích hoạt sau khi đổi phím)
+--   * GRAVITY: Description displayed in separate paragraph, not injected into slider title
+--   * PLAYER: All stats (Streak/Ticket/Token/Point/DisplayName)
+--     use SetAttribute + Data folder — no longer depends on leaderstats
+--   * KEYBIND: Added keybind support for all toggles in Main tab
+--     (default None, only activates after a key is assigned)
 -- ============================================================
 
 -- ============================================================
@@ -271,19 +271,19 @@ local st = {
 
 -- ============================================================
 -- KEYBIND HELPER
--- Lưu trạng thái keybind — mặc định None = không kích hoạt
+-- Stores keybind state — default None = not active
 -- ============================================================
-local keybinds   = {}   -- [featureName] = Enum.KeyCode hoặc nil
-local toggleRefs = {}   -- [featureName] = toggle object từ AddToggle
--- Fluent.Toggles KHÔNG được expose ra ngoài thư viện →
--- ta tự lưu reference khi tạo mỗi Toggle để keybind gọi lại.
+local keybinds   = {}   -- [featureName] = Enum.KeyCode or nil
+local toggleRefs = {}   -- [featureName] = toggle object from AddToggle
+-- Fluent.Toggles is NOT exposed by the library →
+-- we save references manually when creating each Toggle so keybinds can call them.
 
 local function registerKeybind(featureName, keyCode)
     keybinds[featureName] = (keyCode == Enum.KeyCode.Unknown) and nil or keyCode
 end
 
--- Lắng nghe keybind toàn cục
--- Dùng toggleRefs thay vì Fluent.Toggles (Fluent không expose bảng đó)
+-- Listen for global keybinds
+-- Uses toggleRefs instead of Fluent.Toggles (Fluent doesn't expose that table)
 UserInputService.InputBegan:Connect(function(inp, gpe)
     if gpe then return end
     for feat, kc in pairs(keybinds) do
@@ -466,7 +466,7 @@ local function enableGodMode()
                 if score > bestScore then bestScore = score; bestDest = dest end
             end
 
-            -- TP to best escape point (rotate through if multiple bots)
+            -- TP to best escape point
             local target = bestDest or (myPos + Vector3.new(0, GOD_LIFT_H, 0))
             root.CFrame = CFrame.new(target)
             pcall(function()
@@ -627,29 +627,29 @@ local function resetSkybox()
 end
 
 -- ── PLAYER STAT — SetAttribute + Data folder ─────────────────
--- Dùng 3 lớp: Attribute → Data folder → leaderstats (fallback)
--- Hoạt động client-side visual, không cần leaderstats tồn tại
+-- Uses 3 layers: Attribute → Data folder → leaderstats (fallback)
+-- Works client-side visually, does not require leaderstats to exist
 local function applyFakeStat(statName, value, aliases)
     local p = game.Players.LocalPlayer
     local targets = {statName}
     if aliases then for _,a in ipairs(aliases) do table.insert(targets, a) end end
 
     for _, name in ipairs(targets) do
-        -- Lớp 1: Attributes (UI của Evade đọc từ đây)
+        -- Layer 1: Attributes (Evade's UI reads from here)
         pcall(function() p:SetAttribute(name, value) end)
-        -- Lớp 2: Data folder
+        -- Layer 2: Data folder
         local data = p:FindFirstChild("Data")
         if data then
             local child = data:FindFirstChild(name)
             if child then pcall(function() child.Value = value end) end
         end
-        -- Lớp 3: leaderstats fallback
+        -- Layer 3: leaderstats fallback
         local ls = p:FindFirstChild("leaderstats")
         if ls then
             local child = ls:FindFirstChild(name)
             if child then pcall(function() child.Value = value end) end
         end
-        -- Lớp 4: Tìm trong tất cả children
+        -- Layer 4: Search all children
         for _, folder in ipairs(p:GetChildren()) do
             local child = folder:FindFirstChild(name)
             if child and child.Value ~= nil then
@@ -663,33 +663,33 @@ end
 -- AUTO CANDY  v2.6  —  Pro Hybrid Logic
 -- ══════════════════════════════════════════════════════════════
 --
--- Luồng hoạt động:
---   Bật → Initial Scan (sort gần nhất trước) → DescendantAdded
---   → Pickup Verify (chờ kẹo biến mất, thử lại nếu timeout)
---   → Safety Poll/15s  +  FolderWatcher (tự reconnect khi round đổi)
+-- How it works:
+--   Enable → Initial Scan (sorted by nearest first) → DescendantAdded
+--   → Pickup Verify (waits for candy to disappear, retries on timeout)
+--   → Safety Poll every 15s  +  FolderWatcher (auto-reconnects when round changes)
 --
--- Cải tiến so với v2.4/v2.5:
---   [1] Sắp xếp kẹo theo Magnitude (gần nhất nhặt trước)
---   [2] Pickup Verification: chờ kẹo thực sự biến mất trước khi
---       tính là đã nhặt — tránh bỏ sót vì TP quá nhanh
---   [3] Retry: nếu timeout chưa nhặt, TP lại với offset thấp hơn
---   [4] FolderWatcher: tự reconnect DescendantAdded khi game
---       xóa & tạo lại thư mục ItemSpawns giữa các round
+-- Improvements over v2.4/v2.5:
+--   [1] Sort candy by Magnitude (nearest first)
+--   [2] Pickup Verification: wait for candy to actually disappear before
+--       counting as collected — avoids missing items due to TP being too fast
+--   [3] Retry: if timeout, TP again with lower offset to ensure hitbox contact
+--   [4] FolderWatcher: auto-reconnect DescendantAdded when the game
+--       deletes & recreates the ItemSpawns folder between rounds
 -- ══════════════════════════════════════════════════════════════
 
--- Thêm biến quản lý mới
-local candyFolderWatcher   = nil    -- Watcher cho folder recreation
-local PICKUP_TIMEOUT       = 1.5    -- Giây chờ xác nhận đã nhặt
-local candyMissed          = 0      -- Đếm số kẹo bỏ lỡ (debug)
+-- New management variables
+local candyFolderWatcher   = nil    -- Watcher for folder recreation
+local PICKUP_TIMEOUT       = 1.5    -- Seconds to wait for pickup confirmation
+local candyMissed          = 0      -- Counts missed candy (debug)
 
--- ── Bộ lọc ───────────────────────────────────────────────────
+-- ── Filter ────────────────────────────────────────────────────
 local function isCandyObject(obj)
     if not obj or not obj.Name then return false end
     local n = obj.Name:lower()
     for _, kw in ipairs(CANDY_NAMES) do
         if n:find(kw) then return true end
     end
-    return false   -- PHẢI là false, không phải #name > 0
+    return false
 end
 
 local function getCandyPosition(obj)
@@ -699,9 +699,9 @@ local function getCandyPosition(obj)
         if obj:IsA("BasePart") then
             pos = obj.Position
         elseif obj:IsA("Model") then
-            -- Ưu tiên PrimaryPart, fallback sang BasePart bất kỳ
+            -- Prefer PrimaryPart, fallback to any BasePart
             local p = obj.PrimaryPart or obj:FindFirstChildOfClass("BasePart")
-            -- Chờ thêm nếu Model chưa có BasePart (vẫn đang load)
+            -- Wait if Model doesn't have a BasePart yet (still loading)
             if not p then
                 for _ = 1, 5 do
                     task.wait(0.05)
@@ -712,7 +712,7 @@ local function getCandyPosition(obj)
             if p then pos = p.Position end
         end
     end)
-    -- Từ chối vị trí (0,0,0) — là giá trị mặc định khi chưa load xong
+    -- Reject position (0,0,0) — default value when not yet loaded
     if pos and pos.Magnitude < 0.5 then return nil end
     return pos
 end
@@ -729,7 +729,7 @@ local function findItemSpawnsFolder()
     return nil
 end
 
--- ── [1] Bot Safety Check (tách riêng để tái sử dụng) ─────────
+-- ── [1] Bot Safety Check (separated for reuse) ───────────────
 local function isBotDangerousAt(pos)
     if not st.GodMode then return false end
     for _, obj in pairs(workspace:GetDescendants()) do
@@ -745,11 +745,11 @@ local function isBotDangerousAt(pos)
     return false
 end
 
--- ── [1] Sắp xếp kẹo theo khoảng cách gần nhất ───────────────
+-- ── [1] Sort candy list by nearest distance ───────────────────
 local function getSortedCandyList(itemSpawns, myPos)
     local list = {}
     for _, spawnPoint in ipairs(itemSpawns:GetChildren()) do
-        -- Kiểm tra chính spawnPoint
+        -- Check spawnPoint itself
         if isCandyObject(spawnPoint) then
             local pos = getCandyPosition(spawnPoint)
             if pos then
@@ -760,7 +760,7 @@ local function getSortedCandyList(itemSpawns, myPos)
                 })
             end
         end
-        -- Kiểm tra các vật thể con bên trong
+        -- Check child objects inside
         for _, child in ipairs(spawnPoint:GetChildren()) do
             if isCandyObject(child) then
                 local pos = getCandyPosition(child)
@@ -774,15 +774,15 @@ local function getSortedCandyList(itemSpawns, myPos)
             end
         end
     end
-    -- Sắp xếp: kẹo gần nhất ở đầu danh sách
+    -- Sort: nearest candy first
     table.sort(list, function(a, b) return a.dist < b.dist end)
     return list
 end
 
--- ── [2][3] Collect với Pickup Verification + Retry ────────────
--- Thay vì đếm ngay sau khi TP, script chờ kẹo thực sự biến mất
--- để xác nhận server đã nhận hành động. Nếu timeout → thử lại
--- với offset thấp hơn để chắc chắn chạm vào hitbox.
+-- ── [2][3] Collect with Pickup Verification + Retry ──────────
+-- Instead of counting immediately after TP, the script waits for the candy
+-- to actually disappear to confirm the server received the action.
+-- If timeout → retry with lower offset to ensure hitbox contact.
 local function collectWithVerify(obj, pos)
     if not isCandyCollect then return false end
 
@@ -790,34 +790,34 @@ local function collectWithVerify(obj, pos)
     local root = c and c:FindFirstChild("HumanoidRootPart")
     if not root then return false end
 
-    -- Kiểm tra bot nguy hiểm tại vị trí kẹo
+    -- Check if a bot is dangerous at candy position
     if isBotDangerousAt(pos) then
-        candyStatusText = "⚠ Bot gần kẹo — bỏ qua"
+        candyStatusText = "⚠ Bot near candy — skipping"
         return false
     end
 
-    -- Ghi nhớ parent để phát hiện kẹo biến mất
+    -- Remember parent to detect when candy disappears
     local parentRef = obj.Parent
 
-    -- Lần thử 1: TP với offset chuẩn
+    -- Attempt 1: TP with standard offset
     root.CFrame = CFrame.new(pos + Vector3.new(0, candyTPOffset, 0))
 
-    -- Chờ pickup verification (kẹo biến mất khỏi parent)
+    -- Wait for pickup verification (candy disappears from parent)
     local deadline = tick() + PICKUP_TIMEOUT
     local picked   = false
     while tick() < deadline and isCandyCollect do
-        -- Kẹo không còn tồn tại hoặc đã rời khỏi parent = đã nhặt
+        -- Candy no longer exists or has left its parent = picked up
         if not obj or not obj.Parent or obj.Parent ~= parentRef then
             picked = true; break
         end
         task.wait(0.05)
     end
 
-    -- [3] Retry: nếu timeout, thử lại với offset thấp hơn
+    -- [3] Retry: if timeout, try again with lower offset
     if not picked and obj and obj.Parent then
         local retryPos = getCandyPosition(obj)
         if retryPos then
-            candyStatusText = "🔄 Thử lại..."
+            candyStatusText = "🔄 Retrying..."
             root.CFrame = CFrame.new(retryPos + Vector3.new(0, 0.5, 0))
             task.wait(0.2)
             if not obj.Parent or obj.Parent ~= parentRef then
@@ -826,21 +826,21 @@ local function collectWithVerify(obj, pos)
         end
     end
 
-    -- Cập nhật counter
+    -- Update counter
     if picked then
         candyCount   = candyCount + 1
         candyStatusText = "✅ Collected: " .. candyCount
     else
         candyMissed  = candyMissed + 1
-        candyStatusText = "⚠ Miss ×" .. candyMissed .. " | OK: " .. candyCount
+        candyStatusText = "⚠ Missed ×" .. candyMissed .. " | OK: " .. candyCount
     end
 
-    -- Delay đồng bộ server trước khi sang kẹo tiếp theo
+    -- Server sync delay before moving to next candy
     task.wait(candyDelay)
     return picked
 end
 
--- ── Quét toàn bộ folder (sorted) ─────────────────────────────
+-- ── Full folder scan (sorted) ─────────────────────────────────
 local function fullSortedScan(itemSpawns)
     if not itemSpawns or not isCandyCollect then return end
     local c    = player.Character
@@ -849,13 +849,13 @@ local function fullSortedScan(itemSpawns)
 
     local sorted = getSortedCandyList(itemSpawns, root.Position)
     if #sorted == 0 then return end
-    candyStatusText = "🔍 " .. #sorted .. " kẹo — bắt đầu nhặt..."
+    candyStatusText = "🔍 " .. #sorted .. " candy found — starting collection..."
 
     for _, entry in ipairs(sorted) do
         if not isCandyCollect then break end
-        -- Xác nhận object vẫn còn tồn tại trước khi TP
+        -- Confirm object still exists before TP
         if entry.obj and entry.obj.Parent then
-            -- Cập nhật vị trí thực tế (kẹo có thể đã di chuyển)
+            -- Update actual position (candy may have moved)
             local freshPos = getCandyPosition(entry.obj)
             if freshPos then
                 collectWithVerify(entry.obj, freshPos)
@@ -870,49 +870,49 @@ local function setupCandyEvent(itemSpawns)
 
     candyEventConn = itemSpawns.DescendantAdded:Connect(function(obj)
         if not isCandyCollect then return end
-        -- Khi DescendantAdded kích hoạt, Model vừa được tạo nhưng
-        -- BasePart bên trong CÓ THỂ chưa tồn tại → getCandyPosition
-        -- trả về nil hoặc vị trí (0,0,0) mặc định → TP vào không khí.
-        -- Fix: Chờ object thực sự có BasePart với vị trí hợp lệ.
+        -- When DescendantAdded fires, the Model was just created but
+        -- its BasePart inside MAY not exist yet → getCandyPosition
+        -- returns nil or default (0,0,0) position → TP into air.
+        -- Fix: Wait for object to actually have a BasePart with a valid position.
         task.wait(0.05)
         if not isCandyObject(obj) then return end
 
-        -- Retry lấy vị trí tối đa 10 lần (mỗi 0.1s) cho đến khi hợp lệ
+        -- Retry getting position up to 10 times (every 0.1s) until valid
         local pos = nil
         for _ = 1, 10 do
             pos = getCandyPosition(obj)
-            -- Vị trí hợp lệ: khác nil VÀ không phải gốc tọa độ (0,0,0)
+            -- Valid position: not nil AND not at origin (0,0,0)
             if pos and pos.Magnitude > 0.5 then break end
             pos = nil
             task.wait(0.1)
         end
-        if not pos then return end   -- Sau 1s vẫn không có vị trí → bỏ qua
+        if not pos then return end   -- Still no valid position after 1s → skip
 
-        candyStatusText = "⚡ Kẹo mới: " .. obj.Name
+        candyStatusText = "⚡ New candy: " .. obj.Name
         collectWithVerify(obj, pos)
-        if isCandyCollect then candyStatusText = "💤 Chờ kẹo mới..." end
+        if isCandyCollect then candyStatusText = "💤 Waiting for new candy..." end
     end)
 end
 
--- ── [4] FolderWatcher: tự reconnect khi round đổi ────────────
--- Khi Evade xóa & tạo lại ItemSpawns giữa các round,
--- DescendantAdded cũ trở thành "mồ côi". Watcher này
--- phát hiện thư mục mới và reconnect tất cả tự động.
+-- ── [4] FolderWatcher: auto-reconnect when round changes ─────
+-- When Evade deletes & recreates ItemSpawns between rounds,
+-- the old DescendantAdded becomes orphaned. This watcher
+-- detects the new folder and reconnects everything automatically.
 local function startFolderWatcher()
     if candyFolderWatcher then candyFolderWatcher:Disconnect() end
 
     candyFolderWatcher = workspace.DescendantAdded:Connect(function(obj)
         if not isCandyCollect then return end
-        -- Phát hiện thư mục ItemSpawns mới được tạo
+        -- Detect newly created ItemSpawns folder
         if obj.Name == "ItemSpawns" then
-            task.wait(0.5)  -- Chờ game populate kẹo vào folder
+            task.wait(0.5)  -- Wait for game to populate candy into folder
             local newFolder = findItemSpawnsFolder()
             if newFolder then
-                candyStatusText = "🔄 Round mới — Reconnecting..."
+                candyStatusText = "🔄 New round — Reconnecting..."
                 setupCandyEvent(newFolder)
                 task.spawn(function()
                     fullSortedScan(newFolder)
-                    if isCandyCollect then candyStatusText = "💤 Chờ kẹo mới..." end
+                    if isCandyCollect then candyStatusText = "💤 Waiting for new candy..." end
                 end)
             end
         end
@@ -924,10 +924,10 @@ local function startCandyCollect()
     isCandyCollect  = true
     candyCount      = 0
     candyMissed     = 0
-    candyStatusText = "⏳ Tìm ItemSpawns..."
+    candyStatusText = "⏳ Searching for ItemSpawns..."
 
     task.spawn(function()
-        -- Tìm ItemSpawns với timeout 10s
+        -- Search for ItemSpawns with 10s timeout
         local itemSpawns = nil
         local deadline   = tick() + 10
         while tick() < deadline do
@@ -937,23 +937,23 @@ local function startCandyCollect()
         end
 
         if not itemSpawns then
-            candyStatusText = "❌ ItemSpawns không tìm thấy!\nThử điền Custom Path."
+            candyStatusText = "❌ ItemSpawns not found!\nTry entering a Custom Path."
             return
         end
 
-        -- ① INITIAL SCAN — dọn sạch kẹo đang có sẵn (sorted)
+        -- ① INITIAL SCAN — collect existing candy (sorted)
         candyStatusText = "🔍 Initial Scan..."
         fullSortedScan(itemSpawns)
         if not isCandyCollect then return end
 
-        -- ② EVENT LISTENER — thức dậy khi kẹo mới spawn
+        -- ② EVENT LISTENER — wake up when new candy spawns
         setupCandyEvent(itemSpawns)
-        candyStatusText = "💤 Chờ kẹo mới..."
+        candyStatusText = "💤 Waiting for new candy..."
 
-        -- ③ FOLDER WATCHER — tự reconnect khi round đổi map
+        -- ③ FOLDER WATCHER — auto-reconnect when round changes map
         startFolderWatcher()
 
-        -- ④ SAFETY POLL — quét nhẹ mỗi 15s chống bỏ sót
+        -- ④ SAFETY POLL — light scan every 15s to catch missed items
         task.spawn(function()
             while isCandyCollect do
                 task.wait(15)
@@ -963,7 +963,7 @@ local function startCandyCollect()
                     candyStatusText = "🔍 Safety Scan..."
                     fullSortedScan(cur)
                     if isCandyCollect then
-                        candyStatusText = "💤 Chờ kẹo mới..."
+                        candyStatusText = "💤 Waiting for new candy..."
                     end
                 end
             end
@@ -975,7 +975,7 @@ local function stopCandyCollect()
     isCandyCollect = false
     if candyEventConn    then candyEventConn:Disconnect();    candyEventConn    = nil end
     if candyFolderWatcher then candyFolderWatcher:Disconnect(); candyFolderWatcher = nil end
-    candyStatusText = "🔴 Dừng — OK: " .. candyCount .. " | Miss: " .. candyMissed
+    candyStatusText = "🔴 Stopped — OK: " .. candyCount .. " | Missed: " .. candyMissed
 end
 
 -- CharacterAdded
@@ -1060,9 +1060,9 @@ do
     S:AddParagraph({Title="Player Tab v2.6",Content="• Fixed number input (closure vars, no Fluent.Options bug)\n• Display Name + Level persist across tab switches & respawns\n• Reset All button clears all fake stats & name\n• Added Level field\n• Full English UI"})
     S:AddParagraph({Title="Candy v2.6",Content="• Sort by nearest first · Pickup Verify · Retry · FolderWatcher"})
     local S2=Tabs.Log:AddSection("v2.4.0 — God Mode & Candy Fix")
-    S2:AddParagraph({Title="",Content="• God Mode: Avoidance Logic (né tránh Nextbot)\n• Auto Candy: Hybrid Logic 3 giai đoạn\n• isCandyObject: Sửa lỗi return false"})
+    S2:AddParagraph({Title="",Content="• God Mode: Avoidance Logic (dodge Nextbots)\n• Auto Candy: 3-phase Hybrid Logic\n• isCandyObject: Fixed return false bug"})
     local S3=Tabs.Log:AddSection("v2.3.0 — v2.0.0")
-    S3:AddParagraph({Title="",Content="• Fluent Library migration\n• Key UI rainbow border\n• Full rewrite từ Linoria"})
+    S3:AddParagraph({Title="",Content="• Fluent Library migration\n• Key UI rainbow border\n• Full rewrite from Linoria"})
 end
 
 -- ============================================================
@@ -1099,9 +1099,9 @@ do
 
     -- ── God Mode ──────────────────────────────────────────────
     local sGM=Tabs.Main:AddSection("God Mode")
-    sGM:AddParagraph({Title="⚠ Avoidance Logic",Content="Khi bot lại gần < "..BOT_SAFE_DIST.." studs → nhân vật tự đẩy lên "..GOD_LIFT_H.." studs.\nHoạt động dựa trên Magnitude — cách Evade tính sát thương."})
-    sGM:AddSlider("GodSafeDist",{Title="Khoảng cách nguy hiểm (studs)",Default=28,Min=10,Max=60,Rounding=0,Callback=function(v) BOT_SAFE_DIST=v end})
-    sGM:AddSlider("GodLiftHeight",{Title="Độ cao đẩy lên (studs)",Default=15,Min=5,Max=50,Rounding=0,Callback=function(v) GOD_LIFT_H=v end})
+    sGM:AddParagraph({Title="⚠ Avoidance Logic",Content="When a bot gets within "..BOT_SAFE_DIST.." studs → character is automatically teleported "..GOD_LIFT_H.." studs away.\nWorks based on Magnitude — the same way Evade calculates damage."})
+    sGM:AddSlider("GodSafeDist",{Title="Danger Distance (studs)",Default=28,Min=10,Max=60,Rounding=0,Callback=function(v) BOT_SAFE_DIST=v end})
+    sGM:AddSlider("GodLiftHeight",{Title="Escape Height (studs)",Default=15,Min=5,Max=50,Rounding=0,Callback=function(v) GOD_LIFT_H=v end})
     toggleRefs["GodMode"] = sGM:AddToggle("GodMode",{Title="Enable God Mode",Default=false,Callback=function(v)
         st.GodMode=v
         if v then enableGodMode(); Fluent:Notify({Title="God Mode",Content="✅ ON — Avoidance",Duration=2})
@@ -1162,14 +1162,13 @@ do
     sJB:AddKeybind("KbJumpBoost",{Title="Keybind — Jump Boost",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("JumpBoost",new) end})
 
     -- ── Gravity ───────────────────────────────────────────────
-    -- v2.5: Chú thích nằm trên Paragraph riêng, KHÔNG chèn vào title slider
     local sGV=Tabs.Main:AddSection("Gravity")
     sGV:AddParagraph({
-        Title="📌 Hướng dẫn giá trị Gravity",
-        Content="Kéo về âm (< 0) → nhân vật nổi lên\n196 → mặc định của Roblox\nKéo về dương (> 196) → nhân vật nặng hơn"
+        Title="📌 Gravity Value Guide",
+        Content="Negative values (< 0) → character floats upward\n196 → Roblox default\nHigher values (> 196) → character feels heavier"
     })
     sGV:AddSlider("GravityValue",{
-        Title="Gravity",  -- ← Tên ngắn, không bị tràn vào thanh kéo
+        Title="Gravity",
         Default=196, Min=-400, Max=400, Rounding=0,
         Callback=function(v)
             gravValue=v
@@ -1319,7 +1318,7 @@ do
     sFV:AddSlider("FOVValue",{Title="FOV",Default=90,Min=80,Max=140,Rounding=0,Callback=function(v)
         fovValue=v; if isFOV then pcall(function() workspace.CurrentCamera.FieldOfView=v end) end
     end})
-    sFV:AddParagraph({Title="Range",Content="80 = hẹp · 90 = mặc định · 140 = rộng nhất"})
+    sFV:AddParagraph({Title="Range",Content="80 = narrow · 90 = default · 140 = widest"})
     toggleRefs["FOVOverride"] = sFV:AddToggle("FOVOverride",{Title="Enable FOV Override",Default=false,Callback=function(v)
         st.FOVOverride=v; isFOV=v
         if v then
@@ -1331,7 +1330,7 @@ do
         else
             if fovConn then fovConn:Disconnect(); fovConn=nil end
             pcall(function() workspace.CurrentCamera.FieldOfView=70 end)
-            Fluent:Notify({Title="FOV",Content="🔴 Reset 70.",Duration=2})
+            Fluent:Notify({Title="FOV",Content="🔴 Reset to 70.",Duration=2})
         end
     end})
     sFV:AddButton({Title="Reset FOV",Callback=function()
@@ -1441,9 +1440,9 @@ do
     end)
     sCC:AddParagraph({
         Title="📌 Pro Hybrid Logic",
-        Content="① Initial Scan — sort theo khoảng cách gần nhất\n② DescendantAdded — thức dậy khi kẹo mới spawn\n③ Pickup Verify — chờ kẹo biến mất, retry nếu cần\n④ FolderWatcher — tự reconnect khi round đổi map\n⑤ Safety Poll — quét lại mỗi 15 giây"
+        Content="① Initial Scan — sorted by nearest distance\n② DescendantAdded — wakes up when new candy spawns\n③ Pickup Verify — waits for candy to disappear, retries if needed\n④ FolderWatcher — auto-reconnects when round changes map\n⑤ Safety Poll — rescans every 15 seconds"
     })
-    sCC:AddSlider("CandyDelay",{Title="Delay sau mỗi lần nhặt (×0.01s)",Default=10,Min=1,Max=50,Rounding=0,Callback=function(v) candyDelay=v/100 end})
+    sCC:AddSlider("CandyDelay",{Title="Delay after each pickup (×0.01s)",Default=10,Min=1,Max=50,Rounding=0,Callback=function(v) candyDelay=v/100 end})
     sCC:AddSlider("CandyTPOffset",{Title="TP Height Offset (studs)",Default=2,Min=0,Max=8,Rounding=0,Callback=function(v) candyTPOffset=v end})
     sCC:AddInput("CandyCustomPath",{Title="Custom ItemSpawns Path (optional)",Default="",Placeholder="e.g. Game.Map.ItemSpawns",Numeric=false,Finished=false,Callback=function(v) candyCustomPath_v=v end})
     toggleRefs["AutoCandy"] = sCC:AddToggle("AutoCandy",{Title="Enable Auto Collect Candy",Default=false,Callback=function(v)
@@ -1466,7 +1465,7 @@ do
         if f then
             local total=0; for _,sp in pairs(f:GetChildren()) do total=total+#sp:GetChildren() end
             Fluent:Notify({Title="Debug",Content="✅ "..f:GetFullName().."\n"..#f:GetChildren().." points / "..total.." objects",Duration=6})
-        else Fluent:Notify({Title="Debug",Content="❌ ItemSpawns không tìm thấy!",Duration=5}) end
+        else Fluent:Notify({Title="Debug",Content="❌ ItemSpawns not found!",Duration=5}) end
     end})
 
     local sAFK=Tabs.Farm:AddSection("Anti-AFK")
@@ -1646,7 +1645,6 @@ do
                     if gui:IsA("BillboardGui") then
                         for _,lbl in pairs(gui:GetDescendants()) do
                             if lbl:IsA("TextLabel") then
-                                -- Try to restore to real name
                                 if lbl.Text ~= player.Name and lbl.Text ~= player.DisplayName then
                                     lbl.Text = player.DisplayName
                                 end
@@ -1738,7 +1736,7 @@ do
 
     local sKB=Tabs.Settings:AddSection("Keybinds Info")
     sKB:AddParagraph({Title="RightCtrl",     Content="Toggle UI visibility"})
-    sKB:AddParagraph({Title="Custom Keybind",Content="Mỗi toggle ở Main tab đều có ô Keybind riêng.\nMặc định = None → chỉ kích hoạt sau khi chọn phím."})
+    sKB:AddParagraph({Title="Custom Keybind",Content="Every toggle in the Main tab has its own Keybind field.\nDefault = None → only activates after a key is assigned."})
 
     SaveManager:SetLibrary(Fluent)
     InterfaceManager:SetLibrary(Fluent)
