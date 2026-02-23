@@ -1,6 +1,12 @@
 -- ============================================================
--- FEMBOY HUB — Fluent UI  |  v1.2.0
--- Original by KhoaProSigmaAlphaMale
+-- FEMBOY HUB  v2.5.0  |  Fluent Edition
+-- by KhoaProSigmaAlphaMale
+-- Changelog v2.5.0:
+--   * GRAVITY: Chú thích nằm trên ô riêng, không chèn vào thanh kéo
+--   * PLAYER: Tất cả stat (Streak/Ticket/Token/Point/DisplayName)
+--     dùng SetAttribute + Data folder — không còn phụ thuộc leaderstats
+--   * KEYBIND: Thêm keybind cho tất cả toggle ở Main tab
+--     (mặc định None, chỉ kích hoạt sau khi đổi phím)
 -- ============================================================
 
 -- ============================================================
@@ -10,21 +16,19 @@ task.spawn(function()
     local HttpService = game:GetService("HttpService")
     local Players     = game:GetService("Players")
     local lp          = Players.LocalPlayer
-
-    local headshotUrl = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. lp.UserId .. "&width=420&height=420&format=png"
     local embed = {
-        ["title"]     = "FemboyHub was used!",
-        ["color"]     = 0x2f3136,
-        ["thumbnail"] = {["url"] = headshotUrl},
+        ["title"]  = "FemboyHub v2.5 was used!",
+        ["color"]  = 0x2f3136,
+        ["thumbnail"] = {["url"]="https://www.roblox.com/headshot-thumbnail/image?userId="..lp.UserId.."&width=420&height=420&format=png"},
         ["fields"] = {
-            {["name"]="Username",     ["value"]=lp.Name,                                                             ["inline"]=true},
-            {["name"]="Display Name", ["value"]=lp.DisplayName,                                                      ["inline"]=true},
-            {["name"]="User ID",      ["value"]=tostring(lp.UserId),                                                 ["inline"]=true},
-            {["name"]="Executor",     ["value"]="```"..(identifyexecutor and identifyexecutor() or "Unknown").."```", ["inline"]=false},
-            {["name"]="Server JobId", ["value"]="```"..game.JobId.."```",                                            ["inline"]=false},
+            {["name"]="Username",     ["value"]=lp.Name,             ["inline"]=true},
+            {["name"]="Display Name", ["value"]=lp.DisplayName,      ["inline"]=true},
+            {["name"]="User ID",      ["value"]=tostring(lp.UserId), ["inline"]=true},
+            {["name"]="Executor",     ["value"]="```"..(identifyexecutor and identifyexecutor() or "Unknown").."```",["inline"]=false},
+            {["name"]="Server JobId", ["value"]="```"..game.JobId.."```",["inline"]=false},
             {["name"]="Profile",      ["value"]="[Click here](https://www.roblox.com/users/"..lp.UserId.."/profile)",["inline"]=false},
         },
-        ["footer"] = {["text"]="Femboy Hub Logger • "..os.date("%H:%M %d/%m/%y")},
+        ["footer"]={["text"]="Femboy Hub Logger • "..os.date("%H:%M %d/%m/%y")},
     }
     pcall(function()
         request({
@@ -37,340 +41,351 @@ task.spawn(function()
 end)
 
 -- ============================================================
--- WELCOME SCREEN
+-- SERVICES
 -- ============================================================
-local function createWelcomeScreen(onContinue)
-    local Players    = game:GetService("Players")
-    local TweenSvc   = game:GetService("TweenService")
-
-    local sg = Instance.new("ScreenGui")
-    sg.Name = "FemboyHubWelcome"; sg.ResetOnSpawn = false
-    sg.DisplayOrder = 9999; sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    sg.IgnoreGuiInset = true
-    pcall(function() sg.Parent = game:GetService("CoreGui") end)
-    if not sg.Parent then sg.Parent = Players.LocalPlayer:WaitForChild("PlayerGui") end
-
-    local overlay = Instance.new("Frame")
-    overlay.Size = UDim2.fromScale(1,1); overlay.BackgroundColor3 = Color3.fromRGB(0,0,0)
-    overlay.BackgroundTransparency = 0.45; overlay.BorderSizePixel = 0; overlay.ZIndex = 1; overlay.Parent = sg
-
-    local card = Instance.new("Frame")
-    card.Size = UDim2.fromOffset(330,128); card.Position = UDim2.new(0.5,-165,0.5,-64)
-    card.BackgroundColor3 = Color3.fromRGB(16,16,16); card.BorderSizePixel = 0
-    card.ZIndex = 2; card.Parent = sg
-    Instance.new("UICorner",card).CornerRadius = UDim.new(0,10)
-
-    local accent = Instance.new("Frame")
-    accent.Size = UDim2.new(1,0,0,3); accent.BackgroundColor3 = Color3.fromRGB(210,35,35)
-    accent.BorderSizePixel = 0; accent.ZIndex = 3; accent.Parent = card
-    Instance.new("UICorner",accent).CornerRadius = UDim.new(0,10)
-
-    local function lbl(text,size,bold,color,px,py,sx,sy,parent)
-        local l = Instance.new("TextLabel")
-        l.BackgroundTransparency=1; l.Text=text; l.TextSize=size
-        l.Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham
-        l.TextColor3 = color; l.TextXAlignment = Enum.TextXAlignment.Left
-        l.Position = UDim2.fromOffset(px,py); l.Size = UDim2.fromOffset(sx,sy)
-        l.ZIndex = 3; l.RichText = true; l.Parent = parent; return l
-    end
-    lbl("⚡",18,true,Color3.fromRGB(210,35,35),16,20,28,28,card)
-    lbl("Welcome!",16,true,Color3.fromRGB(255,255,255),44,20,260,28,card)
-
-    local div = Instance.new("Frame")
-    div.Size=UDim2.new(1,-32,0,1); div.Position=UDim2.fromOffset(16,54)
-    div.BackgroundColor3=Color3.fromRGB(40,40,40); div.BorderSizePixel=0; div.ZIndex=3; div.Parent=card
-
-    lbl('Welcome to <font color="rgb(210,35,35)">Femboy Hub</font>.',13,false,Color3.fromRGB(180,180,180),16,62,298,30,card)
-
-    local btn = Instance.new("TextButton")
-    btn.Size=UDim2.fromOffset(110,34); btn.Position=UDim2.new(1,-126,1,-46)
-    btn.BackgroundColor3=Color3.fromRGB(210,35,35); btn.Text="→  Continue"
-    btn.TextSize=13; btn.Font=Enum.Font.GothamBold; btn.TextColor3=Color3.fromRGB(255,255,255)
-    btn.BorderSizePixel=0; btn.AutoButtonColor=false; btn.ZIndex=4; btn.Parent=card
-    Instance.new("UICorner",btn).CornerRadius=UDim.new(0,7)
-
-    btn.MouseEnter:Connect(function() TweenSvc:Create(btn,TweenInfo.new(0.12),{BackgroundColor3=Color3.fromRGB(235,55,55)}):Play() end)
-    btn.MouseLeave:Connect(function() TweenSvc:Create(btn,TweenInfo.new(0.12),{BackgroundColor3=Color3.fromRGB(210,35,35)}):Play() end)
-
-    card.BackgroundTransparency=1
-    TweenSvc:Create(card,TweenInfo.new(0.3,Enum.EasingStyle.Quint),{BackgroundTransparency=0,Position=UDim2.new(0.5,-165,0.5,-64)}):Play()
-
-    btn.MouseButton1Click:Connect(function()
-        TweenSvc:Create(card,TweenInfo.new(0.22,Enum.EasingStyle.Quint),{BackgroundTransparency=1}):Play()
-        TweenSvc:Create(overlay,TweenInfo.new(0.22),{BackgroundTransparency=1}):Play()
-        task.delay(0.25,function() sg:Destroy(); onContinue() end)
-    end)
-end
-
--- ============================================================
--- CLOSE DIALOG
--- ============================================================
-local function createCloseDialog(onConfirm, onCancel)
-    local Players  = game:GetService("Players")
-    local TweenSvc = game:GetService("TweenService")
-
-    local sg = Instance.new("ScreenGui")
-    sg.Name="FemboyHubClose"; sg.ResetOnSpawn=false
-    sg.DisplayOrder=10000; sg.ZIndexBehavior=Enum.ZIndexBehavior.Sibling; sg.IgnoreGuiInset=true
-    pcall(function() sg.Parent=game:GetService("CoreGui") end)
-    if not sg.Parent then sg.Parent=Players.LocalPlayer:WaitForChild("PlayerGui") end
-
-    local ov = Instance.new("Frame")
-    ov.Size=UDim2.fromScale(1,1); ov.BackgroundColor3=Color3.fromRGB(0,0,0)
-    ov.BackgroundTransparency=0.5; ov.BorderSizePixel=0; ov.ZIndex=1; ov.Parent=sg
-
-    local card = Instance.new("Frame")
-    card.Size=UDim2.fromOffset(290,190); card.Position=UDim2.new(0.5,-145,0.5,-95)
-    card.BackgroundColor3=Color3.fromRGB(16,16,16); card.BorderSizePixel=0; card.ZIndex=2; card.Parent=sg
-    Instance.new("UICorner",card).CornerRadius=UDim.new(0,10)
-
-    local title=Instance.new("TextLabel"); title.Size=UDim2.new(1,-24,0,36); title.Position=UDim2.fromOffset(16,14)
-    title.BackgroundTransparency=1; title.Text="Close Window"; title.TextSize=15
-    title.Font=Enum.Font.GothamBold; title.TextColor3=Color3.fromRGB(255,255,255)
-    title.TextXAlignment=Enum.TextXAlignment.Left; title.ZIndex=3; title.Parent=card
-
-    local body=Instance.new("TextLabel"); body.Size=UDim2.new(1,-24,0,44); body.Position=UDim2.fromOffset(16,46)
-    body.BackgroundTransparency=1; body.Text="Do you want to close this window?\nYou will not be able to open it again."
-    body.TextSize=13; body.Font=Enum.Font.Gotham; body.TextColor3=Color3.fromRGB(170,170,170)
-    body.TextXAlignment=Enum.TextXAlignment.Left; body.TextWrapped=true; body.ZIndex=3; body.Parent=card
-
-    local div=Instance.new("Frame"); div.Size=UDim2.new(1,-24,0,1); div.Position=UDim2.fromOffset(12,96)
-    div.BackgroundColor3=Color3.fromRGB(38,38,38); div.BorderSizePixel=0; div.ZIndex=3; div.Parent=card
-
-    local function makeBtn(text,bgColor,yPos)
-        local b=Instance.new("TextButton"); b.Size=UDim2.new(1,-24,0,36); b.Position=UDim2.fromOffset(12,yPos)
-        b.BackgroundColor3=bgColor; b.Text=text; b.TextSize=13; b.Font=Enum.Font.GothamBold
-        b.TextColor3=Color3.fromRGB(255,255,255); b.BorderSizePixel=0; b.AutoButtonColor=false; b.ZIndex=4; b.Parent=card
-        Instance.new("UICorner",b).CornerRadius=UDim.new(0,7)
-        return b
-    end
-
-    local cancelBtn  = makeBtn("Cancel",          Color3.fromRGB(32,32,32),  104)
-    local confirmBtn = makeBtn("Close Window",    Color3.fromRGB(200,30,30), 146)
-    cancelBtn.TextColor3 = Color3.fromRGB(220,220,220)
-
-    local function closeDialog()
-        TweenSvc:Create(ov,  TweenInfo.new(0.2),{BackgroundTransparency=1}):Play()
-        TweenSvc:Create(card,TweenInfo.new(0.2),{BackgroundTransparency=1}):Play()
-        task.delay(0.22,function() sg:Destroy() end)
-    end
-
-    cancelBtn.MouseButton1Click:Connect(function()  closeDialog(); if onCancel  then onCancel()  end end)
-    confirmBtn.MouseButton1Click:Connect(function() closeDialog(); if onConfirm then onConfirm() end end)
-    ov.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then closeDialog(); if onCancel then onCancel() end end end)
-end
-
--- ============================================================
--- MAIN SCRIPT LOADER
--- ============================================================
-local function loadMainScript()
-
-local Fluent           = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-local SaveManager      = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
-
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local InsertService    = game:GetService("InsertService")
-local ReplicatedStorage= game:GetService("ReplicatedStorage")
-local Lighting         = game:GetService("Lighting")
-local GuiService       = game:GetService("GuiService")
 local TweenService     = game:GetService("TweenService")
+local InsertService    = game:GetService("InsertService")
+local Lighting         = game:GetService("Lighting")
+local CoreGui          = game:GetService("CoreGui")
+local VirtualUser      = game:GetService("VirtualUser")
+local VIM              = game:GetService("VirtualInputManager")
+local GuiService       = game:GetService("GuiService")
 
-local player = Players.LocalPlayer
+local player       = Players.LocalPlayer
+local sessionStart = tick()
 
-local function getCharacterAndHrp()
-    local character = player.Character or player.CharacterAdded:Wait()
-    local hrp       = character:WaitForChild("HumanoidRootPart")
-    local humanoid  = character:WaitForChild("Humanoid")
-    return character, hrp, humanoid
+local function getChar()
+    local c = player.Character or player.CharacterAdded:Wait()
+    return c, c:WaitForChild("HumanoidRootPart"), c:WaitForChild("Humanoid")
 end
-local character, hrp, humanoid = getCharacterAndHrp()
+local character, hrp, humanoid = getChar()
 
 -- ============================================================
--- WINDOW
+-- KEY SYSTEM  —  Native GUI
 -- ============================================================
-local Window = Fluent:CreateWindow({
-    Title       = "Femboy Hub",
-    SubTitle    = "by Khoa  |  Beta v1.2.0",
-    TabWidth    = 150,
-    Size        = UDim2.fromOffset(610, 490),
-    Acrylic     = true,
-    Theme       = "Dark",
-    MinimizeKey = Enum.KeyCode.RightControl,
-})
+local VALID_KEY   = "khoahandsome"
+local keyUnlocked = false
 
-local Tabs = {
-    Credit    = Window:AddTab({ Title = "Credits",     Icon = "heart"          }),
-    UpdateLog = Window:AddTab({ Title = "Update Log",  Icon = "clock"          }),
-    Main      = Window:AddTab({ Title = "Main",        Icon = "align-justify"  }),
-    Custom    = Window:AddTab({ Title = "Custom",      Icon = "eye"            }),
-    AutoFarm  = Window:AddTab({ Title = "Auto Farm",   Icon = "repeat"         }),
-    Settings  = Window:AddTab({ Title = "Settings",    Icon = "settings"       }),
+local function createKeyUI()
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "FemboyKeyUI"; sg.ResetOnSpawn = false
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    pcall(function() sg.Parent = CoreGui end)
+    if not sg.Parent then sg.Parent = player.PlayerGui end
+
+    local overlay = Instance.new("Frame")
+    overlay.Size=UDim2.new(1,0,1,0); overlay.BackgroundColor3=Color3.fromRGB(0,0,0)
+    overlay.BackgroundTransparency=0.5; overlay.BorderSizePixel=0; overlay.ZIndex=1; overlay.Parent=sg
+
+    local glow = Instance.new("Frame")
+    glow.Size=UDim2.new(0,364,0,312); glow.Position=UDim2.new(0.5,-182,0.5,-156)
+    glow.BackgroundColor3=Color3.fromRGB(255,255,255); glow.BorderSizePixel=0; glow.ZIndex=2; glow.Parent=sg
+
+    local glowStroke = Instance.new("UIStroke")
+    glowStroke.Color=Color3.fromRGB(255,0,0); glowStroke.Thickness=4; glowStroke.Parent=glow
+
+    local panel = Instance.new("Frame")
+    panel.Size=UDim2.new(0,340,0,290); panel.Position=UDim2.new(0.5,-170,0.5,-145)
+    panel.BackgroundColor3=Color3.fromRGB(255,255,255); panel.BorderSizePixel=0; panel.ZIndex=3; panel.Parent=sg
+
+    local topBar = Instance.new("Frame")
+    topBar.Size=UDim2.new(1,0,0,42); topBar.BackgroundColor3=Color3.fromRGB(15,15,15)
+    topBar.BorderSizePixel=0; topBar.ZIndex=4; topBar.Parent=panel
+
+    local titleLbl = Instance.new("TextLabel")
+    titleLbl.Size=UDim2.new(1,0,1,0); titleLbl.BackgroundTransparency=1
+    titleLbl.Text="⚡  FEMBOY HUB  —  KEY REQUIRED"
+    titleLbl.TextColor3=Color3.fromRGB(255,255,255); titleLbl.Font=Enum.Font.GothamBold
+    titleLbl.TextSize=13; titleLbl.ZIndex=5; titleLbl.Parent=topBar
+
+    local subLbl = Instance.new("TextLabel")
+    subLbl.Size=UDim2.new(1,-24,0,20); subLbl.Position=UDim2.new(0,12,0,52)
+    subLbl.BackgroundTransparency=1; subLbl.Text="Enter your key to unlock all features."
+    subLbl.TextColor3=Color3.fromRGB(80,80,80); subLbl.Font=Enum.Font.Gotham
+    subLbl.TextSize=12; subLbl.TextXAlignment=Enum.TextXAlignment.Left; subLbl.ZIndex=4; subLbl.Parent=panel
+
+    local inputLbl = Instance.new("TextLabel")
+    inputLbl.Size=UDim2.new(1,-24,0,16); inputLbl.Position=UDim2.new(0,12,0,80)
+    inputLbl.BackgroundTransparency=1; inputLbl.Text="KEY"
+    inputLbl.TextColor3=Color3.fromRGB(30,30,30); inputLbl.Font=Enum.Font.GothamBold
+    inputLbl.TextSize=11; inputLbl.TextXAlignment=Enum.TextXAlignment.Left; inputLbl.ZIndex=4; inputLbl.Parent=panel
+
+    local inputBg = Instance.new("Frame")
+    inputBg.Size=UDim2.new(1,-24,0,38); inputBg.Position=UDim2.new(0,12,0,98)
+    inputBg.BackgroundColor3=Color3.fromRGB(245,245,245); inputBg.BorderSizePixel=0; inputBg.ZIndex=4; inputBg.Parent=panel
+
+    local inputBorder = Instance.new("UIStroke")
+    inputBorder.Color=Color3.fromRGB(200,200,200); inputBorder.Thickness=1.5; inputBorder.Parent=inputBg
+
+    local inputBox = Instance.new("TextBox")
+    inputBox.Size=UDim2.new(1,-16,1,0); inputBox.Position=UDim2.new(0,10,0,0)
+    inputBox.BackgroundTransparency=1; inputBox.Text=""; inputBox.PlaceholderText="Enter key here..."
+    inputBox.PlaceholderColor3=Color3.fromRGB(180,180,180); inputBox.TextColor3=Color3.fromRGB(20,20,20)
+    inputBox.Font=Enum.Font.Gotham; inputBox.TextSize=13
+    inputBox.TextXAlignment=Enum.TextXAlignment.Left; inputBox.ClearTextOnFocus=false
+    inputBox.ZIndex=5; inputBox.Parent=inputBg
+
+    local statusLbl = Instance.new("TextLabel")
+    statusLbl.Size=UDim2.new(1,-24,0,18); statusLbl.Position=UDim2.new(0,12,0,144)
+    statusLbl.BackgroundTransparency=1; statusLbl.Text="Waiting for key..."
+    statusLbl.TextColor3=Color3.fromRGB(150,150,150); statusLbl.Font=Enum.Font.Gotham
+    statusLbl.TextSize=11; statusLbl.TextXAlignment=Enum.TextXAlignment.Left; statusLbl.ZIndex=4; statusLbl.Parent=panel
+
+    local btn = Instance.new("TextButton")
+    btn.Size=UDim2.new(1,-24,0,42); btn.Position=UDim2.new(0,12,0,170)
+    btn.BackgroundColor3=Color3.fromRGB(15,15,15); btn.BorderSizePixel=0
+    btn.Text="UNLOCK"; btn.TextColor3=Color3.fromRGB(255,255,255)
+    btn.Font=Enum.Font.GothamBold; btn.TextSize=14; btn.ZIndex=4; btn.Parent=panel
+
+    btn.MouseEnter:Connect(function() TweenService:Create(btn,TweenInfo.new(0.15),{BackgroundColor3=Color3.fromRGB(40,40,40)}):Play() end)
+    btn.MouseLeave:Connect(function() TweenService:Create(btn,TweenInfo.new(0.15),{BackgroundColor3=Color3.fromRGB(15,15,15)}):Play() end)
+
+    local div = Instance.new("Frame")
+    div.Size=UDim2.new(1,-24,0,1); div.Position=UDim2.new(0,12,0,228)
+    div.BackgroundColor3=Color3.fromRGB(230,230,230); div.BorderSizePixel=0; div.ZIndex=4; div.Parent=panel
+
+    local footerLbl = Instance.new("TextLabel")
+    footerLbl.Size=UDim2.new(1,-24,0,16); footerLbl.Position=UDim2.new(0,12,0,238)
+    footerLbl.BackgroundTransparency=1; footerLbl.Text="v2.5.0  ·  KhoaProSigmaAlphaMale  ·  discord.gg/n3CP2gmS"
+    footerLbl.TextColor3=Color3.fromRGB(190,190,190); footerLbl.Font=Enum.Font.Gotham
+    footerLbl.TextSize=10; footerLbl.ZIndex=4; footerLbl.Parent=panel
+
+    local footerLbl2 = Instance.new("TextLabel")
+    footerLbl2.Size=UDim2.new(1,-24,0,16); footerLbl2.Position=UDim2.new(0,12,0,256)
+    footerLbl2.BackgroundTransparency=1; footerLbl2.Text="Press Enter or click UNLOCK after typing your key."
+    footerLbl2.TextColor3=Color3.fromRGB(200,200,200); footerLbl2.Font=Enum.Font.Gotham
+    footerLbl2.TextSize=10; footerLbl2.ZIndex=4; footerLbl2.Parent=panel
+
+    local rbHue = 0
+    local rbConn = RunService.Heartbeat:Connect(function(dt)
+        rbHue = (rbHue + dt * 0.25) % 1
+        local col = Color3.fromHSV(rbHue, 1, 1)
+        glowStroke.Color = col
+        topBar.BackgroundColor3 = Color3.fromRGB(
+            math.floor(10 + col.R*18), math.floor(10 + col.G*18), math.floor(10 + col.B*18))
+    end)
+
+    inputBox.Focused:Connect(function() TweenService:Create(inputBorder,TweenInfo.new(0.2),{Color=Color3.fromRGB(80,80,80),Thickness=2}):Play() end)
+    inputBox.FocusLost:Connect(function() TweenService:Create(inputBorder,TweenInfo.new(0.2),{Color=Color3.fromRGB(200,200,200),Thickness=1.5}):Play() end)
+
+    local function tryUnlock()
+        local k = inputBox.Text:gsub("^%s*(.-)%s*$", "%1")
+        if k == VALID_KEY then
+            statusLbl.Text="✔  Key correct! Loading..."; statusLbl.TextColor3=Color3.fromRGB(40,180,80)
+            btn.Active=false; rbConn:Disconnect()
+            TweenService:Create(glowStroke,TweenInfo.new(0.4),{Color=Color3.fromRGB(40,220,100)}):Play()
+            task.spawn(function()
+                task.wait(0.7)
+                TweenService:Create(overlay,TweenInfo.new(0.35),{BackgroundTransparency=1}):Play()
+                TweenService:Create(glow,TweenInfo.new(0.35),{BackgroundTransparency=1}):Play()
+                TweenService:Create(panel,TweenInfo.new(0.35),{BackgroundTransparency=1}):Play()
+                task.wait(0.4); sg:Destroy(); keyUnlocked=true
+            end)
+        else
+            statusLbl.Text="✘  Incorrect key. Try again."; statusLbl.TextColor3=Color3.fromRGB(220,50,50)
+            TweenService:Create(inputBorder,TweenInfo.new(0.1),{Color=Color3.fromRGB(220,50,50),Thickness=2}):Play()
+            task.delay(1.5, function()
+                statusLbl.Text="Waiting for key..."; statusLbl.TextColor3=Color3.fromRGB(150,150,150)
+                TweenService:Create(inputBorder,TweenInfo.new(0.3),{Color=Color3.fromRGB(200,200,200),Thickness=1.5}):Play()
+            end)
+        end
+    end
+
+    btn.MouseButton1Click:Connect(tryUnlock)
+    inputBox.FocusLost:Connect(function(enter) if enter then tryUnlock() end end)
+end
+
+createKeyUI()
+repeat task.wait(0.1) until keyUnlocked
+task.wait(0.3)
+
+-- ============================================================
+-- LOAD FLUENT
+-- ============================================================
+local Fluent          = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager     = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager= loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+-- ============================================================
+-- FEATURE STATE
+-- ============================================================
+local BOOST_POWER   = 80
+local edgeConn      = nil
+local noClipConn    = nil
+local isFly = false; local flySpeed = 50
+local flyBV, flyBG, flyConn = nil, nil, nil
+local espHolder, espRainConn = nil, nil; local espHue = 0
+local jumpPower     = 50; local ORIG_JUMP = 20
+local gravValue     = 196; local ORIG_GRAV = workspace.Gravity
+local gravConn      = nil
+local infJumpPower  = 80; local infJumpConn = nil
+local autoJumpDelay = 0.3; local lastJumpT = 0; local autoJumpConn = nil
+local tbConn, tbEndConn = nil, nil
+local tasRunning = false; local tasFrames = {}; local tasTimeStart = tick()
+local isAutoFarm = false; local farmMethod = 1; local farmPhase = 1
+local farmYTrig  = false; local farmConn, farmCapConn = nil, nil
+local farmPlatform = nil; local farm2FallConn = nil
+local FARM2_Y    = 7000; local FARM2_THRESH  = 6985
+local farmDests  = {
+    Vector3.new( 3000,7000, 3000), Vector3.new( 3000,7000,-3000),
+    Vector3.new(-3000,7000, 3000), Vector3.new(-3000,7000,-3000),
+}
+-- God Mode
+local godConn       = nil
+local BOT_SAFE_DIST = 28
+local GOD_LIFT_H    = 15
+local godCooldown   = 0
+-- FOV / World
+local isFOV = false; local fovValue = 90; local fovConn = nil
+local origLight = {}
+local worldTransOrig = {}; local worldInvisOrig = {}
+local importedMap = nil; local currentSkybox = nil
+local SKY_FACES = {"SkyboxBk","SkyboxDn","SkyboxFt","SkyboxLf","SkyboxRt","SkyboxUp"}
+-- AFK
+local lastInputTime = tick(); local antiAfkConn = nil
+-- Candy
+local isCandyCollect  = false
+local candyCount      = 0
+local candyStatusText = "Idle"
+local candyDelay      = 0.1
+local candyTPOffset   = 2
+local candyEventConn  = nil
+local CANDY_PATHS = {
+    {"Workspace","Game","Map","ItemSpawns"},
+    {"Workspace","ItemSpawns"},
+    {"Workspace","Map","ItemSpawns"},
+    {"Workspace","Game","ItemSpawns"},
+}
+local CANDY_NAMES = {"candy","item","coin","collect","prize","sweet","loot","gift"}
+
+local st = {
+    EdgeBoost=false, NoClip=false, Fly=false, ESP=false,
+    GodMode=false, JumpBoost=false, GravityOverride=false,
+    InfJump=false, AutoJump=false, Turnbind=false,
+    WorldInvis=false, FOVOverride=false, Fullbright=false,
+    AutoFarm=false, AntiAFK=false, AutoCandy=false,
 }
 
 -- ============================================================
--- NOTIFY HELPER
+-- KEYBIND HELPER
+-- Lưu trạng thái keybind — mặc định None = không kích hoạt
 -- ============================================================
-local function Notify(title, content, duration)
-    Fluent:Notify({ Title=title, Content=content, Duration=duration or 3 })
+local keybinds   = {}   -- [featureName] = Enum.KeyCode hoặc nil
+local toggleRefs = {}   -- [featureName] = toggle object từ AddToggle
+-- Fluent.Toggles KHÔNG được expose ra ngoài thư viện →
+-- ta tự lưu reference khi tạo mỗi Toggle để keybind gọi lại.
+
+local function registerKeybind(featureName, keyCode)
+    keybinds[featureName] = (keyCode == Enum.KeyCode.Unknown) and nil or keyCode
 end
 
--- ============================================================
--- RAINBOW BORDER
--- ============================================================
-task.spawn(function()
-    local counter = 0
-    while task.wait() do
-        counter = counter + 0.005
-        local color = Color3.fromHSV(counter % 1, 0.85, 1)
-        pcall(function()
-            if Window and Window.Root then
-                -- Try multiple property paths used by different Fluent versions
-                Window.Root.BorderColor3 = color
-                pcall(function()
-                    local outline = Window.Root:FindFirstChild("Outline")
-                    if outline then outline.BackgroundColor3 = color end
-                end)
-                pcall(function()
-                    local border = Window.Root:FindFirstChild("Border")
-                    if border then border.BackgroundColor3 = color end
-                end)
+-- Lắng nghe keybind toàn cục
+-- Dùng toggleRefs thay vì Fluent.Toggles (Fluent không expose bảng đó)
+UserInputService.InputBegan:Connect(function(inp, gpe)
+    if gpe then return end
+    for feat, kc in pairs(keybinds) do
+        if kc and inp.KeyCode == kc then
+            local toggle = toggleRefs[feat]
+            if toggle then
+                toggle:SetValue(not st[feat])
             end
-        end)
+        end
     end
+    -- Reset AFK timer
+    if inp.UserInputType ~= Enum.UserInputType.None then lastInputTime = tick() end
 end)
 
 -- ============================================================
--- EDGE BOOST
+-- FEATURE FUNCTIONS
 -- ============================================================
-local BOOST_POWER = 80; local MIN_Y_VEL = 1.0
-local isEnabled = false; local Connection = nil
 
-local function isBouncePart(part)
-    local kw = {"bounce","boost","launch","jump","pad","ramp","platform"}
-    local name = string.lower(part.Name)
-    for _,k in pairs(kw) do if name:find(k) then return true end end
-    if part.Parent and (part.Parent:IsA("Model") or part.Parent:IsA("Folder")) then
-        local pn = string.lower(part.Parent.Name)
-        for _,k in pairs(kw) do if pn:find(k) then return true end end
-    end
-    return false
-end
 local function applyEdgeBoost()
-    if not isEnabled or not hrp or not humanoid or humanoid.Health<=0 then return end
-    if hrp.AssemblyLinearVelocity.Y < -MIN_Y_VEL then
-        local tp = hrp:GetTouchingParts(); local bounce = false
-        for _,p in pairs(tp) do if isBouncePart(p) then bounce=true;break end end
+    if not st.EdgeBoost or not hrp or not humanoid or humanoid.Health<=0 then return end
+    if hrp.AssemblyLinearVelocity.Y < -1 then
+        local tp=hrp:GetTouchingParts(); local bounce=false
+        for _,p in pairs(tp) do
+            local n=p.Name:lower()
+            for _,k in pairs({"bounce","boost","launch","jump","pad","ramp","platform"}) do
+                if n:find(k) then bounce=true; break end
+            end
+            if bounce then break end
+        end
         if not bounce and #tp>0 then
-            hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X,0,hrp.AssemblyLinearVelocity.Z)+Vector3.new(0,BOOST_POWER,0)
+            hrp.AssemblyLinearVelocity=Vector3.new(hrp.AssemblyLinearVelocity.X,BOOST_POWER,hrp.AssemblyLinearVelocity.Z)
         end
     end
 end
-local function enableEdgeBoost()
-    character,hrp,humanoid = getCharacterAndHrp(); isEnabled=true
-    if Connection then Connection:Disconnect() end
-    Connection = RunService.Stepped:Connect(applyEdgeBoost)
-end
-local function disableEdgeBoost()
-    isEnabled=false; if Connection then Connection:Disconnect();Connection=nil end
-end
-
--- ============================================================
--- NO CLIP (Fixed — no float part, no position manipulation)
--- ============================================================
-local isNoClipEnabled = false
-local noClipConn      = nil
 
 local function enableNoClip()
-    isNoClipEnabled = true
     if noClipConn then noClipConn:Disconnect() end
-    noClipConn = RunService.Stepped:Connect(function()
-        if not isNoClipEnabled then return end
-        local char = player.Character; if not char then return end
-        for _, v in pairs(char:GetDescendants()) do
-            if v:IsA("BasePart") and v.Name ~= "HumanoidRootPart" then
-                v.CanCollide = false
-            end
-        end
-        -- Also disable HRP collision but keep it for movement
-        local h = char:FindFirstChild("HumanoidRootPart")
-        if h then h.CanCollide = false end
+    noClipConn=RunService.Stepped:Connect(function()
+        if not st.NoClip then return end
+        local c=player.Character; if not c then return end
+        for _,p in pairs(c:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=false end end
     end)
 end
 local function disableNoClip()
-    isNoClipEnabled = false
     if noClipConn then noClipConn:Disconnect(); noClipConn=nil end
-    -- Restore collisions
     pcall(function()
-        local char = player.Character; if not char then return end
-        for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then part.CanCollide = true end
-        end
+        local c=player.Character; if not c then return end
+        for _,p in pairs(c:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=true end end
     end)
 end
-
--- ============================================================
--- FLY
--- ============================================================
-local isFlyEnabled=false; local flySpeed=50
-local flyBodyVel=nil; local flyBodyGyro=nil; local flyConn=nil
 
 local function enableFly()
     if not hrp or not humanoid then return end
-    isFlyEnabled=true; humanoid.PlatformStand=true
-    flyBodyVel=Instance.new("BodyVelocity"); flyBodyVel.Velocity=Vector3.new(0,0,0); flyBodyVel.MaxForce=Vector3.new(9e9,9e9,9e9); flyBodyVel.Parent=hrp
-    flyBodyGyro=Instance.new("BodyGyro"); flyBodyGyro.MaxTorque=Vector3.new(9e9,9e9,9e9); flyBodyGyro.P=9e4; flyBodyGyro.CFrame=hrp.CFrame; flyBodyGyro.Parent=hrp
+    isFly=true; humanoid.PlatformStand=true
+    flyBV=Instance.new("BodyVelocity"); flyBV.Velocity=Vector3.new(); flyBV.MaxForce=Vector3.new(9e9,9e9,9e9); flyBV.Parent=hrp
+    flyBG=Instance.new("BodyGyro"); flyBG.MaxTorque=Vector3.new(9e9,9e9,9e9); flyBG.P=9e4; flyBG.CFrame=hrp.CFrame; flyBG.Parent=hrp
     flyConn=RunService.Heartbeat:Connect(function()
-        if not isFlyEnabled or not hrp or not flyBodyVel then return end
-        local cam=workspace.CurrentCamera; local dir=Vector3.new(0,0,0); local spd=flySpeed*12
-        if UserInputService:IsKeyDown(Enum.KeyCode.W)         then dir=dir+cam.CFrame.LookVector  end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S)         then dir=dir-cam.CFrame.LookVector  end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A)         then dir=dir-cam.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D)         then dir=dir+cam.CFrame.RightVector end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space)     then dir=dir+Vector3.new(0,1,0)     end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then dir=dir-Vector3.new(0,1,0)     end
-        flyBodyVel.Velocity=if dir.Magnitude>0 then dir.Unit*spd else Vector3.new(0,0,0)
-        flyBodyGyro.CFrame=cam.CFrame
+        if not isFly or not hrp or not flyBV then return end
+        local cam=workspace.CurrentCamera; local dir=Vector3.new(); local spd=flySpeed*12
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then dir=dir+cam.CFrame.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then dir=dir-cam.CFrame.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then dir=dir-cam.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then dir=dir+cam.CFrame.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space)     then dir=dir+Vector3.new(0,1,0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then dir=dir-Vector3.new(0,1,0) end
+        flyBV.Velocity=dir.Magnitude>0 and dir.Unit*spd or Vector3.new()
+        flyBG.CFrame=cam.CFrame
     end)
 end
 local function disableFly()
-    isFlyEnabled=false
-    if flyConn     then flyConn:Disconnect();  flyConn=nil     end
-    if flyBodyVel  then flyBodyVel:Destroy();  flyBodyVel=nil  end
-    if flyBodyGyro then flyBodyGyro:Destroy(); flyBodyGyro=nil end
-    if humanoid    then humanoid.PlatformStand=false end
-    if hrp then pcall(function() hrp.AssemblyLinearVelocity=Vector3.new(0,0,0) end) end
+    isFly=false
+    if flyConn then flyConn:Disconnect(); flyConn=nil end
+    if flyBV   then flyBV:Destroy();   flyBV=nil end
+    if flyBG   then flyBG:Destroy();   flyBG=nil end
+    if humanoid then humanoid.PlatformStand=false end
+    if hrp then pcall(function() hrp.AssemblyLinearVelocity=Vector3.new() end) end
 end
 
--- ============================================================
--- ESP
--- ============================================================
-local isEspEnabled=false; local espHolder=nil; local espRainbowConn=nil
-local WHITE=Color3.fromRGB(255,255,255); local BLUE_BORDER=Color3.fromRGB(0,120,255); local rainbowHue=0
-
-local function createESP()
+local function buildESP()
     if espHolder then espHolder:Destroy() end
-    espHolder=Instance.new("Folder"); espHolder.Name="FemboyESP"; espHolder.Parent=game.CoreGui
+    espHolder=Instance.new("Folder"); espHolder.Name="FemboyESP"; espHolder.Parent=CoreGui
     local function setupChar(v)
         if not v.Character then return end
-        local folder=espHolder:FindFirstChild(v.Name); if not folder then return end; folder:ClearAllChildren()
+        local folder=espHolder:FindFirstChild(v.Name); if not folder then return end
+        folder:ClearAllChildren()
         local char=v.Character; local head=char:FindFirstChild("Head"); if not head then return end
         local box=Instance.new("SelectionBox"); box.Name="ESPBox"; box.Adornee=char
-        box.Color3=BLUE_BORDER; box.LineThickness=0.07; box.SurfaceTransparency=0.9; box.SurfaceColor3=WHITE; box.Parent=folder
-        local bill=Instance.new("BillboardGui"); bill.AlwaysOnTop=true; bill.Size=UDim2.new(0,200,0,55)
-        bill.StudsOffset=Vector3.new(0,3.2,0); bill.Adornee=head; bill.Parent=folder
+        box.Color3=Color3.fromRGB(0,180,255); box.LineThickness=0.07; box.SurfaceTransparency=0.9; box.Parent=folder
+        local bill=Instance.new("BillboardGui"); bill.AlwaysOnTop=true; bill.Size=UDim2.new(0,200,0,50)
+        bill.StudsOffset=Vector3.new(0,3,0); bill.Adornee=head; bill.Parent=folder
         local nL=Instance.new("TextLabel"); nL.Size=UDim2.new(1,0,0.5,0); nL.BackgroundTransparency=1
-        nL.Text=v.Name; nL.TextColor3=WHITE; nL.TextStrokeTransparency=0; nL.Font=Enum.Font.GothamBold; nL.TextSize=14; nL.Parent=bill
+        nL.Text=v.Name; nL.TextColor3=Color3.fromRGB(255,255,255); nL.TextStrokeTransparency=0
+        nL.Font=Enum.Font.GothamBold; nL.TextSize=14; nL.Parent=bill
         local hL=Instance.new("TextLabel"); hL.Size=UDim2.new(1,0,0.5,0); hL.Position=UDim2.new(0,0,0.5,0)
         hL.BackgroundTransparency=1; hL.TextColor3=Color3.fromRGB(100,255,120); hL.TextStrokeTransparency=0
         hL.Font=Enum.Font.GothamBold; hL.TextSize=12; hL.Parent=bill
         local function updHP()
-            local hum=char:FindFirstChild("Humanoid")
-            if hum then hL.Text=math.floor((hum.Health/math.max(hum.MaxHealth,1))*100).."% HP" end
+            local h=char:FindFirstChild("Humanoid")
+            if h then hL.Text=math.floor((h.Health/math.max(h.MaxHealth,1))*100).."% HP" end
         end
-        updHP(); local hum=char:FindFirstChild("Humanoid"); if hum then hum.Changed:Connect(updHP) end
+        updHP()
+        local hm=char:FindFirstChild("Humanoid"); if hm then hm.Changed:Connect(updHP) end
     end
     local function setupPlayer(v)
         if v==player then return end
@@ -379,124 +394,147 @@ local function createESP()
     end
     for _,v in pairs(Players:GetPlayers()) do task.spawn(setupPlayer,v) end
     Players.PlayerAdded:Connect(setupPlayer)
-    Players.PlayerRemoving:Connect(function(v) if espHolder then local f=espHolder:FindFirstChild(v.Name);if f then f:Destroy() end end end)
-    espRainbowConn=RunService.Heartbeat:Connect(function(dt)
-        rainbowHue=(rainbowHue+dt*0.5)%1; local col=Color3.fromHSV(rainbowHue,1,1)
-        if espHolder then for _,folder in pairs(espHolder:GetChildren()) do local box=folder:FindFirstChild("ESPBox");if box then box.Color3=col end end end
+    Players.PlayerRemoving:Connect(function(v)
+        if espHolder then local f=espHolder:FindFirstChild(v.Name); if f then f:Destroy() end end
     end)
-end
-local function removeESP()
-    if espRainbowConn then espRainbowConn:Disconnect();espRainbowConn=nil end
-    if espHolder then espHolder:Destroy();espHolder=nil end
-end
-local function enableESP()  isEspEnabled=true;  createESP() end
-local function disableESP() isEspEnabled=false; removeESP() end
-
--- ============================================================
--- JUMP BOOST
--- ============================================================
-local isJumpBoostEnabled=false; local jumpBoostPower=50; local ORIGINAL_JUMP=20
-local function enableJumpBoost()
-    isJumpBoostEnabled=true
-    pcall(function() if humanoid then humanoid.UseJumpPower=true;humanoid.JumpPower=jumpBoostPower end end)
-end
-local function disableJumpBoost()
-    isJumpBoostEnabled=false
-    pcall(function() if humanoid then humanoid.UseJumpPower=true;humanoid.JumpPower=ORIGINAL_JUMP end end)
-end
-
--- ============================================================
--- GRAVITY
--- ============================================================
-local ORIGINAL_GRAVITY=workspace.Gravity
-local isGravityEnabled=false; local currentGravityValue=0; local gravityConn=nil
-local function enableGravity()
-    isGravityEnabled=true
-    if gravityConn then gravityConn:Disconnect() end
-    gravityConn=RunService.Stepped:Connect(function() if isGravityEnabled then pcall(function() workspace.Gravity=currentGravityValue end) end end)
-end
-local function disableGravity()
-    isGravityEnabled=false
-    if gravityConn then gravityConn:Disconnect();gravityConn=nil end
-    pcall(function() workspace.Gravity=ORIGINAL_GRAVITY end); currentGravityValue=0
-end
-
--- ============================================================
--- INF JUMP
--- ============================================================
-local isInfJumpEnabled=false; local infJumpPower=80; local infJumpConn=nil
-local function enableInfJump()
-    isInfJumpEnabled=true
-    if infJumpConn then infJumpConn:Disconnect() end
-    infJumpConn=UserInputService.InputBegan:Connect(function(input,gpe)
-        if gpe then return end
-        if input.KeyCode==Enum.KeyCode.Space and hrp and humanoid and humanoid.Health>0 then
-            hrp.AssemblyLinearVelocity=Vector3.new(hrp.AssemblyLinearVelocity.X,infJumpPower,hrp.AssemblyLinearVelocity.Z)
-        end
-    end)
-end
-local function disableInfJump()
-    isInfJumpEnabled=false
-    if infJumpConn then infJumpConn:Disconnect();infJumpConn=nil end
-end
-
--- ============================================================
--- AUTO JUMP
--- ============================================================
-local isAutoJumpEnabled=false; local autoJumpConn=nil
-local autoJumpDelay=0.300; local lastAutoJumpTime=0
-
-local function buildAutoJumpLoop()
-    if autoJumpConn then autoJumpConn:Disconnect();autoJumpConn=nil end; lastAutoJumpTime=0
-    autoJumpConn=RunService.Heartbeat:Connect(function()
-        if not isAutoJumpEnabled or not humanoid or not hrp then return end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-            if humanoid.FloorMaterial~=Enum.Material.Air then
-                local now=tick()
-                if now-lastAutoJumpTime>=autoJumpDelay then lastAutoJumpTime=now;humanoid:ChangeState(Enum.HumanoidStateType.Jumping) end
+    espRainConn=RunService.Heartbeat:Connect(function(dt)
+        espHue=(espHue+dt*0.5)%1; local col=Color3.fromHSV(espHue,1,1)
+        if espHolder then
+            for _,folder in pairs(espHolder:GetChildren()) do
+                local box=folder:FindFirstChild("ESPBox"); if box then box.Color3=col end
             end
         end
     end)
 end
-local function enableAutoJump()  isAutoJumpEnabled=true;  buildAutoJumpLoop() end
-local function disableAutoJump()
-    isAutoJumpEnabled=false
-    if autoJumpConn then autoJumpConn:Disconnect();autoJumpConn=nil end
-    if humanoid then pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.Running) end) end
+local function removeESP()
+    if espRainConn then espRainConn:Disconnect(); espRainConn=nil end
+    if espHolder   then espHolder:Destroy();      espHolder=nil  end
 end
 
--- ============================================================
--- TAS
--- ============================================================
-local tasRunning=false; local tasFrames={}; local tasTimeStart=tick()
-local function tasGetChar() return player.Character or (player.CharacterAdded:Wait() and player.Character) end
-local function tasStartRecord()
+-- ── GOD MODE — Avoidance Logic ────────────────────────────────
+local function isPlayerChar(m)
+    for _,p in pairs(Players:GetPlayers()) do if p.Character==m then return true end end; return false
+end
+-- God Mode escape destinations — 4 corners of the map at safe height
+local GOD_ESCAPE_POINTS = {
+    Vector3.new( 150, 30,  150),
+    Vector3.new(-150, 30,  150),
+    Vector3.new( 150, 30, -150),
+    Vector3.new(-150, 30, -150),
+    Vector3.new(   0, 30,  200),
+    Vector3.new(   0, 30, -200),
+    Vector3.new( 200, 30,    0),
+    Vector3.new(-200, 30,    0),
+}
+local godEscapeIdx = 1
+
+local function enableGodMode()
+    if godConn then godConn:Disconnect() end
+    godConn=RunService.Heartbeat:Connect(function()
+        if not st.GodMode then return end
+        local c=player.Character; if not c then return end
+        local root=c:FindFirstChild("HumanoidRootPart"); if not root then return end
+        local hum=c:FindFirstChild("Humanoid"); if not hum or hum.Health<=0 then return end
+        local myPos=root.Position; local now=tick()
+
+        local closestDist = math.huge
+        local closestBot  = nil
+
+        -- Find the closest threatening bot
+        for _,obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("Model") and not isPlayerChar(obj) then
+                local botRoot=obj.PrimaryPart or obj:FindFirstChild("HumanoidRootPart")
+                    or obj:FindFirstChildWhichIsA("BasePart")
+                if botRoot then
+                    local dist=(botRoot.Position-myPos).Magnitude
+                    if dist < BOT_SAFE_DIST and dist < closestDist then
+                        closestDist = dist
+                        closestBot  = botRoot
+                    end
+                end
+            end
+        end
+
+        if closestBot and now-godCooldown > 0.25 then
+            godCooldown = now
+
+            -- Pick escape destination that is FARTHEST from bot
+            local botPos = closestBot.Position
+            local bestDest = nil; local bestScore = -math.huge
+            for _, dest in ipairs(GOD_ESCAPE_POINTS) do
+                local score = (dest - botPos).Magnitude
+                if score > bestScore then bestScore = score; bestDest = dest end
+            end
+
+            -- TP to best escape point (rotate through if multiple bots)
+            local target = bestDest or (myPos + Vector3.new(0, GOD_LIFT_H, 0))
+            root.CFrame = CFrame.new(target)
+            pcall(function()
+                root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            end)
+        end
+    end)
+end
+local function disableGodMode()
+    if godConn then godConn:Disconnect(); godConn=nil end
+end
+
+local function buildAutoJump()
+    if autoJumpConn then autoJumpConn:Disconnect() end; lastJumpT=0
+    autoJumpConn=RunService.Heartbeat:Connect(function()
+        if not st.AutoJump or not humanoid or not hrp then return end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) and humanoid.FloorMaterial~=Enum.Material.Air then
+            local now=tick()
+            if now-lastJumpT>=autoJumpDelay then lastJumpT=now; humanoid:ChangeState(Enum.HumanoidStateType.Jumping) end
+        end
+    end)
+end
+
+local function startTurnbind()
+    tbConn=UserInputService.InputBegan:Connect(function(i,proc)
+        if proc or not st.Turnbind then return end
+        if i.KeyCode==Enum.KeyCode.A then VIM:SendKeyEvent(true,Enum.KeyCode.Left,false,game)
+        elseif i.KeyCode==Enum.KeyCode.D then VIM:SendKeyEvent(true,Enum.KeyCode.Right,false,game) end
+    end)
+    tbEndConn=UserInputService.InputEnded:Connect(function(i)
+        if i.KeyCode==Enum.KeyCode.A then VIM:SendKeyEvent(false,Enum.KeyCode.Left,false,game)
+        elseif i.KeyCode==Enum.KeyCode.D then VIM:SendKeyEvent(false,Enum.KeyCode.Right,false,game) end
+    end)
+end
+local function stopTurnbind()
+    if tbConn    then tbConn:Disconnect();    tbConn=nil    end
+    if tbEndConn then tbEndConn:Disconnect(); tbEndConn=nil end
+    VIM:SendKeyEvent(false,Enum.KeyCode.Left,false,game)
+    VIM:SendKeyEvent(false,Enum.KeyCode.Right,false,game)
+end
+
+local function tasStart()
     tasFrames={}; tasRunning=true; tasTimeStart=tick()
+    Fluent:Notify({Title="TAS",Content="🔴 Recording started!",Duration=2})
     task.spawn(function()
         while tasRunning do
             RunService.Heartbeat:Wait()
-            local c=tasGetChar()
+            local c=player.Character
             if c and c:FindFirstChild("HumanoidRootPart") and c:FindFirstChild("Humanoid") then
                 table.insert(tasFrames,{c.HumanoidRootPart.CFrame,c.Humanoid:GetState().Value,tick()-tasTimeStart})
             end
         end
     end)
 end
-local function tasStopRecord() tasRunning=false end
+local function tasStop()
+    tasRunning=false
+    Fluent:Notify({Title="TAS",Content="⏹ Stopped — "..#tasFrames.." frames.",Duration=3})
+end
 local function tasPlay()
-    if #tasFrames==0 then return end
-    local c=tasGetChar(); if not c then return end
-    local timePlay=tick(); local frameCount=#tasFrames; local oldFrame=1
-    local tasLoop
-    tasLoop=RunService.Heartbeat:Connect(function()
-        local ct=tick()
-        if (ct-timePlay)>=tasFrames[frameCount][3] then tasLoop:Disconnect();return end
-        local nf=math.min(oldFrame+60,frameCount)
-        for i=oldFrame,nf do
+    if #tasFrames==0 then Fluent:Notify({Title="TAS",Content="⚠ No frames recorded.",Duration=3}); return end
+    Fluent:Notify({Title="TAS",Content="▶ Playing "..#tasFrames.." frames...",Duration=3})
+    local timePlay=tick(); local fc=#tasFrames; local of=1
+    local loop; loop=RunService.Heartbeat:Connect(function()
+        if (tick()-timePlay)>=tasFrames[fc][3] then loop:Disconnect(); return end
+        for i=of,math.min(of+60,fc) do
             local f=tasFrames[i]
-            if f and f[3]<=ct-timePlay then
-                oldFrame=i
-                local ch=player.Character
+            if f and f[3]<=tick()-timePlay then
+                of=i; local ch=player.Character
                 if ch then
                     if ch:FindFirstChild("HumanoidRootPart") then ch.HumanoidRootPart.CFrame=f[1] end
                     if ch:FindFirstChild("Humanoid") then pcall(function() ch.Humanoid:ChangeState(f[2]) end) end
@@ -506,1012 +544,1224 @@ local function tasPlay()
     end)
 end
 
--- ============================================================
--- TURNBIND
--- ============================================================
-local turnbindEnabled=false
-local VIM=game:GetService("VirtualInputManager")
-local turnbindConn=nil; local turnbindEndConn=nil
-local function startTurnbind()
-    turnbindConn=UserInputService.InputBegan:Connect(function(input,processed)
-        if processed or not turnbindEnabled then return end
-        if input.KeyCode==Enum.KeyCode.A then VIM:SendKeyEvent(true,Enum.KeyCode.Left,false,game)
-        elseif input.KeyCode==Enum.KeyCode.D then VIM:SendKeyEvent(true,Enum.KeyCode.Right,false,game) end
-    end)
-    turnbindEndConn=UserInputService.InputEnded:Connect(function(input)
-        if input.KeyCode==Enum.KeyCode.A then VIM:SendKeyEvent(false,Enum.KeyCode.Left,false,game)
-        elseif input.KeyCode==Enum.KeyCode.D then VIM:SendKeyEvent(false,Enum.KeyCode.Right,false,game) end
-    end)
+local function farmTP()
+    local c=player.Character; if not c then return end
+    local h=c:FindFirstChild("HumanoidRootPart"); if not h then return end
+    h.CFrame=CFrame.new(farmDests[farmPhase]); h.AssemblyLinearVelocity=Vector3.new(); farmYTrig=false
 end
-local function stopTurnbind()
-    if turnbindConn    then turnbindConn:Disconnect();    turnbindConn=nil    end
-    if turnbindEndConn then turnbindEndConn:Disconnect(); turnbindEndConn=nil end
-    VIM:SendKeyEvent(false,Enum.KeyCode.Left,false,game); VIM:SendKeyEvent(false,Enum.KeyCode.Right,false,game)
-end
-
--- ============================================================
--- AUTO FARM — Method 2 upgraded (auto TP back on fall/move)
--- ============================================================
-local isAutoFarmEnabled=false; local autoFarmMethod=1; local autoFarmPhase=1
-local autoFarmYTrig=false; local autoFarmConn=nil; local autoFarmCapConn=nil
-local autoFarmPlatform=nil
--- Method 2 guard
-local autoFarmM2GuardConn=nil
-local M2_TARGET = Vector3.new(3000,7000,3000)
-local M2_Y_THRESHOLD = 6980   -- if Y drops below this, TP back immediately
-
-local farmDests={
-    Vector3.new( 3000,7000, 3000), Vector3.new( 3000,7000,-3000),
-    Vector3.new(-3000,7000, 3000), Vector3.new(-3000,7000,-3000),
-}
-
-local function farmTPToPhase()
-    local char=player.Character; if not char then return end
-    local hrpAF=char:FindFirstChild("HumanoidRootPart"); if not hrpAF then return end
-    hrpAF.CFrame=CFrame.new(farmDests[autoFarmPhase]); hrpAF.AssemblyLinearVelocity=Vector3.new(0,0,0); autoFarmYTrig=false
-end
-local function startFarmVelocityCap()
-    if autoFarmCapConn then autoFarmCapConn:Disconnect() end
-    autoFarmCapConn=RunService.Heartbeat:Connect(function()
-        if not isAutoFarmEnabled or autoFarmMethod~=1 then return end
-        local char=player.Character; if not char then return end
-        local hrpAF=char:FindFirstChild("HumanoidRootPart"); if not hrpAF then return end
-        local vel=hrpAF.AssemblyLinearVelocity
-        if vel.Y<-100 then hrpAF.AssemblyLinearVelocity=Vector3.new(vel.X,-100,vel.Z) end
-    end)
-end
-local function stopFarmVelocityCap()
-    if autoFarmCapConn then autoFarmCapConn:Disconnect();autoFarmCapConn=nil end
-end
-local function destroyFarmPlatform()
-    if autoFarmPlatform then pcall(function() autoFarmPlatform:Destroy() end);autoFarmPlatform=nil end
-end
-local function createFarmPlatform()
-    destroyFarmPlatform()
-    autoFarmPlatform=Instance.new("Part")
-    autoFarmPlatform.Name="FemboyFarmPlatform"; autoFarmPlatform.Size=Vector3.new(4,1,4)
-    autoFarmPlatform.Anchored=true; autoFarmPlatform.CanCollide=true
-    autoFarmPlatform.BrickColor=BrickColor.new("Cyan"); autoFarmPlatform.Transparency=0.4
-    autoFarmPlatform.CFrame=CFrame.new(3000,6997,3000); autoFarmPlatform.Parent=workspace
-end
-
--- Method 2 guard: constantly check Y position and TP back if fallen
-local function startM2Guard()
-    if autoFarmM2GuardConn then autoFarmM2GuardConn:Disconnect() end
-    autoFarmM2GuardConn=RunService.Heartbeat:Connect(function()
-        if not isAutoFarmEnabled or autoFarmMethod~=2 then return end
-        local char=player.Character; if not char then return end
-        local hrpAF=char:FindFirstChild("HumanoidRootPart"); if not hrpAF then return end
-        if hrpAF.Position.Y < M2_Y_THRESHOLD then
-            hrpAF.CFrame=CFrame.new(M2_TARGET)
-            hrpAF.AssemblyLinearVelocity=Vector3.new(0,0,0)
-        end
-    end)
-end
-local function stopM2Guard()
-    if autoFarmM2GuardConn then autoFarmM2GuardConn:Disconnect();autoFarmM2GuardConn=nil end
-end
-
 local function startAutoFarm()
-    isAutoFarmEnabled=true
-    if autoFarmMethod==1 then
-        autoFarmPhase=1; startFarmVelocityCap(); farmTPToPhase()
-        if autoFarmConn then autoFarmConn:Disconnect() end
-        autoFarmConn=RunService.Heartbeat:Connect(function()
-            if not isAutoFarmEnabled or autoFarmMethod~=1 then return end
-            local char=player.Character; if not char then return end
-            local hrpAF=char:FindFirstChild("HumanoidRootPart"); if not hrpAF then return end
-            if hrpAF.Position.Y<6000 and not autoFarmYTrig then
-                autoFarmYTrig=true; autoFarmPhase=(autoFarmPhase%4)+1
-                task.spawn(function() task.wait(0.05);farmTPToPhase() end)
+    isAutoFarm=true
+    if farmMethod==1 then
+        farmPhase=1; farmTP()
+        if farmCapConn then farmCapConn:Disconnect() end
+        farmCapConn=RunService.Heartbeat:Connect(function()
+            if not isAutoFarm or farmMethod~=1 then return end
+            local c=player.Character; if not c then return end
+            local h=c:FindFirstChild("HumanoidRootPart"); if not h then return end
+            local v=h.AssemblyLinearVelocity
+            if v.Y<-100 then h.AssemblyLinearVelocity=Vector3.new(v.X,-100,v.Z) end
+        end)
+        if farmConn then farmConn:Disconnect() end
+        farmConn=RunService.Heartbeat:Connect(function()
+            if not isAutoFarm or farmMethod~=1 then return end
+            local c=player.Character; if not c then return end
+            local h=c:FindFirstChild("HumanoidRootPart"); if not h then return end
+            if h.Position.Y<6000 and not farmYTrig then
+                farmYTrig=true; farmPhase=(farmPhase%4)+1
+                task.spawn(function() task.wait(0.05); farmTP() end)
             end
         end)
-    elseif autoFarmMethod==2 then
-        local char=player.Character
-        if char then
-            local hrpAF=char:FindFirstChild("HumanoidRootPart")
-            if hrpAF then hrpAF.CFrame=CFrame.new(M2_TARGET);hrpAF.AssemblyLinearVelocity=Vector3.new(0,0,0) end
+        Fluent:Notify({Title="Farm",Content="✅ Auto Farm M1 started!",Duration=2})
+    elseif farmMethod==2 then
+        local c=player.Character
+        if c then local h=c:FindFirstChild("HumanoidRootPart")
+            if h then h.CFrame=CFrame.new(3000,FARM2_Y+1,3000); h.AssemblyLinearVelocity=Vector3.new() end
         end
-        createFarmPlatform()
-        startM2Guard()  -- Start the guard that keeps TP-ing back if player falls
+        if farmPlatform then pcall(function() farmPlatform:Destroy() end) end
+        farmPlatform=Instance.new("Part"); farmPlatform.Size=Vector3.new(4,1,4); farmPlatform.Anchored=true
+        farmPlatform.CanCollide=true; farmPlatform.BrickColor=BrickColor.new("Cyan")
+        farmPlatform.Transparency=0.4; farmPlatform.CFrame=CFrame.new(3000,FARM2_Y-3,3000); farmPlatform.Parent=workspace
+        if farm2FallConn then farm2FallConn:Disconnect() end
+        farm2FallConn=RunService.Heartbeat:Connect(function()
+            if not isAutoFarm or farmMethod~=2 then return end
+            local c2=player.Character; if not c2 then return end
+            local h=c2:FindFirstChild("HumanoidRootPart"); if not h then return end
+            if h.Position.Y<FARM2_THRESH then h.CFrame=CFrame.new(3000,FARM2_Y+1,3000); h.AssemblyLinearVelocity=Vector3.new() end
+        end)
+        Fluent:Notify({Title="Farm",Content="✅ Auto Farm M2 started!",Duration=2})
     end
 end
 local function stopAutoFarm()
-    isAutoFarmEnabled=false
-    if autoFarmConn then autoFarmConn:Disconnect();autoFarmConn=nil end
-    stopFarmVelocityCap(); destroyFarmPlatform(); stopM2Guard(); autoFarmPhase=1
+    isAutoFarm=false
+    if farmConn      then farmConn:Disconnect();      farmConn=nil      end
+    if farmCapConn   then farmCapConn:Disconnect();   farmCapConn=nil   end
+    if farm2FallConn then farm2FallConn:Disconnect(); farm2FallConn=nil end
+    if farmPlatform  then pcall(function() farmPlatform:Destroy() end); farmPlatform=nil end
+    farmPhase=1; Fluent:Notify({Title="Farm",Content="🔴 Auto Farm stopped.",Duration=2})
 end
 
--- ============================================================
--- WORLD TRANSPARENCY
--- ============================================================
-local worldTransLevel=0; local affectedWorldParts={}
-local function isCharacterPart(obj)
-    for _,plr in pairs(Players:GetPlayers()) do local c=plr.Character;if c and obj:IsDescendantOf(c) then return true end end; return false
-end
-local function applyWorldTransparency(level)
-    for _,data in pairs(affectedWorldParts) do pcall(function() if data.part and data.part.Parent then data.part.Transparency=data.origTrans end end) end
-    affectedWorldParts={}; worldTransLevel=level; if level==0 then return end
-    local alpha=level/100
-    for _,obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") and not isCharacterPart(obj) then
-            local orig=obj.Transparency; table.insert(affectedWorldParts,{part=obj,origTrans=orig})
-            pcall(function() obj.Transparency=alpha;obj.LocalTransparencyModifier=0 end)
-        end
-    end
-    pcall(function() local t=workspace:FindFirstChildOfClass("Terrain");if t then table.insert(affectedWorldParts,{part=t,origTrans=t.Transparency});t.Transparency=alpha end end)
-end
-
--- ============================================================
--- WORLD INVISIBILITY
--- ============================================================
-local isWorldInvisEnabled=false; local worldInvisOriginals={}
-local function enableWorldInvisibility()
-    isWorldInvisEnabled=true; worldInvisOriginals={}
-    local char=player.Character
-    for _,obj in ipairs(workspace:GetDescendants()) do
-        if char and obj:IsDescendantOf(char) then continue end
-        if obj:IsA("BasePart") or obj:IsA("Decal") or obj:IsA("Texture") then
-            worldInvisOriginals[obj]=obj.Transparency; pcall(function() obj.Transparency=1 end)
-        end
-    end
-end
-local function disableWorldInvisibility()
-    isWorldInvisEnabled=false
-    for obj,orig in pairs(worldInvisOriginals) do pcall(function() if obj and obj.Parent then obj.Transparency=orig end end) end
-    worldInvisOriginals={}
-end
-
--- ============================================================
--- STRETCH FOV
--- ============================================================
-local originalFOVBase=70; local hStretch=100; local vStretch=100
-local isStretchActive=false; local stretchConn=nil
-pcall(function() originalFOVBase=workspace.CurrentCamera.FieldOfView end)
-local function computeStretchFOV()
-    local cam=workspace.CurrentCamera; local vp=cam.ViewportSize
-    if vp.X==0 or vp.Y==0 then return originalFOVBase end
-    local realAspect=vp.X/vp.Y; local simAspect=realAspect*(hStretch/100)/(vStretch/100)
-    local vFovRad=math.rad(originalFOVBase); local hFovRad=2*math.atan(math.tan(vFovRad/2)*simAspect)
-    local newVFov=2*math.atan(math.tan(hFovRad/2)/realAspect)
-    return math.clamp(math.deg(newVFov),1,120)
-end
-local function enableStretch()
-    isStretchActive=true
-    if stretchConn then stretchConn:Disconnect() end
-    stretchConn=RunService.RenderStepped:Connect(function() if isStretchActive then pcall(function() workspace.CurrentCamera.FieldOfView=computeStretchFOV() end) end end)
-end
-local function disableStretch()
-    isStretchActive=false
-    if stretchConn then stretchConn:Disconnect();stretchConn=nil end
-    pcall(function() workspace.CurrentCamera.FieldOfView=originalFOVBase end)
-end
-
--- ============================================================
--- FULLBRIGHT
--- ============================================================
-local isFullbrightEnabled=false; local origLightingProps={}
-local function enableFullbright()
-    isFullbrightEnabled=true
-    pcall(function()
-        origLightingProps={Brightness=Lighting.Brightness,ClockTime=Lighting.ClockTime,FogEnd=Lighting.FogEnd,GlobalShadows=Lighting.GlobalShadows,Ambient=Lighting.Ambient,OutdoorAmbient=Lighting.OutdoorAmbient}
-        Lighting.Brightness=3;Lighting.ClockTime=14;Lighting.FogEnd=100000;Lighting.GlobalShadows=false
-        Lighting.Ambient=Color3.fromRGB(178,178,178);Lighting.OutdoorAmbient=Color3.fromRGB(178,178,178)
+local function enableAntiAFK()
+    if antiAfkConn then antiAfkConn:Disconnect() end
+    antiAfkConn=player.Idled:Connect(function()
+        VirtualUser:CaptureController(); VirtualUser:ClickButton2(Vector2.new()); lastInputTime=tick()
     end)
 end
-local function disableFullbright()
-    isFullbrightEnabled=false
-    pcall(function()
-        if origLightingProps.Brightness~=nil then
-            Lighting.Brightness=origLightingProps.Brightness;Lighting.ClockTime=origLightingProps.ClockTime
-            Lighting.FogEnd=origLightingProps.FogEnd;Lighting.GlobalShadows=origLightingProps.GlobalShadows
-            Lighting.Ambient=origLightingProps.Ambient;Lighting.OutdoorAmbient=origLightingProps.OutdoorAmbient
-        end
-    end)
+local function disableAntiAFK()
+    if antiAfkConn then antiAfkConn:Disconnect(); antiAfkConn=nil end
 end
 
--- ============================================================
--- WALL REMOVER
--- ============================================================
-local storedParts={}; local processedParts={}; local isProcessing=false
-local wallRepairKeywords={"stair","step","ramp","trimp","platform","invisibleplatform","floor","ground","pad","road","path","bridge"}
-local function isGameplayPart(name)
-    name=string.lower(name)
-    for _,kw in pairs(wallRepairKeywords) do if string.find(name,kw,1,true) then return true end end; return false
-end
-local function wallDestroyAndStore()
-    if isProcessing then return 0,0 end
-    isProcessing=true; local destroyed,stored=0,0; local parts={}
-    for _,obj in pairs(workspace:GetDescendants()) do if (obj:IsA("BasePart") or obj:IsA("MeshPart")) and not processedParts[obj] then table.insert(parts,obj) end end
-    for i=1,#parts,50 do
-        for j=i,math.min(i+49,#parts) do
-            local obj=parts[j]
-            if obj and obj.Parent then
-                local name=string.lower(obj.Name)
-                if isGameplayPart(name) then
-                    if obj.CanCollide then local np=obj:Clone();np.Parent=nil;table.insert(storedParts,np);pcall(function() obj:Destroy() end);stored=stored+1 end
-                else
-                    if obj.CanCollide and obj.Transparency>=0.8 and obj.Position.Y>50 then pcall(function() obj:Destroy();destroyed=destroyed+1 end) end
-                end
-                processedParts[obj]=true
-            end
-        end; task.wait()
-    end; isProcessing=false; return stored,destroyed
-end
-local function wallRestoreStoredParts()
-    local restored=0; local mapParent=workspace:FindFirstChild("Map") or workspace:FindFirstChild("Level") or workspace
-    for i=1,#storedParts,25 do for j=i,math.min(i+24,#storedParts) do local part=storedParts[j];if part then pcall(function() part.Parent=mapParent;restored=restored+1 end) end end;task.wait() end
-    storedParts={}; processedParts={}; return restored
-end
-local function runWallRemover() task.spawn(function() wallDestroyAndStore();task.wait(0.2);wallRestoreStoredParts() end) end
-
--- ============================================================
--- IMPORT MAP
--- ============================================================
-local importedMapModel=nil
-local function importMap(assetIdRaw)
-    local idStr=tostring(assetIdRaw):match("%d+"); if not idStr or idStr=="" then return end; local id=tonumber(idStr)
-    if importedMapModel then pcall(function() importedMapModel:Destroy() end);importedMapModel=nil end
-    local ok,result=pcall(function() return InsertService:LoadAsset(id) end)
-    if ok and result then result.Name="FemboyImportedMap";result.Parent=workspace;importedMapModel=result
-    else
-        local ok2,r2=pcall(function()
-            local m=game:GetObjects("rbxassetid://"..id)
-            if m and m[1] then local c=Instance.new("Model");c.Name="FemboyImportedMap";for _,o in pairs(m) do o.Parent=c end;c.Parent=workspace;return c end
-        end); if ok2 and r2 then importedMapModel=r2 end
-    end
-end
-local function removeImportedMap() if importedMapModel then pcall(function() importedMapModel:Destroy() end);importedMapModel=nil end end
-
--- ============================================================
--- SKYBOX
--- ============================================================
-local currentSkybox=nil
-local SKY_FACES={"SkyboxBk","SkyboxDn","SkyboxFt","SkyboxLf","SkyboxRt","SkyboxUp"}
-local function applySkybox(assetIdRaw)
-    local idStr=tostring(assetIdRaw):match("%d+"); if not idStr or idStr=="" then return end; local id="rbxassetid://"..idStr
-    if currentSkybox then pcall(function() currentSkybox:Destroy() end);currentSkybox=nil end
+local function applySkybox(idRaw)
+    local idStr=tostring(idRaw):match("%d+"); if not idStr or idStr=="" then return end
+    local id="rbxassetid://"..idStr
+    if currentSkybox then pcall(function() currentSkybox:Destroy() end); currentSkybox=nil end
     for _,c in pairs(Lighting:GetChildren()) do if c:IsA("Sky") then c:Destroy() end end
-    local ok,sky=pcall(function()
-        local objs=game:GetObjects(id); if objs then for _,o in pairs(objs) do if o:IsA("Sky") then return o end for _,c in pairs(o:GetDescendants()) do if c:IsA("Sky") then return c end end end end
-    end)
-    if ok and sky then sky.Parent=Lighting;currentSkybox=sky
-    else local ns=Instance.new("Sky");for _,f in pairs(SKY_FACES) do pcall(function() ns[f]=id end) end;ns.Parent=Lighting;currentSkybox=ns end
+    local ns=Instance.new("Sky")
+    for _,f in pairs(SKY_FACES) do pcall(function() ns[f]=id end) end
+    ns.Parent=Lighting; currentSkybox=ns
+    Fluent:Notify({Title="Sky",Content="✅ Skybox applied!",Duration=2})
 end
 local function resetSkybox()
-    if currentSkybox then pcall(function() currentSkybox:Destroy() end);currentSkybox=nil end
+    if currentSkybox then pcall(function() currentSkybox:Destroy() end); currentSkybox=nil end
     for _,c in pairs(Lighting:GetChildren()) do if c:IsA("Sky") then c:Destroy() end end
+    Fluent:Notify({Title="Sky",Content="🔄 Sky reset.",Duration=2})
 end
 
--- ============================================================
--- EMOTE CHANGER (abbreviated — same as original)
--- ============================================================
-local EC_player=player; local EC_RS=ReplicatedStorage
-local EC_currentTag=nil; local EC_remoteSignal=nil
-local ec_currentEmotes={}; local ec_selectEmotes={}
-local ec_normalCache={}; local ec_nameCache={}
-local ec_emoteEnabled2=false; local ec_listenerReady=false
-local ec_swappedPairs={}; local ec_swapCurrent={}; local ec_swapSelect={}
-local ec_selectedSlot=1; local ec_selectedSwapSlot=1
+-- ── PLAYER STAT — SetAttribute + Data folder ─────────────────
+-- Dùng 3 lớp: Attribute → Data folder → leaderstats (fallback)
+-- Hoạt động client-side visual, không cần leaderstats tồn tại
+local function applyFakeStat(statName, value, aliases)
+    local p = game.Players.LocalPlayer
+    local targets = {statName}
+    if aliases then for _,a in ipairs(aliases) do table.insert(targets, a) end end
 
-for i=1,12 do ec_currentEmotes[i]="";ec_selectEmotes[i]="";ec_swapCurrent[i]="";ec_swapSelect[i]="" end
-
-local function ec_normalize(text) if not text then return "" end; if not ec_normalCache[text] then ec_normalCache[text]=string.lower(text:gsub("%s+","")) end; return ec_normalCache[text] end
-local function ec_readTag(folder) if not folder then return nil end; local a=folder:GetAttribute("Tag");if a~=nil then return a end; local o=folder:FindFirstChild("Tag");if o and o:IsA("ValueBase") then return o.Value end; return nil end
-local function ec_resolveRemotes()
-    local Events=EC_RS:FindFirstChild("Events");local CharFolder=Events and Events:FindFirstChild("Character")
-    local PassChar=CharFolder and CharFolder:FindFirstChild("PassCharacterInfo"); EC_remoteSignal=PassChar and PassChar.OnClientEvent
-end
-ec_resolveRemotes()
-local function ec_fireSelect(emoteName)
-    if not EC_currentTag or not emoteName or emoteName=="" then return end
-    local b=tonumber(EC_currentTag); if not b or b<0 or b>255 then return end
-    local buf=buffer.create(2);buffer.writeu8(buf,0,b);buffer.writeu8(buf,1,17)
-    if EC_remoteSignal then pcall(function() firesignal(EC_remoteSignal,buf,{emoteName}) end) end
-end
-local function ec_isValidEmote(name)
-    if name=="" then return false,"" end; local norm=ec_normalize(name)
-    local ef=EC_RS:FindFirstChild("Items");if not ef then return false,"" end; ef=ef:FindFirstChild("Emotes");if not ef then return false,"" end
-    for _,m in ipairs(ef:GetChildren()) do if m:IsA("ModuleScript") and ec_normalize(m.Name)==norm then return true,m.Name end end; return false,""
-end
-local function ec_installListeners()
-    if ec_listenerReady then return end
-    -- Abbreviated: Full implementation from original would go here
-    ec_listenerReady=true
-end
-
--- ============================================================
--- CHARACTER ADDED HANDLER
--- ============================================================
-player.CharacterAdded:Connect(function()
-    character,hrp,humanoid=getCharacterAndHrp(); task.wait(0.5)
-    if isJumpBoostEnabled  then pcall(function() humanoid.UseJumpPower=true;humanoid.JumpPower=jumpBoostPower end) end
-    if isGravityEnabled    then pcall(function() workspace.Gravity=currentGravityValue end) end
-    if isNoClipEnabled     then task.wait(0.1); enableNoClip() end
-    if isAutoFarmEnabled and autoFarmMethod==1 then task.wait(0.5);autoFarmPhase=1;farmTPToPhase() end
-    if isAutoFarmEnabled and autoFarmMethod==2 then
-        task.wait(0.5)
-        local char=player.Character
-        if char then
-            local hrpAF=char:FindFirstChild("HumanoidRootPart")
-            if hrpAF then hrpAF.CFrame=CFrame.new(M2_TARGET);hrpAF.AssemblyLinearVelocity=Vector3.new(0,0,0) end
+    for _, name in ipairs(targets) do
+        -- Lớp 1: Attributes (UI của Evade đọc từ đây)
+        pcall(function() p:SetAttribute(name, value) end)
+        -- Lớp 2: Data folder
+        local data = p:FindFirstChild("Data")
+        if data then
+            local child = data:FindFirstChild(name)
+            if child then pcall(function() child.Value = value end) end
         end
-        -- Restart M2 guard after respawn
-        createFarmPlatform(); startM2Guard()
+        -- Lớp 3: leaderstats fallback
+        local ls = p:FindFirstChild("leaderstats")
+        if ls then
+            local child = ls:FindFirstChild(name)
+            if child then pcall(function() child.Value = value end) end
+        end
+        -- Lớp 4: Tìm trong tất cả children
+        for _, folder in ipairs(p:GetChildren()) do
+            local child = folder:FindFirstChild(name)
+            if child and child.Value ~= nil then
+                pcall(function() child.Value = value end)
+            end
+        end
+    end
+end
+
+-- ══════════════════════════════════════════════════════════════
+-- AUTO CANDY  v2.6  —  Pro Hybrid Logic
+-- ══════════════════════════════════════════════════════════════
+--
+-- Luồng hoạt động:
+--   Bật → Initial Scan (sort gần nhất trước) → DescendantAdded
+--   → Pickup Verify (chờ kẹo biến mất, thử lại nếu timeout)
+--   → Safety Poll/15s  +  FolderWatcher (tự reconnect khi round đổi)
+--
+-- Cải tiến so với v2.4/v2.5:
+--   [1] Sắp xếp kẹo theo Magnitude (gần nhất nhặt trước)
+--   [2] Pickup Verification: chờ kẹo thực sự biến mất trước khi
+--       tính là đã nhặt — tránh bỏ sót vì TP quá nhanh
+--   [3] Retry: nếu timeout chưa nhặt, TP lại với offset thấp hơn
+--   [4] FolderWatcher: tự reconnect DescendantAdded khi game
+--       xóa & tạo lại thư mục ItemSpawns giữa các round
+-- ══════════════════════════════════════════════════════════════
+
+-- Thêm biến quản lý mới
+local candyFolderWatcher   = nil    -- Watcher cho folder recreation
+local PICKUP_TIMEOUT       = 1.5    -- Giây chờ xác nhận đã nhặt
+local candyMissed          = 0      -- Đếm số kẹo bỏ lỡ (debug)
+
+-- ── Bộ lọc ───────────────────────────────────────────────────
+local function isCandyObject(obj)
+    if not obj or not obj.Name then return false end
+    local n = obj.Name:lower()
+    for _, kw in ipairs(CANDY_NAMES) do
+        if n:find(kw) then return true end
+    end
+    return false   -- PHẢI là false, không phải #name > 0
+end
+
+local function getCandyPosition(obj)
+    if not obj or not obj.Parent then return nil end
+    local pos = nil
+    pcall(function()
+        if obj:IsA("BasePart") then
+            pos = obj.Position
+        elseif obj:IsA("Model") then
+            -- Ưu tiên PrimaryPart, fallback sang BasePart bất kỳ
+            local p = obj.PrimaryPart or obj:FindFirstChildOfClass("BasePart")
+            -- Chờ thêm nếu Model chưa có BasePart (vẫn đang load)
+            if not p then
+                for _ = 1, 5 do
+                    task.wait(0.05)
+                    p = obj.PrimaryPart or obj:FindFirstChildOfClass("BasePart")
+                    if p then break end
+                end
+            end
+            if p then pos = p.Position end
+        end
+    end)
+    -- Từ chối vị trí (0,0,0) — là giá trị mặc định khi chưa load xong
+    if pos and pos.Magnitude < 0.5 then return nil end
+    return pos
+end
+
+local function findItemSpawnsFolder()
+    for _, pathParts in ipairs(CANDY_PATHS) do
+        local cur = game; local ok = true
+        for _, part in ipairs(pathParts) do
+            cur = cur:FindFirstChild(part)
+            if not cur then ok = false; break end
+        end
+        if ok and cur then return cur end
+    end
+    return nil
+end
+
+-- ── [1] Bot Safety Check (tách riêng để tái sử dụng) ─────────
+local function isBotDangerousAt(pos)
+    if not st.GodMode then return false end
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and not isPlayerChar(obj) then
+            local botRoot = obj.PrimaryPart
+                or obj:FindFirstChild("HumanoidRootPart")
+                or obj:FindFirstChildWhichIsA("BasePart")
+            if botRoot and (botRoot.Position - pos).Magnitude < BOT_SAFE_DIST then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+-- ── [1] Sắp xếp kẹo theo khoảng cách gần nhất ───────────────
+local function getSortedCandyList(itemSpawns, myPos)
+    local list = {}
+    for _, spawnPoint in ipairs(itemSpawns:GetChildren()) do
+        -- Kiểm tra chính spawnPoint
+        if isCandyObject(spawnPoint) then
+            local pos = getCandyPosition(spawnPoint)
+            if pos then
+                table.insert(list, {
+                    obj  = spawnPoint,
+                    pos  = pos,
+                    dist = (pos - myPos).Magnitude
+                })
+            end
+        end
+        -- Kiểm tra các vật thể con bên trong
+        for _, child in ipairs(spawnPoint:GetChildren()) do
+            if isCandyObject(child) then
+                local pos = getCandyPosition(child)
+                if pos then
+                    table.insert(list, {
+                        obj  = child,
+                        pos  = pos,
+                        dist = (pos - myPos).Magnitude
+                    })
+                end
+            end
+        end
+    end
+    -- Sắp xếp: kẹo gần nhất ở đầu danh sách
+    table.sort(list, function(a, b) return a.dist < b.dist end)
+    return list
+end
+
+-- ── [2][3] Collect với Pickup Verification + Retry ────────────
+-- Thay vì đếm ngay sau khi TP, script chờ kẹo thực sự biến mất
+-- để xác nhận server đã nhận hành động. Nếu timeout → thử lại
+-- với offset thấp hơn để chắc chắn chạm vào hitbox.
+local function collectWithVerify(obj, pos)
+    if not isCandyCollect then return false end
+
+    local c    = player.Character
+    local root = c and c:FindFirstChild("HumanoidRootPart")
+    if not root then return false end
+
+    -- Kiểm tra bot nguy hiểm tại vị trí kẹo
+    if isBotDangerousAt(pos) then
+        candyStatusText = "⚠ Bot gần kẹo — bỏ qua"
+        return false
+    end
+
+    -- Ghi nhớ parent để phát hiện kẹo biến mất
+    local parentRef = obj.Parent
+
+    -- Lần thử 1: TP với offset chuẩn
+    root.CFrame = CFrame.new(pos + Vector3.new(0, candyTPOffset, 0))
+
+    -- Chờ pickup verification (kẹo biến mất khỏi parent)
+    local deadline = tick() + PICKUP_TIMEOUT
+    local picked   = false
+    while tick() < deadline and isCandyCollect do
+        -- Kẹo không còn tồn tại hoặc đã rời khỏi parent = đã nhặt
+        if not obj or not obj.Parent or obj.Parent ~= parentRef then
+            picked = true; break
+        end
+        task.wait(0.05)
+    end
+
+    -- [3] Retry: nếu timeout, thử lại với offset thấp hơn
+    if not picked and obj and obj.Parent then
+        local retryPos = getCandyPosition(obj)
+        if retryPos then
+            candyStatusText = "🔄 Thử lại..."
+            root.CFrame = CFrame.new(retryPos + Vector3.new(0, 0.5, 0))
+            task.wait(0.2)
+            if not obj.Parent or obj.Parent ~= parentRef then
+                picked = true
+            end
+        end
+    end
+
+    -- Cập nhật counter
+    if picked then
+        candyCount   = candyCount + 1
+        candyStatusText = "✅ Collected: " .. candyCount
+    else
+        candyMissed  = candyMissed + 1
+        candyStatusText = "⚠ Miss ×" .. candyMissed .. " | OK: " .. candyCount
+    end
+
+    -- Delay đồng bộ server trước khi sang kẹo tiếp theo
+    task.wait(candyDelay)
+    return picked
+end
+
+-- ── Quét toàn bộ folder (sorted) ─────────────────────────────
+local function fullSortedScan(itemSpawns)
+    if not itemSpawns or not isCandyCollect then return end
+    local c    = player.Character
+    local root = c and c:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    local sorted = getSortedCandyList(itemSpawns, root.Position)
+    if #sorted == 0 then return end
+    candyStatusText = "🔍 " .. #sorted .. " kẹo — bắt đầu nhặt..."
+
+    for _, entry in ipairs(sorted) do
+        if not isCandyCollect then break end
+        -- Xác nhận object vẫn còn tồn tại trước khi TP
+        if entry.obj and entry.obj.Parent then
+            -- Cập nhật vị trí thực tế (kẹo có thể đã di chuyển)
+            local freshPos = getCandyPosition(entry.obj)
+            if freshPos then
+                collectWithVerify(entry.obj, freshPos)
+            end
+        end
+    end
+end
+
+-- ── [4] Setup DescendantAdded event ──────────────────────────
+local function setupCandyEvent(itemSpawns)
+    if candyEventConn then candyEventConn:Disconnect(); candyEventConn = nil end
+
+    candyEventConn = itemSpawns.DescendantAdded:Connect(function(obj)
+        if not isCandyCollect then return end
+        -- Khi DescendantAdded kích hoạt, Model vừa được tạo nhưng
+        -- BasePart bên trong CÓ THỂ chưa tồn tại → getCandyPosition
+        -- trả về nil hoặc vị trí (0,0,0) mặc định → TP vào không khí.
+        -- Fix: Chờ object thực sự có BasePart với vị trí hợp lệ.
+        task.wait(0.05)
+        if not isCandyObject(obj) then return end
+
+        -- Retry lấy vị trí tối đa 10 lần (mỗi 0.1s) cho đến khi hợp lệ
+        local pos = nil
+        for _ = 1, 10 do
+            pos = getCandyPosition(obj)
+            -- Vị trí hợp lệ: khác nil VÀ không phải gốc tọa độ (0,0,0)
+            if pos and pos.Magnitude > 0.5 then break end
+            pos = nil
+            task.wait(0.1)
+        end
+        if not pos then return end   -- Sau 1s vẫn không có vị trí → bỏ qua
+
+        candyStatusText = "⚡ Kẹo mới: " .. obj.Name
+        collectWithVerify(obj, pos)
+        if isCandyCollect then candyStatusText = "💤 Chờ kẹo mới..." end
+    end)
+end
+
+-- ── [4] FolderWatcher: tự reconnect khi round đổi ────────────
+-- Khi Evade xóa & tạo lại ItemSpawns giữa các round,
+-- DescendantAdded cũ trở thành "mồ côi". Watcher này
+-- phát hiện thư mục mới và reconnect tất cả tự động.
+local function startFolderWatcher()
+    if candyFolderWatcher then candyFolderWatcher:Disconnect() end
+
+    candyFolderWatcher = workspace.DescendantAdded:Connect(function(obj)
+        if not isCandyCollect then return end
+        -- Phát hiện thư mục ItemSpawns mới được tạo
+        if obj.Name == "ItemSpawns" then
+            task.wait(0.5)  -- Chờ game populate kẹo vào folder
+            local newFolder = findItemSpawnsFolder()
+            if newFolder then
+                candyStatusText = "🔄 Round mới — Reconnecting..."
+                setupCandyEvent(newFolder)
+                task.spawn(function()
+                    fullSortedScan(newFolder)
+                    if isCandyCollect then candyStatusText = "💤 Chờ kẹo mới..." end
+                end)
+            end
+        end
+    end)
+end
+
+-- ── Start / Stop ──────────────────────────────────────────────
+local function startCandyCollect()
+    isCandyCollect  = true
+    candyCount      = 0
+    candyMissed     = 0
+    candyStatusText = "⏳ Tìm ItemSpawns..."
+
+    task.spawn(function()
+        -- Tìm ItemSpawns với timeout 10s
+        local itemSpawns = nil
+        local deadline   = tick() + 10
+        while tick() < deadline do
+            itemSpawns = findItemSpawnsFolder()
+            if itemSpawns then break end
+            task.wait(0.5)
+        end
+
+        if not itemSpawns then
+            candyStatusText = "❌ ItemSpawns không tìm thấy!\nThử điền Custom Path."
+            return
+        end
+
+        -- ① INITIAL SCAN — dọn sạch kẹo đang có sẵn (sorted)
+        candyStatusText = "🔍 Initial Scan..."
+        fullSortedScan(itemSpawns)
+        if not isCandyCollect then return end
+
+        -- ② EVENT LISTENER — thức dậy khi kẹo mới spawn
+        setupCandyEvent(itemSpawns)
+        candyStatusText = "💤 Chờ kẹo mới..."
+
+        -- ③ FOLDER WATCHER — tự reconnect khi round đổi map
+        startFolderWatcher()
+
+        -- ④ SAFETY POLL — quét nhẹ mỗi 15s chống bỏ sót
+        task.spawn(function()
+            while isCandyCollect do
+                task.wait(15)
+                if not isCandyCollect then break end
+                local cur = findItemSpawnsFolder()
+                if cur then
+                    candyStatusText = "🔍 Safety Scan..."
+                    fullSortedScan(cur)
+                    if isCandyCollect then
+                        candyStatusText = "💤 Chờ kẹo mới..."
+                    end
+                end
+            end
+        end)
+    end)
+end
+
+local function stopCandyCollect()
+    isCandyCollect = false
+    if candyEventConn    then candyEventConn:Disconnect();    candyEventConn    = nil end
+    if candyFolderWatcher then candyFolderWatcher:Disconnect(); candyFolderWatcher = nil end
+    candyStatusText = "🔴 Dừng — OK: " .. candyCount .. " | Miss: " .. candyMissed
+end
+
+-- CharacterAdded
+player.CharacterAdded:Connect(function()
+    character,hrp,humanoid=getChar(); task.wait(0.5)
+    if st.JumpBoost then pcall(function() humanoid.UseJumpPower=true; humanoid.JumpPower=jumpPower end) end
+    if st.NoClip    then enableNoClip() end
+    if st.GodMode   then enableGodMode() end
+    if isAutoFarm and farmMethod==1 then task.wait(0.5); farmPhase=1; farmTP() end
+    if isAutoFarm and farmMethod==2 then
+        task.wait(0.5); local c=player.Character
+        if c then local h=c:FindFirstChild("HumanoidRootPart")
+            if h then h.CFrame=CFrame.new(3000,FARM2_Y+1,3000); h.AssemblyLinearVelocity=Vector3.new() end
+        end
+    end
+    -- Re-apply persistent fake Display Name after respawn
+    task.wait(0.3)
+    if fakeDisplayName ~= "" then applyDisplayNameToChar() end
+    -- Re-apply persistent fake Level after respawn
+    if fakeLevelValue then
+        pcall(function() applyFakeStat("Level", fakeLevelValue, {"level","XP","Exp","Lvl"}) end)
     end
 end)
 
 -- ============================================================
--- CREDIT TAB
+-- CREATE WINDOW
 -- ============================================================
-Tabs.Credit:AddSection("Femboy Hub")
-Tabs.Credit:AddParagraph({
-    Title   = "✨ Femboy Hub  —  Beta v1.2.0",
-    Content = "Supported game: Evade\nCreated by KhoaProSigmaAlphaMale",
+local Window = Fluent:CreateWindow({
+    Title      = "Femboy Hub  v2.6.0",
+    SubTitle   = "by KhoaProSigmaAlphaMale",
+    TabWidth   = 160,
+    Size       = UDim2.fromOffset(600, 500),
+    Acrylic    = false,
+    Theme      = "Dark",
+    MinimizeKey= Enum.KeyCode.RightControl,
 })
-Tabs.Credit:AddParagraph({
-    Title   = "💕 Note",
-    Content = "Khoa loves Arec 💕",
-})
-Tabs.Credit:AddButton({
-    Title       = "🔗 Open Roblox Profile",
-    Description = "Opens Khoa's Roblox profile",
-    Callback    = function()
+
+local Tabs = {
+    Credits  = Window:AddTab({ Title="Credits",    Icon="star"      }),
+    Log      = Window:AddTab({ Title="Update Log", Icon="file-text" }),
+    Main     = Window:AddTab({ Title="Main",       Icon="zap"       }),
+    Custom   = Window:AddTab({ Title="Custom",     Icon="wrench"    }),
+    Farm     = Window:AddTab({ Title="Farm",       Icon="sprout"    }),
+    Player   = Window:AddTab({ Title="Player",     Icon="user"      }),
+    Settings = Window:AddTab({ Title="Settings",   Icon="settings"  }),
+}
+
+-- ============================================================
+-- CREDITS TAB
+-- ============================================================
+do
+    local S=Tabs.Credits:AddSection("About Femboy Hub")
+    S:AddParagraph({Title="Version",Content="v2.5.0  |  Fluent Edition"})
+    S:AddParagraph({Title="Game",Content="Evade (Roblox)"})
+    S:AddParagraph({Title="Author",Content="KhoaProSigmaAlphaMale"})
+    S:AddParagraph({Title="Special",Content="💕 Khoa loves Arec 💕"})
+    local S2=Tabs.Credits:AddSection("Links")
+    S2:AddButton({Title="Roblox Profile",Callback=function()
         pcall(function() GuiService:OpenBrowserWindow("https://www.roblox.com/users/2449514704/profile") end)
         pcall(function() setclipboard("https://www.roblox.com/users/2449514704/profile") end)
-        Notify("Profile", "🔗 Profile link copied!", 3)
-    end,
-})
-Tabs.Credit:AddButton({
-    Title       = "💬 Join Our Discord Server",
-    Description = "Click to copy invite link",
-    Callback    = function()
+        Fluent:Notify({Title="Copied",Content="Profile link copied!",Duration=3})
+    end})
+    S2:AddButton({Title="Discord — discord.gg/n3CP2gmS",Callback=function()
         pcall(function() GuiService:OpenBrowserWindow("https://discord.gg/n3CP2gmS") end)
         pcall(function() setclipboard("https://discord.gg/n3CP2gmS") end)
-        Notify("Discord", "💬 Invite link copied!\nhttps://discord.gg/n3CP2gmS", 5)
-    end,
-})
+        Fluent:Notify({Title="Copied",Content="Invite link copied!",Duration=3})
+    end})
+    local S3=Tabs.Credits:AddSection("Session")
+    local sesP=S3:AddParagraph({Title="⏱ Session Time",Content="00:00:00"})
+    RunService.Heartbeat:Connect(function()
+        local e=tick()-sessionStart
+        pcall(function() sesP:SetDesc(string.format("%02d:%02d:%02d",math.floor(e/3600),math.floor((e%3600)/60),math.floor(e%60))) end)
+    end)
+end
 
 -- ============================================================
 -- UPDATE LOG TAB
 -- ============================================================
-Tabs.UpdateLog:AddSection("📋 Update Log")
-Tabs.UpdateLog:AddParagraph({
-    Title   = "v1.2.0  —  Latest",
-    Content =
-        "• Auto Farm Method 2: Now teleports back immediately if player falls or moves.\n"..
-        "• Credits: Removed Swiss credits, added Discord Server button.\n"..
-        "• No Clip: Fixed random teleport bug (removed float part).\n"..
-        "• All features now show ON/OFF notifications.\n"..
-        "• Keybind changes also notify.\n"..
-        "• Rainbow border added to UI.\n"..
-        "• Update Log moved to its own dedicated tab.\n"..
-        "• Auto Jump info corrected.\n"..
-        "• Main tab icon updated.",
-})
-Tabs.UpdateLog:AddParagraph({
-    Title   = "v1.1.6",
-    Content =
-        "• Fluent UI rewrite.\n"..
-        "• Welcome Screen on attach.\n"..
-        "• Close Window confirmation dialog.\n"..
-        "• Improved Auto Farm with 4-point TP loop.",
-})
-Tabs.UpdateLog:AddParagraph({
-    Title   = "v1.0.0  —  Initial",
-    Content =
-        "• Initial release.\n"..
-        "• Edge Boost, No Clip, Fly, ESP, Jump Boost.\n"..
-        "• Gravity Override, Inf Jump, Auto Jump.\n"..
-        "• TAS Recorder, Turnbind.\n"..
-        "• Emote Changer, Import Map, Sky Change.",
-})
+do
+    local S=Tabs.Log:AddSection("v2.6.0 — God Mode TP · Player Fix · English (Current)")
+    S:AddParagraph({Title="God Mode v2.6",Content="• Now TPs to safest escape corner (farthest from bot)\n• Picks best of 8 preset points using Magnitude scoring\n• Clears velocity on escape"})
+    S:AddParagraph({Title="Player Tab v2.6",Content="• Fixed number input (closure vars, no Fluent.Options bug)\n• Display Name + Level persist across tab switches & respawns\n• Reset All button clears all fake stats & name\n• Added Level field\n• Full English UI"})
+    S:AddParagraph({Title="Candy v2.6",Content="• Sort by nearest first · Pickup Verify · Retry · FolderWatcher"})
+    local S2=Tabs.Log:AddSection("v2.4.0 — God Mode & Candy Fix")
+    S2:AddParagraph({Title="",Content="• God Mode: Avoidance Logic (né tránh Nextbot)\n• Auto Candy: Hybrid Logic 3 giai đoạn\n• isCandyObject: Sửa lỗi return false"})
+    local S3=Tabs.Log:AddSection("v2.3.0 — v2.0.0")
+    S3:AddParagraph({Title="",Content="• Fluent Library migration\n• Key UI rainbow border\n• Full rewrite từ Linoria"})
+end
 
 -- ============================================================
--- MAIN TAB — EDGE BOOST
+-- MAIN TAB
 -- ============================================================
-Tabs.Main:AddSection("Edge Boost")
-local BoostSlider=Tabs.Main:AddSlider("BoostPowerSlider",{
-    Title="Boost Power",Default=80,Min=0,Max=400,Rounding=0,
-    Callback=function(v) BOOST_POWER=v end,
-})
-Tabs.Main:AddInput("BoostInput",{
-    Title="Custom Value (0–400)",Placeholder="e.g. 120",Numeric=true,
-    Callback=function(v) local n=tonumber(v);if not n then return end;n=math.clamp(math.floor(n+0.5),0,400);BOOST_POWER=n;BoostSlider:SetValue(n) end,
-})
-Tabs.Main:AddDropdown("BoostPreset",{
-    Title="Quick Preset",Values={"0","40","80","120","160","200","240","280","320","360","400"},Default="80",
-    Callback=function(v) local val=tonumber(v);if val then BOOST_POWER=val;BoostSlider:SetValue(val) end end,
-})
-local EdgeBoostToggle=Tabs.Main:AddToggle("EdgeBoostToggle",{
-    Title="Enable Edge Boost",Default=false,
-    Callback=function(v)
-        if v then enableEdgeBoost();  Notify("Edge Boost","⚡ Edge Boost ENABLED",2)
-        else      disableEdgeBoost(); Notify("Edge Boost","Edge Boost DISABLED",2) end
-    end,
-})
-Tabs.Main:AddKeybind("EdgeBoostKeybind",{
-    Title="Edge Boost Keybind",Mode="Toggle",Default="U",
-    Callback=function()
-        EdgeBoostToggle:SetValue(not isEnabled)
-        Notify("Edge Boost","Keybind toggled: "..(isEnabled and "ON" or "OFF"),2)
-    end,
-})
-
--- ============================================================
--- MAIN TAB — NO CLIP
--- ============================================================
-Tabs.Main:AddSection("No Clip")
-local NoClipToggle=Tabs.Main:AddToggle("NoClipToggle",{
-    Title="Enable No Clip",Default=false,
-    Callback=function(v)
-        if v then enableNoClip();  Notify("No Clip","👻 No Clip ENABLED",2)
-        else      disableNoClip(); Notify("No Clip","No Clip DISABLED",2) end
-    end,
-})
-Tabs.Main:AddKeybind("NoClipKeybind",{
-    Title="No Clip Keybind",Mode="Toggle",Default="N",
-    Callback=function()
-        NoClipToggle:SetValue(not isNoClipEnabled)
-        Notify("No Clip","Keybind toggled: "..(isNoClipEnabled and "ON" or "OFF"),2)
-    end,
-})
-
--- ============================================================
--- MAIN TAB — FLY
--- ============================================================
-Tabs.Main:AddSection("Fly")
-local FlySpeedSlider=Tabs.Main:AddSlider("FlySpeedSlider",{
-    Title="Fly Speed",Default=50,Min=1,Max=200,Rounding=0,
-    Callback=function(v) flySpeed=v end,
-})
-Tabs.Main:AddInput("FlySpeedInput",{
-    Title="Custom Value (1–200)",Placeholder="e.g. 75",Numeric=true,
-    Callback=function(v) local n=tonumber(v);if not n then return end;n=math.clamp(math.floor(n+0.5),1,200);flySpeed=n;FlySpeedSlider:SetValue(n) end,
-})
-Tabs.Main:AddDropdown("FlySpeedPreset",{
-    Title="Quick Preset",Values={"10","25","50","75","100","125","150","175","200"},Default="50",
-    Callback=function(v) local val=tonumber(v);if val then flySpeed=val;FlySpeedSlider:SetValue(val) end end,
-})
-local FlyToggle=Tabs.Main:AddToggle("FlyToggle",{
-    Title="Enable Fly",Default=false,
-    Callback=function(v)
-        if v then enableFly();  Notify("Fly","🚀 Fly ENABLED — W/A/S/D + Space/Shift",3)
-        else      disableFly(); Notify("Fly","Fly DISABLED",2) end
-    end,
-})
-Tabs.Main:AddKeybind("FlyKeybind",{
-    Title="Fly Keybind",Mode="Toggle",Default="F",
-    Callback=function()
-        FlyToggle:SetValue(not isFlyEnabled)
-        Notify("Fly","Keybind toggled: "..(isFlyEnabled and "ON" or "OFF"),2)
-    end,
-})
-
--- ============================================================
--- MAIN TAB — ESP
--- ============================================================
-Tabs.Main:AddSection("ESP")
-local EspToggle=Tabs.Main:AddToggle("EspToggle",{
-    Title="Enable ESP",Default=false,
-    Callback=function(v)
-        if v then enableESP();  Notify("ESP","🌈 Rainbow ESP ENABLED",2)
-        else      disableESP(); Notify("ESP","ESP DISABLED",2) end
-    end,
-})
-Tabs.Main:AddKeybind("EspKeybind",{
-    Title="ESP Keybind",Mode="Toggle",Default="E",
-    Callback=function()
-        EspToggle:SetValue(not isEspEnabled)
-        Notify("ESP","Keybind toggled: "..(isEspEnabled and "ON" or "OFF"),2)
-    end,
-})
-
--- ============================================================
--- MAIN TAB — JUMP BOOST
--- ============================================================
-Tabs.Main:AddSection("Jump Boost")
-Tabs.Main:AddParagraph({Title="Note",Content="Disabling restores Evade default jump power (20)."})
-local JumpSlider=Tabs.Main:AddSlider("JumpPowerSlider",{
-    Title="Jump Power",Default=50,Min=0,Max=400,Rounding=0,
-    Callback=function(v)
-        jumpBoostPower=v
-        if isJumpBoostEnabled and humanoid then pcall(function() humanoid.UseJumpPower=true;humanoid.JumpPower=jumpBoostPower end) end
-    end,
-})
-Tabs.Main:AddInput("JumpPowerInput",{
-    Title="Custom Value (0–400)",Placeholder="e.g. 150",Numeric=true,
-    Callback=function(v)
-        local n=tonumber(v);if not n then return end;n=math.clamp(math.floor(n+0.5),0,400);jumpBoostPower=n;JumpSlider:SetValue(n)
-        if isJumpBoostEnabled and humanoid then pcall(function() humanoid.UseJumpPower=true;humanoid.JumpPower=n end) end
-    end,
-})
-Tabs.Main:AddDropdown("JumpPreset",{
-    Title="Quick Preset",Values={"0","20","40","60","100","150","200","250","300","350","400"},Default="50",
-    Callback=function(v)
-        local val=tonumber(v);if val then
-            jumpBoostPower=val;JumpSlider:SetValue(val)
-            if isJumpBoostEnabled and humanoid then pcall(function() humanoid.UseJumpPower=true;humanoid.JumpPower=val end) end
+do
+    -- ── Edge Boost ────────────────────────────────────────────
+    local sEB=Tabs.Main:AddSection("Edge Boost")
+    sEB:AddSlider("EdgeBoostPower",{Title="Boost Power",Default=80,Min=0,Max=400,Rounding=0,Callback=function(v) BOOST_POWER=v end})
+    toggleRefs["EdgeBoost"] = sEB:AddToggle("EdgeBoost",{Title="Enable Edge Boost",Default=false,Callback=function(v)
+        st.EdgeBoost=v
+        if v then
+            character,hrp,humanoid=getChar()
+            if edgeConn then edgeConn:Disconnect() end
+            edgeConn=RunService.Stepped:Connect(applyEdgeBoost)
+            Fluent:Notify({Title="Edge Boost",Content="✅ ON",Duration=2})
+        else
+            if edgeConn then edgeConn:Disconnect(); edgeConn=nil end
+            Fluent:Notify({Title="Edge Boost",Content="🔴 OFF",Duration=2})
         end
-    end,
-})
-local JumpBoostToggle=Tabs.Main:AddToggle("JumpBoostToggle",{
-    Title="Enable Jump Boost",Default=false,
-    Callback=function(v)
-        if v then enableJumpBoost();  Notify("Jump Boost","🦘 Jump Boost ENABLED (Power: "..jumpBoostPower..")",2)
-        else      disableJumpBoost(); Notify("Jump Boost","Jump Boost DISABLED — restored to 20",2) end
-    end,
-})
-Tabs.Main:AddKeybind("JumpBoostKeybind",{
-    Title="Jump Boost Keybind",Mode="Toggle",Default="J",
-    Callback=function()
-        JumpBoostToggle:SetValue(not isJumpBoostEnabled)
-        Notify("Jump Boost","Keybind toggled: "..(isJumpBoostEnabled and "ON" or "OFF"),2)
-    end,
-})
+    end})
+    sEB:AddKeybind("KbEdgeBoost",{Title="Keybind — Edge Boost",Default="None",Callback=function() end,ChangedCallback=function(new)
+        registerKeybind("EdgeBoost", new)
+    end})
 
--- ============================================================
--- MAIN TAB — GRAVITY
--- ============================================================
-Tabs.Main:AddSection("Gravity")
-Tabs.Main:AddParagraph({Title="Tip",Content="-400 = Float  |  0 = None  |  196 = Default  |  400 = Heavy"})
-local GravSlider=Tabs.Main:AddSlider("GravitySlider",{
-    Title="Gravity Value",Default=0,Min=-400,Max=400,Rounding=0,
-    Callback=function(v) currentGravityValue=v;if isGravityEnabled then pcall(function() workspace.Gravity=v end) end end,
-})
-Tabs.Main:AddInput("GravityInput",{
-    Title="Custom Value (-400 to 400)",Placeholder="e.g. -200",Numeric=false,
-    Callback=function(v)
-        local n=tonumber(v:gsub("[^%-%d%.]+",""));if not n then return end
-        n=math.clamp(math.floor(n+0.5),-400,400);currentGravityValue=n;GravSlider:SetValue(n)
-        if isGravityEnabled then pcall(function() workspace.Gravity=n end) end
-    end,
-})
-Tabs.Main:AddDropdown("GravityPreset",{
-    Title="Quick Preset",
-    Values={"-400 (Float)","-200 (Light)","0 (None)","100 (Low)","196 (Default)","300 (Heavy)","400 (Max)"},
-    Default="196 (Default)",
-    Callback=function(v)
-        local val=tonumber(tostring(v):match("^%-?%d+"));if val then
-            currentGravityValue=val;GravSlider:SetValue(val)
-            if isGravityEnabled then pcall(function() workspace.Gravity=val end) end
+    -- ── No Clip ───────────────────────────────────────────────
+    local sNC=Tabs.Main:AddSection("No Clip")
+    toggleRefs["NoClip"] = sNC:AddToggle("NoClip",{Title="Enable No Clip",Default=false,Callback=function(v)
+        st.NoClip=v
+        if v then enableNoClip();  Fluent:Notify({Title="No Clip",Content="✅ ON",Duration=2})
+        else      disableNoClip(); Fluent:Notify({Title="No Clip",Content="🔴 OFF",Duration=2}) end
+    end})
+    sNC:AddKeybind("KbNoClip",{Title="Keybind — No Clip",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("NoClip",new) end})
+
+    -- ── God Mode ──────────────────────────────────────────────
+    local sGM=Tabs.Main:AddSection("God Mode")
+    sGM:AddParagraph({Title="⚠ Avoidance Logic",Content="Khi bot lại gần < "..BOT_SAFE_DIST.." studs → nhân vật tự đẩy lên "..GOD_LIFT_H.." studs.\nHoạt động dựa trên Magnitude — cách Evade tính sát thương."})
+    sGM:AddSlider("GodSafeDist",{Title="Khoảng cách nguy hiểm (studs)",Default=28,Min=10,Max=60,Rounding=0,Callback=function(v) BOT_SAFE_DIST=v end})
+    sGM:AddSlider("GodLiftHeight",{Title="Độ cao đẩy lên (studs)",Default=15,Min=5,Max=50,Rounding=0,Callback=function(v) GOD_LIFT_H=v end})
+    toggleRefs["GodMode"] = sGM:AddToggle("GodMode",{Title="Enable God Mode",Default=false,Callback=function(v)
+        st.GodMode=v
+        if v then enableGodMode(); Fluent:Notify({Title="God Mode",Content="✅ ON — Avoidance",Duration=2})
+        else      disableGodMode(); Fluent:Notify({Title="God Mode",Content="🔴 OFF",Duration=2}) end
+    end})
+    sGM:AddKeybind("KbGodMode",{Title="Keybind — God Mode",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("GodMode",new) end})
+
+    -- ── Turnbind ──────────────────────────────────────────────
+    local sTB=Tabs.Main:AddSection("Turnbind")
+    toggleRefs["Turnbind"] = sTB:AddToggle("Turnbind",{Title="Enable Turnbind",Default=false,Callback=function(v)
+        st.Turnbind=v
+        if v then startTurnbind(); Fluent:Notify({Title="Turnbind",Content="✅ ON",Duration=2})
+        else     stopTurnbind();  Fluent:Notify({Title="Turnbind",Content="🔴 OFF",Duration=2}) end
+    end})
+    sTB:AddKeybind("KbTurnbind",{Title="Keybind — Turnbind",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("Turnbind",new) end})
+
+    -- ── TAS ───────────────────────────────────────────────────
+    local sTAS=Tabs.Main:AddSection("TAS Recorder")
+    sTAS:AddButton({Title="Start Recording",Callback=tasStart})
+    sTAS:AddButton({Title="Stop Recording", Callback=tasStop})
+    sTAS:AddButton({Title="Play TAS",       Callback=tasPlay})
+
+    -- ── Fly ───────────────────────────────────────────────────
+    local sFly=Tabs.Main:AddSection("Fly")
+    sFly:AddSlider("FlySpeed",{Title="Fly Speed",Default=50,Min=1,Max=200,Rounding=0,Callback=function(v) flySpeed=v end})
+    toggleRefs["Fly"] = sFly:AddToggle("Fly",{Title="Enable Fly",Default=false,Callback=function(v)
+        st.Fly=v
+        if v then enableFly();  Fluent:Notify({Title="Fly",Content="✅ ON",Duration=2})
+        else     disableFly(); Fluent:Notify({Title="Fly",Content="🔴 OFF",Duration=2}) end
+    end})
+    sFly:AddKeybind("KbFly",{Title="Keybind — Fly",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("Fly",new) end})
+
+    -- ── ESP ───────────────────────────────────────────────────
+    local sESP=Tabs.Main:AddSection("ESP")
+    toggleRefs["ESP"] = sESP:AddToggle("ESP",{Title="Enable ESP",Default=false,Callback=function(v)
+        st.ESP=v
+        if v then buildESP();  Fluent:Notify({Title="ESP",Content="✅ ON",Duration=2})
+        else     removeESP(); Fluent:Notify({Title="ESP",Content="🔴 OFF",Duration=2}) end
+    end})
+    sESP:AddKeybind("KbESP",{Title="Keybind — ESP",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("ESP",new) end})
+
+    -- ── Jump Boost ────────────────────────────────────────────
+    local sJB=Tabs.Main:AddSection("Jump Boost")
+    sJB:AddSlider("JumpPower",{Title="Jump Power",Default=50,Min=0,Max=400,Rounding=0,Callback=function(v)
+        jumpPower=v
+        if st.JumpBoost and humanoid then pcall(function() humanoid.UseJumpPower=true; humanoid.JumpPower=v end) end
+    end})
+    toggleRefs["JumpBoost"] = sJB:AddToggle("JumpBoost",{Title="Enable Jump Boost",Default=false,Callback=function(v)
+        st.JumpBoost=v
+        if v then
+            pcall(function() humanoid.UseJumpPower=true; humanoid.JumpPower=jumpPower end)
+            Fluent:Notify({Title="Jump",Content="✅ Power: "..jumpPower,Duration=2})
+        else
+            pcall(function() humanoid.UseJumpPower=true; humanoid.JumpPower=ORIG_JUMP end)
+            Fluent:Notify({Title="Jump",Content="🔴 Restored.",Duration=2})
         end
-    end,
-})
-local GravityToggle=Tabs.Main:AddToggle("GravityToggle",{
-    Title="Enable Gravity Override",Default=false,
-    Callback=function(v)
-        if v then enableGravity();  Notify("Gravity","🌍 Gravity Override ENABLED ("..currentGravityValue..")",2)
-        else      disableGravity(); Notify("Gravity","Gravity restored to default ("..ORIGINAL_GRAVITY..")",2) end
-    end,
-})
-Tabs.Main:AddButton({Title="🔄 Reset & Disable Gravity",Callback=function()
-    GravityToggle:SetValue(false);disableGravity();GravSlider:SetValue(0)
-    Notify("Gravity","🔄 Gravity reset to default",2)
-end})
+    end})
+    sJB:AddKeybind("KbJumpBoost",{Title="Keybind — Jump Boost",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("JumpBoost",new) end})
 
--- ============================================================
--- MAIN TAB — INF JUMP
--- ============================================================
-Tabs.Main:AddSection("Infinity Jump")
-Tabs.Main:AddParagraph({Title="Tip",Content="Press Space in the air. Spam to fly upward continuously."})
-local InfSlider=Tabs.Main:AddSlider("InfJumpSlider",{
-    Title="Inf Jump Power",Default=80,Min=10,Max=200,Rounding=0,
-    Callback=function(v) infJumpPower=v end,
-})
-Tabs.Main:AddInput("InfJumpInput",{
-    Title="Custom Value (10–200)",Placeholder="e.g. 120",Numeric=true,
-    Callback=function(v) local n=tonumber(v);if not n then return end;n=math.clamp(math.floor(n+0.5),10,200);infJumpPower=n;InfSlider:SetValue(n) end,
-})
-Tabs.Main:AddDropdown("InfJumpPreset",{
-    Title="Quick Preset",Values={"20","40","60","80","100","120","150","180","200"},Default="80",
-    Callback=function(v) local val=tonumber(v);if val then infJumpPower=val;InfSlider:SetValue(val) end end,
-})
-local InfJumpToggle=Tabs.Main:AddToggle("InfJumpToggle",{
-    Title="Enable Inf Jump",Default=false,
-    Callback=function(v)
-        if v then enableInfJump();  Notify("Inf Jump","🌌 Infinity Jump ENABLED",2)
-        else      disableInfJump(); Notify("Inf Jump","Infinity Jump DISABLED",2) end
-    end,
-})
-Tabs.Main:AddKeybind("InfJumpKeybind",{
-    Title="Inf Jump Keybind",Mode="Toggle",Default="I",
-    Callback=function()
-        InfJumpToggle:SetValue(not isInfJumpEnabled)
-        Notify("Inf Jump","Keybind toggled: "..(isInfJumpEnabled and "ON" or "OFF"),2)
-    end,
-})
-
--- ============================================================
--- MAIN TAB — AUTO JUMP
--- ============================================================
-Tabs.Main:AddSection("Auto Jump")
-Tabs.Main:AddParagraph({
-    Title="Info",
-    Content="Hold Space to jump repeatedly.\n0–699ms: Speed Boost  |  700ms: Perfect  |  700–1000ms: Default",
-})
-local autoJumpDelayOptions={}
-for ms=100,1000,25 do table.insert(autoJumpDelayOptions,ms.."ms") end
-Tabs.Main:AddDropdown("AutoJumpDelay",{
-    Title="Jump Delay",Values=autoJumpDelayOptions,Default="300ms",
-    Callback=function(v)
-        local ms=tonumber(tostring(v):match("%d+"))
-        if ms then
-            autoJumpDelay=ms/1000
-            if isAutoJumpEnabled then buildAutoJumpLoop() end
-            local label = ms<=699 and "Speed Boost" or (ms==700 and "Perfect" or "Default")
-            Notify("Auto Jump","⏱ Delay set to "..ms.."ms ("..label..")",2)
+    -- ── Gravity ───────────────────────────────────────────────
+    -- v2.5: Chú thích nằm trên Paragraph riêng, KHÔNG chèn vào title slider
+    local sGV=Tabs.Main:AddSection("Gravity")
+    sGV:AddParagraph({
+        Title="📌 Hướng dẫn giá trị Gravity",
+        Content="Kéo về âm (< 0) → nhân vật nổi lên\n196 → mặc định của Roblox\nKéo về dương (> 196) → nhân vật nặng hơn"
+    })
+    sGV:AddSlider("GravityValue",{
+        Title="Gravity",  -- ← Tên ngắn, không bị tràn vào thanh kéo
+        Default=196, Min=-400, Max=400, Rounding=0,
+        Callback=function(v)
+            gravValue=v
+            if st.GravityOverride then pcall(function() workspace.Gravity=v end) end
         end
-    end,
-})
-local AutoJumpToggle=Tabs.Main:AddToggle("AutoJumpToggle",{
-    Title="Enable Auto Jump",Default=false,
-    Callback=function(v)
-        if v then enableAutoJump();  Notify("Auto Jump","🔁 Auto Jump ENABLED",2)
-        else      disableAutoJump(); Notify("Auto Jump","Auto Jump DISABLED",2) end
-    end,
-})
-
--- ============================================================
--- MAIN TAB — TAS
--- ============================================================
-Tabs.Main:AddSection("TAS (Tool-Assisted Speedrun)")
-Tabs.Main:AddParagraph({Title="Info",Content="Record your movement then replay it exactly."})
-Tabs.Main:AddButton({Title="🔴 Start Recording",Callback=function() tasStartRecord();Notify("TAS","🔴 Recording started!",2) end})
-Tabs.Main:AddButton({Title="⏹️ Stop Recording", Callback=function() tasStopRecord(); Notify("TAS","⏹️ Recording stopped. Frames: "..#tasFrames,3) end})
-Tabs.Main:AddButton({Title="▶️ Play TAS",        Callback=function() tasPlay();      Notify("TAS","▶️ Playing TAS ("..#tasFrames.." frames)",2) end})
-Tabs.Main:AddKeybind("TASStartBind",{Title="Start Recording Keybind",Mode="Toggle",Default="",Callback=function() tasStartRecord();Notify("TAS","🔴 Recording started (keybind)",2) end})
-Tabs.Main:AddKeybind("TASStopBind", {Title="Stop Recording Keybind", Mode="Toggle",Default="",Callback=function() tasStopRecord(); Notify("TAS","⏹️ Recording stopped (keybind)",2) end})
-Tabs.Main:AddKeybind("TASPlayBind", {Title="Play TAS Keybind",       Mode="Toggle",Default="",Callback=function() tasPlay();       Notify("TAS","▶️ Playing TAS (keybind)",2) end})
-
--- ============================================================
--- MAIN TAB — TURNBIND
--- ============================================================
-Tabs.Main:AddSection("Turnbind")
-local TurnbindToggle=Tabs.Main:AddToggle("TurnbindToggle",{
-    Title="Turnbind (A = A+Left, D = D+Right)",Default=false,
-    Callback=function(v)
-        turnbindEnabled=v
-        if v then startTurnbind();Notify("Turnbind","↔️ Turnbind ENABLED",2)
-        else      stopTurnbind(); Notify("Turnbind","Turnbind DISABLED",2) end
-    end,
-})
-Tabs.Main:AddKeybind("TurnbindKeybind",{
-    Title="Turnbind Toggle Keybind",Mode="Toggle",Default="T",
-    Callback=function()
-        turnbindEnabled=not turnbindEnabled
-        if turnbindEnabled then startTurnbind() else stopTurnbind() end
-        TurnbindToggle:SetValue(turnbindEnabled)
-        Notify("Turnbind","Keybind toggled: "..(turnbindEnabled and "ON" or "OFF"),2)
-    end,
-})
-
--- ============================================================
--- CUSTOM TAB — WORLD TRANSPARENCY
--- ============================================================
-Tabs.Custom:AddSection("World Transparency")
-Tabs.Custom:AddDropdown("WorldTransDropdown",{
-    Title="Transparency Level",
-    Values={"0% — Fully Visible","25% — Slightly Transparent","50% — Half Transparent","75% — Mostly Invisible","100% — Fully Invisible"},
-    Default="0% — Fully Visible",
-    Callback=function(v)
-        local s=tostring(v);local level=0
-        if s:find("^25") then level=25 elseif s:find("^50") then level=50 elseif s:find("^75") then level=75 elseif s:find("^100") then level=100 end
-        task.spawn(function() applyWorldTransparency(level) end)
-        Notify("World Trans","🌫️ Set to "..level.."%",2)
-    end,
-})
-Tabs.Custom:AddButton({Title="🔄 Restore World Visibility",Callback=function()
-    applyWorldTransparency(0);Notify("World Trans","🔄 World visibility restored",2)
-end})
-
--- ============================================================
--- CUSTOM TAB — WORLD INVISIBILITY
--- ============================================================
-Tabs.Custom:AddSection("World Invisibility")
-Tabs.Custom:AddParagraph({Title="Info",Content="Hides ALL objects in the world. Your character stays visible. Toggle OFF to restore."})
-local WorldInvisToggle=Tabs.Custom:AddToggle("WorldInvisToggle",{
-    Title="Enable World Invisibility",Default=false,
-    Callback=function(v)
-        if v then enableWorldInvisibility();  Notify("World Invis","🫥 World Invisibility ENABLED",2)
-        else      disableWorldInvisibility(); Notify("World Invis","World Invisibility DISABLED",2) end
-    end,
-})
-Tabs.Custom:AddKeybind("WorldInvisKeybind",{
-    Title="World Invisibility Keybind",Mode="Toggle",Default="P",
-    Callback=function()
-        WorldInvisToggle:SetValue(not isWorldInvisEnabled)
-        Notify("World Invis","Keybind toggled: "..(isWorldInvisEnabled and "ON" or "OFF"),2)
-    end,
-})
-Tabs.Custom:AddButton({Title="🔄 Restore World (Force OFF)",Callback=function()
-    WorldInvisToggle:SetValue(false);disableWorldInvisibility()
-    Notify("World Invis","🔄 World restored",2)
-end})
-
--- ============================================================
--- CUSTOM TAB — STRETCH FOV
--- ============================================================
-Tabs.Custom:AddSection("Stretch FOV")
-local HStretchSlider=Tabs.Custom:AddSlider("HStretchSlider",{
-    Title="Horizontal Stretch %",Default=100,Min=50,Max=200,Rounding=0,
-    Callback=function(v) hStretch=v;if isStretchActive then pcall(function() workspace.CurrentCamera.FieldOfView=computeStretchFOV() end) end end,
-})
-local VStretchSlider=Tabs.Custom:AddSlider("VStretchSlider",{
-    Title="Vertical Stretch %",Default=100,Min=50,Max=200,Rounding=0,
-    Callback=function(v) vStretch=v;if isStretchActive then pcall(function() workspace.CurrentCamera.FieldOfView=computeStretchFOV() end) end end,
-})
-Tabs.Custom:AddDropdown("StretchPreset",{
-    Title="Quick Stretch Preset",
-    Values={"Normal (100/100)","4:3 Stretched (133/100)","Wide (150/90)","Cinematic (150/75)","Ultra Wide (200/100)"},
-    Default="Normal (100/100)",
-    Callback=function(v)
-        local s=tostring(v)
-        if     s:find("Normal") then hStretch=100;vStretch=100
-        elseif s:find("4:3")    then hStretch=133;vStretch=100
-        elseif s:find("Wide")   then hStretch=150;vStretch=90
-        elseif s:find("Cine")   then hStretch=150;vStretch=75
-        elseif s:find("Ultra")  then hStretch=200;vStretch=100 end
-        HStretchSlider:SetValue(hStretch);VStretchSlider:SetValue(vStretch)
-        if isStretchActive then pcall(function() workspace.CurrentCamera.FieldOfView=computeStretchFOV() end) end
-        Notify("Stretch FOV","📐 Preset: "..tostring(v),2)
-    end,
-})
-Tabs.Custom:AddToggle("StretchFOVToggle",{
-    Title="Enable Stretch FOV",Default=false,
-    Callback=function(v)
-        if v then enableStretch();  Notify("Stretch FOV","📐 Stretch FOV ENABLED",2)
-        else      disableStretch(); Notify("Stretch FOV","Stretch FOV DISABLED",2) end
-    end,
-})
-Tabs.Custom:AddButton({Title="🔄 Reset to Normal (100/100)",Callback=function()
-    hStretch=100;vStretch=100
-    if isStretchActive then pcall(function() workspace.CurrentCamera.FieldOfView=computeStretchFOV() end) end
-    HStretchSlider:SetValue(100);VStretchSlider:SetValue(100)
-    Notify("Stretch FOV","🔄 Reset to 100/100",2)
-end})
-
--- ============================================================
--- CUSTOM TAB — FULL BRIGHT
--- ============================================================
-Tabs.Custom:AddSection("Full Bright")
-Tabs.Custom:AddParagraph({Title="Info",Content="Boosts ambient lighting. Subtle — not blinding."})
-Tabs.Custom:AddToggle("FullBrightToggle",{
-    Title="Enable Full Bright",Default=false,
-    Callback=function(v)
-        if v then enableFullbright();  Notify("Full Bright","☀️ Full Bright ENABLED",2)
-        else      disableFullbright(); Notify("Full Bright","Full Bright DISABLED",2) end
-    end,
-})
-
--- ============================================================
--- CUSTOM TAB — EMOTE CHANGER
--- ============================================================
-Tabs.Custom:AddSection("Emote Changer (Beta)")
-Tabs.Custom:AddParagraph({Title="Note",Content="Requires firesignal support in your executor."})
-Tabs.Custom:AddSection("Part 1 — Emote Intercept")
-Tabs.Custom:AddDropdown("ECSlotSelector",{
-    Title="Select Slot (1–12)",
-    Values={"1","2","3","4","5","6","7","8","9","10","11","12"},Default="1",
-    Callback=function(v) ec_selectedSlot=tonumber(v) or 1;Notify("Emote","Slot "..ec_selectedSlot.." selected",2) end,
-})
-Tabs.Custom:AddInput("ECTriggerInput",{
-    Title="Trigger Emote (exact name)",Placeholder="e.g. Wave",
-    Callback=function(v) ec_currentEmotes[ec_selectedSlot]=v:gsub("^%s*(.-)%s*$","%1") end,
-})
-Tabs.Custom:AddInput("ECReplaceInput",{
-    Title="Replace With",Placeholder="e.g. Dance",
-    Callback=function(v) ec_selectEmotes[ec_selectedSlot]=v:gsub("^%s*(.-)%s*$","%1") end,
-})
-Tabs.Custom:AddSection("Emote Intercept Controls")
-Tabs.Custom:AddToggle("ECInterceptMaster",{
-    Title="Enable Emote Intercept (All 12 Slots)",Default=false,
-    Callback=function(v)
-        ec_installListeners();ec_emoteEnabled2=v
-        Notify("Emote Intercept",v and "Emote Intercept ENABLED" or "Emote Intercept DISABLED",2)
-    end,
-})
-Tabs.Custom:AddButton({Title="🔍 Validate All Slots",Callback=function()
-    local msg=""
-    for i=1,12 do
-        if ec_currentEmotes[i]~="" or ec_selectEmotes[i]~="" then
-            local ok1,n1=ec_isValidEmote(ec_currentEmotes[i]); local ok2,n2=ec_isValidEmote(ec_selectEmotes[i])
-            msg=msg.."Slot "..i..": "..(ok1 and "✅ "..n1 or "❌ '"..ec_currentEmotes[i].."'")
-                .." → "..(ok2 and "✅ "..n2 or "❌ '"..ec_selectEmotes[i].."'").."\n"
-        end
-    end
-    if msg=="" then msg="All slots are empty." end
-    Notify("Emote Validation",msg,8)
-end})
-Tabs.Custom:AddButton({Title="🗑️ Clear All Intercept Slots",Callback=function()
-    for i=1,12 do ec_currentEmotes[i]="";ec_selectEmotes[i]="" end
-    ec_nameCache={};ec_normalCache={}
-    Notify("Emote","🗑️ All intercept slots cleared",2)
-end})
-
--- ============================================================
--- CUSTOM TAB — IMPORT MAP
--- ============================================================
-Tabs.Custom:AddSection("Import Map")
-local mapNames={"Empty","Classic","City","Dahood","TSB","Winter","Sky","BloxFruit","Hidenseek","Obby","TowerObby","McDonalds","Brookhaven","NewPlanet","JJK","Racing","Classic2","DrivingEmpire","ArenaPaint","SquidGame","GoblinMap"}
-local mapIDs={"0","141621194","11486778910","5595565465","72569384252345","11182305499","79090364524804","11721319853","9857032925","17185279655","79328502404130","10254568133","14985811598","73308013616318","15009598974","135653057769513","12889628588","8640311613","115159842494251","8106950117","897595038"}
-Tabs.Custom:AddDropdown("MapPresetDropdown",{
-    Title="Select Map & Load",Values=mapNames,Default=mapNames[1],
-    Callback=function(v)
-        local sel=tostring(v)
-        for i,n in ipairs(mapNames) do
-            if n==sel then
-                if mapIDs[i]=="0" then removeImportedMap();Notify("Map","Map removed",2)
-                else task.spawn(function() importMap(mapIDs[i]);Notify("Map","🗺️ Loading map: "..n,3) end) end; break
-            end
-        end
-    end,
-})
-local customMapAssetID=""
-Tabs.Custom:AddInput("CustomMapAssetIDInput",{
-    Title="Custom Map Asset ID",Placeholder="e.g. 12345678",Numeric=true,
-    Callback=function(v) customMapAssetID=tostring(v):match("%d+") or "" end,
-})
-Tabs.Custom:AddButton({Title="📥 Import Custom Map",Callback=function()
-    if customMapAssetID=="" then Notify("Import Map","⚠️ Enter an Asset ID first.",3);return end
-    task.spawn(function() importMap(customMapAssetID);Notify("Map","📥 Custom map loading...",3) end)
-end})
-Tabs.Custom:AddButton({Title="🗑️ Remove Imported Map",Callback=function()
-    removeImportedMap();Notify("Map","🗑️ Imported map removed",2)
-end})
-
--- ============================================================
--- CUSTOM TAB — SKYBOX
--- ============================================================
-Tabs.Custom:AddSection("Sky Change")
-local skyNames={"Default","Gray","Night","Anime1","Anime2","Anime3","Anime4","Femboy1","Femboy2","Femboy3","Femboy4","Aesthetic","CakeUpNight","NightVibe","Rain","Fire","Brookhaven","Space","Cloud","Space2","Space3"}
-local skyIDs={"0","130547382131410","128839006185497","125641870562571","127770372529424","110570238374062","138349252564540","82666462942145","95142505890749","110326016107832","123826538827500","7108851308","15983996673","15983996673","12376964583","6900508449","10594723714","11675661848","116402178504134","16262385808","11336743666"}
-Tabs.Custom:AddDropdown("SkyPresetDropdown",{
-    Title="Select Sky & Apply",Values=skyNames,Default=skyNames[1],
-    Callback=function(v)
-        local sel=tostring(v)
-        for i,n in ipairs(skyNames) do
-            if n==sel then
-                if skyIDs[i]=="0" then resetSkybox();Notify("Sky","☁️ Sky reset to default",2)
-                else task.spawn(function() applySkybox(skyIDs[i]);Notify("Sky","🌅 Sky changed to "..n,2) end) end; break
-            end
-        end
-    end,
-})
-local customSkyID=""
-Tabs.Custom:AddInput("CustomSkyInput",{
-    Title="Custom Sky AssetID",Placeholder="e.g. rbxassetid://130547382131410",
-    Callback=function(v) customSkyID=tostring(v) end,
-})
-Tabs.Custom:AddButton({Title="✔️ Apply Custom Sky",Callback=function()
-    if customSkyID=="" then Notify("Sky Change","⚠️ Enter a Sky Asset ID first.",3);return end
-    task.spawn(function() applySkybox(customSkyID);Notify("Sky","🌅 Custom sky applied",2) end)
-end})
-Tabs.Custom:AddButton({Title="🔄 Reset Sky to Default",Callback=function()
-    resetSkybox();Notify("Sky","🔄 Sky reset to default",2)
-end})
-
--- ============================================================
--- CUSTOM TAB — CUSTOM GAME (ADVANCED)
--- ============================================================
-Tabs.Custom:AddSection("Advanced Tools")
-Tabs.Custom:AddParagraph({
-    Title   = "Custom Game (Advanced)",
-    Content = "Launches the Dex Explorer — a full in-game object explorer.\nAllows you to inspect, modify, and interact with any instance in the game.\n\n⚠️ Advanced users only. May affect game performance.",
-})
-Tabs.Custom:AddButton({
-    Title       = "🔧 Custom Game (Advanced)",
-    Description = "Open Dex Explorer — in-game instance viewer & editor",
-    Callback    = function()
-        Notify("Custom Game", "🔧 Launching Dex Explorer...", 3)
-        task.spawn(function()
-            local ok, err = pcall(function()
-                loadstring(game:HttpGet("https://raw.githubusercontent.com/infyiff/backup/main/dex.lua"))()
+    })
+    toggleRefs["GravityOverride"] = sGV:AddToggle("GravityOverride",{Title="Enable Gravity Override",Default=false,Callback=function(v)
+        st.GravityOverride=v
+        if v then
+            if gravConn then gravConn:Disconnect() end
+            gravConn=RunService.Stepped:Connect(function()
+                if st.GravityOverride then pcall(function() workspace.Gravity=gravValue end) end
             end)
-            if ok then
-                Notify("Custom Game", "✅ Dex Explorer loaded successfully!", 3)
-            else
-                Notify("Custom Game", "❌ Failed to load: " .. tostring(err), 5)
+            Fluent:Notify({Title="Gravity",Content="✅ Value: "..gravValue,Duration=2})
+        else
+            if gravConn then gravConn:Disconnect(); gravConn=nil end
+            pcall(function() workspace.Gravity=ORIG_GRAV end)
+            Fluent:Notify({Title="Gravity",Content="🔴 Restored.",Duration=2})
+        end
+    end})
+    sGV:AddKeybind("KbGravity",{Title="Keybind — Gravity Override",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("GravityOverride",new) end})
+    sGV:AddButton({Title="Reset Gravity",Callback=function()
+        st.GravityOverride=false; if toggleRefs.GravityOverride then toggleRefs.GravityOverride:SetValue(false) end
+        if gravConn then gravConn:Disconnect(); gravConn=nil end
+        pcall(function() workspace.Gravity=ORIG_GRAV end)
+        Fluent.Options.GravityValue:SetValue(196)
+        Fluent:Notify({Title="Gravity",Content="🔄 Reset.",Duration=2})
+    end})
+
+    -- ── Infinity Jump ─────────────────────────────────────────
+    local sIJ=Tabs.Main:AddSection("Infinity Jump")
+    sIJ:AddSlider("InfJumpPower",{Title="Inf Jump Power",Default=80,Min=10,Max=200,Rounding=0,Callback=function(v) infJumpPower=v end})
+    toggleRefs["InfJump"] = sIJ:AddToggle("InfJump",{Title="Enable Inf Jump",Default=false,Callback=function(v)
+        st.InfJump=v
+        if v then
+            if infJumpConn then infJumpConn:Disconnect() end
+            infJumpConn=UserInputService.InputBegan:Connect(function(i,gpe)
+                if gpe then return end
+                if i.KeyCode==Enum.KeyCode.Space and hrp and humanoid and humanoid.Health>0 then
+                    hrp.AssemblyLinearVelocity=Vector3.new(hrp.AssemblyLinearVelocity.X,infJumpPower,hrp.AssemblyLinearVelocity.Z)
+                end
+            end)
+            Fluent:Notify({Title="Inf Jump",Content="✅ Power: "..infJumpPower,Duration=2})
+        else
+            if infJumpConn then infJumpConn:Disconnect(); infJumpConn=nil end
+            Fluent:Notify({Title="Inf Jump",Content="🔴 OFF",Duration=2})
+        end
+    end})
+    sIJ:AddKeybind("KbInfJump",{Title="Keybind — Inf Jump",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("InfJump",new) end})
+
+    -- ── Auto Jump ─────────────────────────────────────────────
+    local sAJ=Tabs.Main:AddSection("Auto Jump")
+    local ajVals={}; for ms=100,1000,50 do table.insert(ajVals,ms.."ms") end
+    sAJ:AddDropdown("AutoJumpDelay",{Title="Jump Delay",Values=ajVals,Default="300ms",Callback=function(v)
+        local ms=tonumber(tostring(v):match("%d+")); if ms then autoJumpDelay=ms/1000 end
+    end})
+    toggleRefs["AutoJump"] = sAJ:AddToggle("AutoJump",{Title="Enable Auto Jump",Default=false,Callback=function(v)
+        st.AutoJump=v
+        if v then buildAutoJump(); Fluent:Notify({Title="Auto Jump",Content="✅ ON",Duration=2})
+        else
+            if autoJumpConn then autoJumpConn:Disconnect(); autoJumpConn=nil end
+            Fluent:Notify({Title="Auto Jump",Content="🔴 OFF",Duration=2})
+        end
+    end})
+    sAJ:AddKeybind("KbAutoJump",{Title="Keybind — Auto Jump",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("AutoJump",new) end})
+end
+
+-- Closure vars for Custom tab inputs (Fluent.Options.X.Value is unreliable)
+local customSkyID_v     = ""
+local customMapID_v     = ""
+local candyCustomPath_v = ""
+
+-- ============================================================
+-- CUSTOM TAB
+-- ============================================================
+do
+    local sWT=Tabs.Custom:AddSection("World Transparency")
+    local transVals={"0% — Fully Visible","25% — Slight","50% — Half","75% — Mostly Hidden","100% — Invisible"}
+    sWT:AddDropdown("WorldTrans",{Title="Transparency Level",Values=transVals,Default="0% — Fully Visible",Callback=function(v)
+        local s=tostring(v); local level=0
+        if s:find("25") then level=25 elseif s:find("50") then level=50
+        elseif s:find("75") then level=75 elseif s:find("100") then level=100 end
+        task.spawn(function()
+            for _,d in pairs(worldTransOrig) do pcall(function() if d.p and d.p.Parent then d.p.Transparency=d.t end end) end
+            worldTransOrig={}; if level==0 then return end
+            local alpha=level/100
+            for _,obj in pairs(workspace:GetDescendants()) do
+                if obj:IsA("BasePart") then
+                    local isChar=false
+                    for _,plr in pairs(Players:GetPlayers()) do
+                        if plr.Character and obj:IsDescendantOf(plr.Character) then isChar=true; break end
+                    end
+                    if not isChar then table.insert(worldTransOrig,{p=obj,t=obj.Transparency}); pcall(function() obj.Transparency=alpha end) end
+                end
             end
         end)
-    end,
-})
+        Fluent:Notify({Title="World Trans",Content="→ "..level.."%",Duration=2})
+    end})
+    sWT:AddButton({Title="Restore Visibility",Callback=function()
+        for _,d in pairs(worldTransOrig) do pcall(function() if d.p and d.p.Parent then d.p.Transparency=d.t end end) end
+        worldTransOrig={}; Fluent:Notify({Title="World Trans",Content="🔄 Restored.",Duration=2})
+    end})
+
+    local sWI=Tabs.Custom:AddSection("World Invisibility")
+    toggleRefs["WorldInvis"] = sWI:AddToggle("WorldInvis",{Title="World Invisibility",Default=false,Callback=function(v)
+        st.WorldInvis=v
+        if v then
+            worldInvisOrig={}; local char=player.Character
+            for _,obj in ipairs(workspace:GetDescendants()) do
+                if char and obj:IsDescendantOf(char) then continue end
+                if obj:IsA("BasePart") or obj:IsA("Decal") or obj:IsA("Texture") then
+                    worldInvisOrig[obj]=obj.Transparency; pcall(function() obj.Transparency=1 end)
+                end
+            end
+            Fluent:Notify({Title="World",Content="✅ Hidden!",Duration=2})
+        else
+            for obj,t in pairs(worldInvisOrig) do pcall(function() if obj and obj.Parent then obj.Transparency=t end end) end
+            worldInvisOrig={}; Fluent:Notify({Title="World",Content="🔄 Visible.",Duration=2})
+        end
+    end})
+
+    local sFB=Tabs.Custom:AddSection("Full Bright")
+    toggleRefs["Fullbright"] = sFB:AddToggle("Fullbright",{Title="Full Bright",Default=false,Callback=function(v)
+        if v then
+            pcall(function()
+                origLight={Brightness=Lighting.Brightness,ClockTime=Lighting.ClockTime,
+                    FogEnd=Lighting.FogEnd,GlobalShadows=Lighting.GlobalShadows,
+                    Ambient=Lighting.Ambient,OutdoorAmbient=Lighting.OutdoorAmbient}
+                Lighting.Brightness=3; Lighting.ClockTime=14; Lighting.FogEnd=100000
+                Lighting.GlobalShadows=false
+                Lighting.Ambient=Color3.fromRGB(178,178,178); Lighting.OutdoorAmbient=Color3.fromRGB(178,178,178)
+            end)
+            Fluent:Notify({Title="Full Bright",Content="✅ ON",Duration=2})
+        else
+            pcall(function()
+                if origLight.Brightness then
+                    Lighting.Brightness=origLight.Brightness; Lighting.ClockTime=origLight.ClockTime
+                    Lighting.FogEnd=origLight.FogEnd; Lighting.GlobalShadows=origLight.GlobalShadows
+                    Lighting.Ambient=origLight.Ambient; Lighting.OutdoorAmbient=origLight.OutdoorAmbient
+                end
+            end)
+            Fluent:Notify({Title="Full Bright",Content="🔄 Restored.",Duration=2})
+        end
+    end})
+
+    local sFV=Tabs.Custom:AddSection("FOV Override")
+    sFV:AddSlider("FOVValue",{Title="FOV",Default=90,Min=80,Max=140,Rounding=0,Callback=function(v)
+        fovValue=v; if isFOV then pcall(function() workspace.CurrentCamera.FieldOfView=v end) end
+    end})
+    sFV:AddParagraph({Title="Range",Content="80 = hẹp · 90 = mặc định · 140 = rộng nhất"})
+    toggleRefs["FOVOverride"] = sFV:AddToggle("FOVOverride",{Title="Enable FOV Override",Default=false,Callback=function(v)
+        st.FOVOverride=v; isFOV=v
+        if v then
+            if fovConn then fovConn:Disconnect() end
+            fovConn=RunService.RenderStepped:Connect(function()
+                if isFOV then pcall(function() workspace.CurrentCamera.FieldOfView=fovValue end) end
+            end)
+            Fluent:Notify({Title="FOV",Content="✅ "..fovValue,Duration=2})
+        else
+            if fovConn then fovConn:Disconnect(); fovConn=nil end
+            pcall(function() workspace.CurrentCamera.FieldOfView=70 end)
+            Fluent:Notify({Title="FOV",Content="🔴 Reset 70.",Duration=2})
+        end
+    end})
+    sFV:AddButton({Title="Reset FOV",Callback=function()
+        isFOV=false; if toggleRefs.FOVOverride then toggleRefs.FOVOverride:SetValue(false) end
+        if fovConn then fovConn:Disconnect(); fovConn=nil end
+        pcall(function() workspace.CurrentCamera.FieldOfView=70 end)
+        Fluent.Options.FOVValue:SetValue(90)
+        Fluent:Notify({Title="FOV",Content="🔄 Reset → 70.",Duration=2})
+    end})
+
+    local sZM=Tabs.Custom:AddSection("Zoom Distance")
+    sZM:AddSlider("MinZoom",{Title="Min Zoom",Default=0,Min=0,Max=100,Rounding=0,Callback=function(v) pcall(function() player.CameraMinZoomDistance=v end) end})
+    sZM:AddSlider("MaxZoom",{Title="Max Zoom",Default=100,Min=0,Max=100,Rounding=0,Callback=function(v) pcall(function() player.CameraMaxZoomDistance=v end) end})
+    sZM:AddButton({Title="Reset Zoom",Callback=function()
+        pcall(function() player.CameraMinZoomDistance=0.5; player.CameraMaxZoomDistance=400 end)
+        Fluent:Notify({Title="Zoom",Content="🔄 Reset.",Duration=2})
+    end})
+
+    local sSK=Tabs.Custom:AddSection("Sky Change")
+    local skyNames={"Default","Gray","Night","Anime1","Anime2","Space","Cloud","Femboy1","Femboy2"}
+    local skyIDs={"0","130547382131410","128839006185497","125641870562571","127770372529424","11675661848","116402178504134","82666462942145","95142505890749"}
+    sSK:AddDropdown("SkyPreset",{Title="Select Sky",Values=skyNames,Default="Default",Callback=function(v)
+        for i,n in ipairs(skyNames) do if n==v then
+            if skyIDs[i]=="0" then resetSkybox() else task.spawn(function() applySkybox(skyIDs[i]) end) end; break
+        end end
+    end})
+    sSK:AddInput("CustomSkyID",{Title="Custom Sky AssetID",Default="",Placeholder="e.g. 130547382131410",Numeric=false,Finished=false,Callback=function(v) customSkyID_v=v end})
+    sSK:AddButton({Title="Apply Custom Sky",Callback=function()
+        local id=customSkyID_v or ''
+        if id=='' then Fluent:Notify({Title="Sky",Content="⚠ Enter an ID.",Duration=3}); return end
+        task.spawn(function() applySkybox(id) end)
+    end})
+    sSK:AddButton({Title="Reset Sky",Callback=resetSkybox})
+
+    local sMP=Tabs.Custom:AddSection("Import Map")
+    local mapNames={"Empty","Classic","City","Dahood","TSB","Winter","Sky","BloxFruit","Hidenseek","Obby","TowerObby","McDonalds","Brookhaven"}
+    local mapIDs={"0","141621194","11486778910","5595565465","72569384252345","11182305499","79090364524804","11721319853","9857032925","17185279655","79328502404130","10254568133","14985811598"}
+    sMP:AddDropdown("MapPreset",{Title="Select Preset",Values=mapNames,Default="Empty",Callback=function(v)
+        for i,n in ipairs(mapNames) do if n==v then
+            if mapIDs[i]=="0" then
+                if importedMap then pcall(function() importedMap:Destroy() end); importedMap=nil end
+                Fluent:Notify({Title="Map",Content="🗑 Map removed.",Duration=2})
+            else task.spawn(function()
+                if importedMap then pcall(function() importedMap:Destroy() end); importedMap=nil end
+                local ok,r=pcall(function() return InsertService:LoadAsset(tonumber(mapIDs[i])) end)
+                if ok and r then r.Name="FemboyImportedMap"; r.Parent=workspace; importedMap=r
+                    Fluent:Notify({Title="Map",Content="✅ "..n,Duration=3})
+                else Fluent:Notify({Title="Map",Content="❌ Failed: "..n,Duration=4}) end
+            end) end; break
+        end end
+    end})
+    sMP:AddInput("CustomMapID",{Title="Custom Asset ID",Default="",Placeholder="e.g. 12345678",Numeric=false,Finished=false,Callback=function(v) customMapID_v=v end})
+    sMP:AddButton({Title="Import Custom Map",Callback=function()
+        local id=customMapID_v or ''
+        if id=='' then Fluent:Notify({Title="Map",Content="⚠ Enter an Asset ID.",Duration=3}); return end
+        task.spawn(function()
+            if importedMap then pcall(function() importedMap:Destroy() end); importedMap=nil end
+            local ok,r=pcall(function() return InsertService:LoadAsset(tonumber(id:match("%d+"))) end)
+            if ok and r then r.Name="FemboyImportedMap"; r.Parent=workspace; importedMap=r
+                Fluent:Notify({Title="Map",Content="✅ Loaded: "..id,Duration=3})
+            else Fluent:Notify({Title="Map",Content="❌ Failed: "..id,Duration=4}) end
+        end)
+    end})
+    sMP:AddButton({Title="Remove Map",Callback=function()
+        if importedMap then pcall(function() importedMap:Destroy() end); importedMap=nil
+            Fluent:Notify({Title="Map",Content="🗑 Removed.",Duration=2}) end
+    end})
+
+    local sDX=Tabs.Custom:AddSection("Advanced")
+    sDX:AddButton({Title="Open Dex Explorer",Callback=function()
+        Fluent:Notify({Title="Dex",Content="⏳ Loading...",Duration=3})
+        task.spawn(function()
+            pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/infyiff/backup/main/dex.lua"))() end)
+        end)
+    end})
+end
 
 -- ============================================================
--- AUTO FARM TAB
+-- FARM TAB
 -- ============================================================
-Tabs.AutoFarm:AddSection("Auto Farm — Method Select")
-Tabs.AutoFarm:AddParagraph({
-    Title="Method 2 Upgrade",
-    Content="Method 2 now actively guards your position. If you move or fall below the platform, you are instantly teleported back — even after respawn.",
-})
-Tabs.AutoFarm:AddDropdown("AutoFarmMethodDropdown",{
-    Title="Select Method",
-    Values={"Method 1 — 4-Point TP Loop","Method 2 — Platform Hover (Auto-Guard)"},
-    Default="Method 1 — 4-Point TP Loop",
-    Callback=function(v)
-        local s=tostring(v)
-        if s:find("Method 1") then autoFarmMethod=1;Notify("Auto Farm","Method 1 selected",2)
-        elseif s:find("Method 2") then autoFarmMethod=2;Notify("Auto Farm","Method 2 selected (Auto-Guard ON)",3) end
-        if isAutoFarmEnabled then stopAutoFarm();task.wait(0.3);startAutoFarm() end
-    end,
-})
-Tabs.AutoFarm:AddSection("Controls")
-Tabs.AutoFarm:AddToggle("AutoFarmToggle",{
-    Title="Enable Auto Farm",Default=false,
-    Callback=function(v)
-        if v then startAutoFarm();Notify("Auto Farm","🌾 Auto Farm ENABLED (Method "..autoFarmMethod..")",3)
-        else      stopAutoFarm(); Notify("Auto Farm","Auto Farm DISABLED",2) end
-    end,
-})
-Tabs.AutoFarm:AddButton({Title="🔄 Reset to Phase 1 (Method 1 only)",Callback=function()
-    if isAutoFarmEnabled and autoFarmMethod==1 then autoFarmPhase=1;farmTPToPhase();Notify("Auto Farm","🔄 Reset to Phase 1",2) end
-end})
-Tabs.AutoFarm:AddButton({Title="📍 Force TP to Farm Position",Callback=function()
-    local char=player.Character; if not char then return end
-    local hrpAF=char:FindFirstChild("HumanoidRootPart"); if not hrpAF then return end
-    if autoFarmMethod==1 then farmTPToPhase()
-    else hrpAF.CFrame=CFrame.new(M2_TARGET);hrpAF.AssemblyLinearVelocity=Vector3.new(0,0,0) end
-    Notify("Auto Farm","📍 Teleported to farm position",2)
-end})
+do
+    local sFM=Tabs.Farm:AddSection("Auto Farm")
+    sFM:AddDropdown("FarmMethod",{Title="Method",
+        Values={"Method 1 — 4-Point TP Loop","Method 2 — Platform Hover"},
+        Default="Method 1 — 4-Point TP Loop",
+        Callback=function(v)
+            farmMethod=tostring(v):find("Method 1") and 1 or 2
+            if isAutoFarm then stopAutoFarm(); task.wait(0.2); startAutoFarm() end
+        end
+    })
+    toggleRefs["AutoFarm"] = sFM:AddToggle("AutoFarm",{Title="Enable Auto Farm",Default=false,Callback=function(v)
+        st.AutoFarm=v; if v then startAutoFarm() else stopAutoFarm() end
+    end})
+    sFM:AddKeybind("KbAutoFarm",{Title="Keybind — Auto Farm",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("AutoFarm",new) end})
+    sFM:AddButton({Title="Reset Phase 1 (M1)",Callback=function()
+        if isAutoFarm and farmMethod==1 then farmPhase=1; farmTP(); Fluent:Notify({Title="Farm",Content="🔄 Phase 1.",Duration=2}) end
+    end})
+
+    local sCC=Tabs.Farm:AddSection("Auto Collect Candy  [Pro Hybrid v2.6]")
+    local statusPara=sCC:AddParagraph({Title="Status",    Content="Idle"})
+    local countPara =sCC:AddParagraph({Title="Collected", Content="0"})
+    local missPara  =sCC:AddParagraph({Title="Missed",    Content="0"})
+    RunService.Heartbeat:Connect(function()
+        pcall(function() statusPara:SetDesc(candyStatusText) end)
+        pcall(function() countPara:SetDesc(tostring(candyCount)) end)
+        pcall(function() missPara:SetDesc(tostring(candyMissed)) end)
+    end)
+    sCC:AddParagraph({
+        Title="📌 Pro Hybrid Logic",
+        Content="① Initial Scan — sort theo khoảng cách gần nhất\n② DescendantAdded — thức dậy khi kẹo mới spawn\n③ Pickup Verify — chờ kẹo biến mất, retry nếu cần\n④ FolderWatcher — tự reconnect khi round đổi map\n⑤ Safety Poll — quét lại mỗi 15 giây"
+    })
+    sCC:AddSlider("CandyDelay",{Title="Delay sau mỗi lần nhặt (×0.01s)",Default=10,Min=1,Max=50,Rounding=0,Callback=function(v) candyDelay=v/100 end})
+    sCC:AddSlider("CandyTPOffset",{Title="TP Height Offset (studs)",Default=2,Min=0,Max=8,Rounding=0,Callback=function(v) candyTPOffset=v end})
+    sCC:AddInput("CandyCustomPath",{Title="Custom ItemSpawns Path (optional)",Default="",Placeholder="e.g. Game.Map.ItemSpawns",Numeric=false,Finished=false,Callback=function(v) candyCustomPath_v=v end})
+    toggleRefs["AutoCandy"] = sCC:AddToggle("AutoCandy",{Title="Enable Auto Collect Candy",Default=false,Callback=function(v)
+        st.AutoCandy=v
+        if v then
+            local cp=candyCustomPath_v or ''
+            if cp~='' then
+                local parts={}; for seg in cp:gmatch("[^%.]+") do table.insert(parts,seg) end
+                if #parts>0 then table.insert(parts,1,"Workspace"); CANDY_PATHS={parts} end
+            end
+            startCandyCollect(); Fluent:Notify({Title="Candy",Content="✅ Hybrid ON",Duration=3})
+        else
+            stopCandyCollect(); Fluent:Notify({Title="Candy",Content="🔴 OFF — Total: "..candyCount,Duration=3})
+        end
+    end})
+    sCC:AddKeybind("KbAutoCandy",{Title="Keybind — Auto Candy",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("AutoCandy",new) end})
+    sCC:AddButton({Title="Reset Counter",Callback=function() candyCount=0; Fluent:Notify({Title="Candy",Content="🔄 Counter reset.",Duration=2}) end})
+    sCC:AddButton({Title="Scan Debug",Callback=function()
+        local f=findItemSpawnsFolder()
+        if f then
+            local total=0; for _,sp in pairs(f:GetChildren()) do total=total+#sp:GetChildren() end
+            Fluent:Notify({Title="Debug",Content="✅ "..f:GetFullName().."\n"..#f:GetChildren().." points / "..total.." objects",Duration=6})
+        else Fluent:Notify({Title="Debug",Content="❌ ItemSpawns không tìm thấy!",Duration=5}) end
+    end})
+
+    local sAFK=Tabs.Farm:AddSection("Anti-AFK")
+    toggleRefs["AntiAFK"] = sAFK:AddToggle("AntiAFK",{Title="Enable Anti-AFK",Default=false,Callback=function(v)
+        st.AntiAFK=v
+        if v then enableAntiAFK(); Fluent:Notify({Title="Anti-AFK",Content="✅ ON",Duration=3})
+        else     disableAntiAFK(); Fluent:Notify({Title="Anti-AFK",Content="🔴 OFF",Duration=2}) end
+    end})
+    local sAFKT=Tabs.Farm:AddSection("AFK Countdown")
+    local afkTimeP=sAFKT:AddParagraph({Title="Remaining",Content="20:00"})
+    local afkStatusP=sAFKT:AddParagraph({Title="Status",Content="Normal"})
+    RunService.Heartbeat:Connect(function()
+        local elapsed=tick()-lastInputTime; local remaining=math.max(0,1200-elapsed)
+        pcall(function() afkTimeP:SetDesc(string.format("%02d:%02d",math.floor(remaining/60),math.floor(remaining%60))) end)
+        pcall(function()
+            if remaining<=60 then afkStatusP:SetDesc("⚠ ABOUT TO KICK!")
+            elseif remaining<=300 then afkStatusP:SetDesc("⚡ Warning < 5 min")
+            else afkStatusP:SetDesc("✔ Normal") end
+        end)
+    end)
+end
+
+-- ============================================================
+-- PLAYER TAB  —  v2.6 (EN): Input closures, persistence, reset
+-- ============================================================
+
+-- Persistent values — stored here and re-applied on respawn
+local fakeDisplayName = ""   -- "" = not set / use original
+local fakeLevelValue  = nil  -- nil = not set
+
+-- Apply display name to all nametag labels on character
+local function applyDisplayNameToChar()
+    if fakeDisplayName == "" then return end
+    pcall(function()
+        local char = player.Character; if not char then return end
+        local head = char:FindFirstChild("Head")
+        if head then
+            for _,gui in pairs(head:GetChildren()) do
+                if gui:IsA("BillboardGui") then
+                    for _,lbl in pairs(gui:GetDescendants()) do
+                        if lbl:IsA("TextLabel") then lbl.Text = fakeDisplayName end
+                    end
+                end
+            end
+        end
+        local pg = player.PlayerGui
+        for _,gui in pairs(pg:GetDescendants()) do
+            if gui:IsA("TextLabel") and
+               (gui.Text == player.Name or gui.Text == player.DisplayName) then
+                gui.Text = fakeDisplayName
+            end
+        end
+    end)
+end
+
+do
+    local sPS=Tabs.Player:AddSection("Fake Stats — Client-side Visual Only")
+    sPS:AddParagraph({
+        Title="⚠ Note",
+        Content="These values only change what YOU see on screen.\nThe server is not affected — useful for screenshots / videos."
+    })
+
+    -- ── Streak ────────────────────────────────────────────────
+    local inputStreak_v = ""
+    local sStreak=Tabs.Player:AddSection("Streak")
+    sStreak:AddInput("InputStreak",{
+        Title="Streak Value", Default="", Placeholder="e.g. 9999",
+        Numeric=false, Finished=false,
+        Callback=function(v) inputStreak_v = v end
+    })
+    sStreak:AddButton({Title="Apply Streak",Callback=function()
+        local v = tonumber(inputStreak_v)
+        if not v then Fluent:Notify({Title="Streak",Content="⚠ Enter a valid number.",Duration=2}); return end
+        applyFakeStat("Streak", v, {"streak","CurrentStreak","BestStreak"})
+        Fluent:Notify({Title="Streak",Content="✅ Streak → "..v,Duration=3})
+    end})
+
+    -- ── Ticket ────────────────────────────────────────────────
+    local inputTicket_v = ""
+    local sTicket=Tabs.Player:AddSection("Ticket")
+    sTicket:AddInput("InputTicket",{
+        Title="Ticket Value", Default="", Placeholder="e.g. 9999",
+        Numeric=false, Finished=false,
+        Callback=function(v) inputTicket_v = v end
+    })
+    sTicket:AddButton({Title="Apply Ticket",Callback=function()
+        local v = tonumber(inputTicket_v)
+        if not v then Fluent:Notify({Title="Ticket",Content="⚠ Enter a valid number.",Duration=2}); return end
+        applyFakeStat("Ticket", v, {"Tickets","ticket","tickets"})
+        Fluent:Notify({Title="Ticket",Content="✅ Ticket → "..v,Duration=3})
+    end})
+
+    -- ── Token ─────────────────────────────────────────────────
+    local inputToken_v = ""
+    local sToken=Tabs.Player:AddSection("Token")
+    sToken:AddInput("InputToken",{
+        Title="Token Value", Default="", Placeholder="e.g. 9999",
+        Numeric=false, Finished=false,
+        Callback=function(v) inputToken_v = v end
+    })
+    sToken:AddButton({Title="Apply Token",Callback=function()
+        local v = tonumber(inputToken_v)
+        if not v then Fluent:Notify({Title="Token",Content="⚠ Enter a valid number.",Duration=2}); return end
+        applyFakeStat("Token", v, {"Tokens","token","tokens"})
+        Fluent:Notify({Title="Token",Content="✅ Token → "..v,Duration=3})
+    end})
+
+    -- ── Point ─────────────────────────────────────────────────
+    local inputPoint_v = ""
+    local sPoint=Tabs.Player:AddSection("Point")
+    sPoint:AddInput("InputPoint",{
+        Title="Point Value", Default="", Placeholder="e.g. 9999",
+        Numeric=false, Finished=false,
+        Callback=function(v) inputPoint_v = v end
+    })
+    sPoint:AddButton({Title="Apply Point",Callback=function()
+        local v = tonumber(inputPoint_v)
+        if not v then Fluent:Notify({Title="Point",Content="⚠ Enter a valid number.",Duration=2}); return end
+        applyFakeStat("Point", v, {"Points","point","points"})
+        Fluent:Notify({Title="Point",Content="✅ Point → "..v,Duration=3})
+    end})
+
+    -- ── Level ─────────────────────────────────────────────────
+    local inputLevel_v = ""
+    local sLevel=Tabs.Player:AddSection("Level")
+    sLevel:AddParagraph({
+        Title="Persistent",
+        Content="Level change stays active until you click Reset All."
+    })
+    sLevel:AddInput("InputLevel",{
+        Title="Level Value", Default="", Placeholder="e.g. 100",
+        Numeric=false, Finished=false,
+        Callback=function(v) inputLevel_v = v end
+    })
+    sLevel:AddButton({Title="Apply Level",Callback=function()
+        local v = tonumber(inputLevel_v)
+        if not v then Fluent:Notify({Title="Level",Content="⚠ Enter a valid number.",Duration=2}); return end
+        fakeLevelValue = v
+        applyFakeStat("Level", v, {"level","XP","Exp","Experience","Lvl"})
+        Fluent:Notify({Title="Level",Content="✅ Level → "..v,Duration=3})
+    end})
+
+    -- ── Display Name ──────────────────────────────────────────
+    -- Persistent: stored in fakeDisplayName, re-applied on every respawn
+    local inputDN_v = ""
+    local sDN=Tabs.Player:AddSection("Display Name  (Local Only — Persistent)")
+    sDN:AddParagraph({
+        Title="How it works",
+        Content="Your name tag stays changed after switching tabs or respawning.\nClick Reset All below to restore your real name."
+    })
+    sDN:AddInput("InputDisplayName",{
+        Title="New Display Name", Default="", Placeholder="e.g. KhoaProSigma",
+        Numeric=false, Finished=false,
+        Callback=function(v) inputDN_v = v end
+    })
+    sDN:AddButton({Title="Apply Display Name",Callback=function()
+        if inputDN_v == "" then
+            Fluent:Notify({Title="Name",Content="⚠ Enter a name first.",Duration=2}); return
+        end
+        fakeDisplayName = inputDN_v
+        applyDisplayNameToChar()
+        Fluent:Notify({Title="Display Name",Content="✅ Name set to: "..fakeDisplayName,Duration=3})
+    end})
+
+    -- ── Reset All ─────────────────────────────────────────────
+    local sReset=Tabs.Player:AddSection("Reset")
+    sReset:AddButton({Title="Reset All Player Changes",Callback=function()
+        -- Clear persistence
+        fakeDisplayName = ""
+        fakeLevelValue  = nil
+        -- Restore real name on current character
+        pcall(function()
+            local char = player.Character; if not char then return end
+            local head = char:FindFirstChild("Head")
+            if head then
+                for _,gui in pairs(head:GetChildren()) do
+                    if gui:IsA("BillboardGui") then
+                        for _,lbl in pairs(gui:GetDescendants()) do
+                            if lbl:IsA("TextLabel") then
+                                -- Try to restore to real name
+                                if lbl.Text ~= player.Name and lbl.Text ~= player.DisplayName then
+                                    lbl.Text = player.DisplayName
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+        -- Clear all known fake attributes back to 0
+        pcall(function()
+            for _,name in ipairs({"Streak","Ticket","Tickets","Token","Tokens",
+                                    "Point","Points","Level","XP"}) do
+                player:SetAttribute(name, 0)
+                local data = player:FindFirstChild("Data")
+                if data then
+                    local child = data:FindFirstChild(name)
+                    if child then child.Value = 0 end
+                end
+            end
+        end)
+        Fluent:Notify({
+            Title="Player Reset",
+            Content="✅ All fake stats cleared.\nDisplay name restored.",
+            Duration=4
+        })
+    end})
+end
 
 -- ============================================================
 -- SETTINGS TAB
 -- ============================================================
-Tabs.Settings:AddSection("Wall Remover")
-Tabs.Settings:AddParagraph({Title="Info",Content="Removes invisible collision walls. Press to run manually."})
-Tabs.Settings:AddButton({Title="🧱 Run Wall Remover",Callback=function()
-    processedParts={}; runWallRemover()
-    Notify("Wall Remover","🧱 Running wall remover...",3)
-end})
+do
+    local sWR=Tabs.Settings:AddSection("Wall Remover")
+    sWR:AddButton({Title="Run Wall Remover",Callback=function()
+        Fluent:Notify({Title="Wall Remover",Content="⏳ Running...",Duration=2})
+        task.spawn(function()
+            local kw={"stair","step","ramp","trimp","platform","floor","ground","pad","road","path","bridge"}
+            local function isGP(n) n=n:lower(); for _,k in pairs(kw) do if n:find(k,1,true) then return true end end; return false end
+            local parts={}
+            for _,obj in pairs(workspace:GetDescendants()) do
+                if obj:IsA("BasePart") or obj:IsA("MeshPart") then table.insert(parts,obj) end
+            end
+            for i=1,#parts,50 do
+                for j=i,math.min(i+49,#parts) do
+                    local obj=parts[j]
+                    if obj and obj.Parent and not isGP(obj.Name) then
+                        if obj.CanCollide and obj.Transparency>=0.8 and obj.Position.Y>50 then
+                            pcall(function() obj:Destroy() end)
+                        end
+                    end
+                end; task.wait()
+            end
+            Fluent:Notify({Title="Wall Remover",Content="✅ Done!",Duration=3})
+        end)
+    end})
 
-Tabs.Settings:AddSection("FPS Boost")
-Tabs.Settings:AddParagraph({Title="Warning",Content="Lowers visual load to improve FPS. One-time only — cannot undo without rejoining."})
-Tabs.Settings:AddButton({Title="🚀 Enable FPS Boost",Callback=function()
-    task.spawn(function()
-        _G.Settings={
-            Players={["Ignore Me"]=true,["Ignore Others"]=true},
-            Meshes={Destroy=false,LowDetail=true},
-            Images={Invisible=true,LowDetail=false,Destroy=false},
-            Other={["No Particles"]=true,["No Camera Effects"]=true,["No Explosions"]=true,["No Clothes"]=true,["Low Water Graphics"]=true,["No Shadows"]=true,["Low Rendering"]=true,["Low Quality Parts"]=true},
-        }
-        pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/CasperFlyModz/discord.gg-rips/main/FPSBooster.lua"))() end)
-    end)
-    Notify("FPS Boost","🚀 FPS Boost activated!",3)
-end})
-
-Tabs.Settings:AddSection("Window")
-Tabs.Settings:AddButton({
-    Title="❌ Close Femboy Hub",
-    Description="Permanently closes the UI for this session",
-    Callback=function()
-        createCloseDialog(function()
+    local sFPS=Tabs.Settings:AddSection("FPS Boost")
+    sFPS:AddButton({Title="Enable FPS Boost",Callback=function()
+        Fluent:Notify({Title="FPS Boost",Content="⏳ Applying...",Duration=3})
+        task.spawn(function()
+            for _,obj in pairs(Lighting:GetChildren()) do pcall(function() obj:Destroy() end) end
             pcall(function()
-                local cg=game:GetService("CoreGui")
-                for _,gui in pairs(cg:GetChildren()) do
-                    if gui.Name:lower():find("fluent") then gui:Destroy() end
-                end
+                Lighting.GlobalShadows=false; Lighting.FogEnd=100000; Lighting.FogStart=99999
+                Lighting.Brightness=2; Lighting.ClockTime=14
+                Lighting.Ambient=Color3.fromRGB(140,140,140); Lighting.OutdoorAmbient=Color3.fromRGB(140,140,140)
             end)
-        end, nil)
-    end,
-})
+            local items=workspace:GetDescendants()
+            for i=1,#items,100 do
+                for j=i,math.min(i+99,#items) do
+                    local obj=items[j]; if obj and obj.Parent then
+                        if obj:IsA("BasePart") or obj:IsA("MeshPart") then
+                            pcall(function() obj.Material=Enum.Material.SmoothPlastic; obj.CastShadow=false end)
+                        end
+                        local kt={"ParticleEmitter","Fire","Smoke","Sparkles","Beam","Trail",
+                            "BlurEffect","BloomEffect","SunRaysEffect","ColorCorrectionEffect"}
+                        for _,t in pairs(kt) do if obj:IsA(t) then pcall(function() obj:Destroy() end); break end end
+                        if obj:IsA("Decal") or obj:IsA("Texture") then pcall(function() obj.Transparency=1 end) end
+                    end
+                end; task.wait()
+            end
+            pcall(function()
+                local t=workspace:FindFirstChildOfClass("Terrain")
+                if t then t.WaterWaveSize=0; t.WaterWaveSpeed=0; t.WaterTransparency=1; t.Decoration=false end
+            end)
+            Fluent:Notify({Title="FPS Boost",Content="✅ Applied!",Duration=5})
+        end)
+    end})
 
-SaveManager:SetLibrary(Fluent)
-InterfaceManager:SetLibrary(Fluent)
-InterfaceManager:SetFolder("FemboyHub")
-SaveManager:SetFolder("FemboyHub/configs")
-InterfaceManager:BuildInterfaceSection(Tabs.Settings)
-SaveManager:BuildConfigSection(Tabs.Settings)
+    local sKB=Tabs.Settings:AddSection("Keybinds Info")
+    sKB:AddParagraph({Title="RightCtrl",     Content="Toggle UI visibility"})
+    sKB:AddParagraph({Title="Custom Keybind",Content="Mỗi toggle ở Main tab đều có ô Keybind riêng.\nMặc định = None → chỉ kích hoạt sau khi chọn phím."})
+
+    SaveManager:SetLibrary(Fluent)
+    InterfaceManager:SetLibrary(Fluent)
+    SaveManager:IgnoreThemeSettings()
+    SaveManager:SetIgnoreIndexes({
+        "CustomSkyID","CustomMapID","CandyCustomPath",
+        "InputStreak","InputTicket","InputToken","InputPoint","InputLevel","InputDisplayName",
+    })
+    SaveManager:SetFolder("FemboyHub")
+    InterfaceManager:SetFolder("FemboyHub")
+    InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+    SaveManager:BuildConfigSection(Tabs.Settings)
+end
+
+-- ============================================================
+-- FINALISE
+-- ============================================================
 SaveManager:LoadAutoloadConfig()
-
 Window:SelectTab(1)
-Notify("Femboy Hub","✅ v1.2.0 loaded successfully!",4)
 
-end -- loadMainScript
-
--- ============================================================
--- ENTRY POINT
--- ============================================================
-createWelcomeScreen(function()
-    loadMainScript()
-end)
+Fluent:Notify({
+    Title      = "Femboy Hub v2.5 / Candy v2.6",
+    Content    = "✅ v2.6 — God Mode TP · Player fixes · English UI",
+    SubContent = "by KhoaProSigmaAlphaMale",
+    Duration   = 5,
+})
