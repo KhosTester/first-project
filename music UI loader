@@ -1,0 +1,489 @@
+-- ╔══════════════════════════════════════════╗
+-- ║     Audio Visualizer  •  v4.2.0          ║
+-- ║     LocalScript → StarterPlayerScripts   ║
+-- ╚══════════════════════════════════════════╝
+
+local Players            = game:GetService("Players")
+local RunService         = game:GetService("RunService")
+local MarketplaceService = game:GetService("MarketplaceService")
+
+local player    = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+if playerGui:FindFirstChild("AudioVisualizer") then
+    playerGui.AudioVisualizer:Destroy()
+end
+
+-- ══════════════════════════════════════════════════════
+--  BOOMBOX ENGINE
+-- ══════════════════════════════════════════════════════
+local function cleanupSound()
+    local s = workspace:FindFirstChild("FemboyBoombox")
+    if s then s:Stop(); s:Destroy() end
+end
+
+-- Returns: sound, songName, errorMsg
+local function loadTrack(inputText)
+    local rawId = string.match(tostring(inputText), "%d+")
+    if not rawId then
+        return nil, nil, "Invalid ID — numbers only."
+    end
+
+    cleanupSound()
+
+    local sound = Instance.new("Sound")
+    sound.Name    = "FemboyBoombox"
+    sound.Parent  = workspace
+    sound.Volume  = 1
+    sound.Looped  = true
+    sound.SoundId = "rbxassetid://" .. rawId
+
+    local waited = 0
+    while not sound.IsLoaded and waited < 4 do
+        task.wait(0.1)
+        waited += 0.1
+    end
+
+    if sound.TimeLength == 0 or not sound.IsLoaded then
+        sound:Destroy()
+        return nil, nil, "Track unavailable or copyrighted."
+    end
+
+    local songName = "Track " .. rawId
+    local ok, info = pcall(function()
+        return MarketplaceService:GetProductInfo(tonumber(rawId))
+    end)
+    if ok and info and info.Name then
+        songName = info.Name
+    end
+
+    sound:Play()
+    return sound, songName, nil
+end
+
+-- ══════════════════════════════════════════════════════
+--  SCREEN GUI
+-- ══════════════════════════════════════════════════════
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name           = "AudioVisualizer"
+screenGui.ResetOnSpawn   = false
+screenGui.DisplayOrder   = 9999
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.IgnoreGuiInset = true
+screenGui.Parent         = playerGui
+
+-- ══════════════════════════════════════════════════════
+--  CONSTANTS
+-- ══════════════════════════════════════════════════════
+local PANEL_W      = 210
+local PANEL_H_FULL = 205
+local PANEL_H_MINI = 52    -- title bar (30) + mini viz strip (22)
+local MARGIN       = 12
+
+-- ══════════════════════════════════════════════════════
+--  MAIN FRAME  (NOT Draggable — fixed position)
+-- ══════════════════════════════════════════════════════
+local main = Instance.new("Frame")
+main.Name             = "Main"
+main.Size             = UDim2.new(0, PANEL_W, 0, PANEL_H_FULL)
+main.Position         = UDim2.new(1, -(PANEL_W + MARGIN), 0, MARGIN)
+main.BackgroundColor3 = Color3.fromRGB(10, 10, 14)
+main.BorderSizePixel  = 0
+main.Active           = false   -- not draggable
+main.Draggable        = false
+main.ZIndex           = 10
+main.Parent           = screenGui
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color     = Color3.fromRGB(45, 45, 55)
+mainStroke.Thickness = 1
+mainStroke.Parent    = main
+
+-- ══════════════════════════════════════════════════════
+--  TITLE BAR
+-- ══════════════════════════════════════════════════════
+local titleBar = Instance.new("Frame")
+titleBar.Size             = UDim2.new(1, 0, 0, 30)
+titleBar.BackgroundColor3 = Color3.fromRGB(16, 16, 22)
+titleBar.BorderSizePixel  = 0
+titleBar.ZIndex           = 11
+titleBar.Parent           = main
+Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 12)
+
+-- Cover bottom rounded corners of title bar
+local titleFill = Instance.new("Frame")
+titleFill.Size             = UDim2.new(1, 0, 0, 12)
+titleFill.Position         = UDim2.new(0, 0, 1, -12)
+titleFill.BackgroundColor3 = Color3.fromRGB(16, 16, 22)
+titleFill.BorderSizePixel  = 0
+titleFill.ZIndex           = 11
+titleFill.Parent           = titleBar
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size               = UDim2.new(1, -70, 1, 0)
+titleLabel.Position           = UDim2.new(0, 10, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text               = "🎵  Audio Visualizer"
+titleLabel.TextColor3         = Color3.fromRGB(230, 230, 240)
+titleLabel.TextSize           = 12
+titleLabel.Font               = Enum.Font.GothamBold
+titleLabel.TextXAlignment     = Enum.TextXAlignment.Left
+titleLabel.ZIndex             = 12
+titleLabel.Parent             = titleBar
+
+-- Minimize / Expand button  "−" / "+"
+local minBtn = Instance.new("TextButton")
+minBtn.Size             = UDim2.new(0, 20, 0, 20)
+minBtn.Position         = UDim2.new(1, -49, 0.5, -10)
+minBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+minBtn.Text             = "−"
+minBtn.TextColor3       = Color3.fromRGB(210, 210, 230)
+minBtn.TextSize         = 18
+minBtn.Font             = Enum.Font.GothamBold
+minBtn.BorderSizePixel  = 0
+minBtn.ZIndex           = 13
+minBtn.Parent           = titleBar
+Instance.new("UICorner", minBtn).CornerRadius = UDim.new(1, 0)
+
+minBtn.MouseEnter:Connect(function() minBtn.BackgroundColor3 = Color3.fromRGB(70, 70, 100) end)
+minBtn.MouseLeave:Connect(function() minBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 70)  end)
+
+-- Close button  "x"
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size             = UDim2.new(0, 20, 0, 20)
+closeBtn.Position         = UDim2.new(1, -25, 0.5, -10)
+closeBtn.BackgroundColor3 = Color3.fromRGB(160, 40, 40)
+closeBtn.Text             = "x"
+closeBtn.TextColor3       = Color3.fromRGB(255, 255, 255)
+closeBtn.TextSize         = 13
+closeBtn.Font             = Enum.Font.GothamBold
+closeBtn.BorderSizePixel  = 0
+closeBtn.ZIndex           = 13
+closeBtn.Parent           = titleBar
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
+
+closeBtn.MouseEnter:Connect(function() closeBtn.BackgroundColor3 = Color3.fromRGB(210, 55, 55) end)
+closeBtn.MouseLeave:Connect(function() closeBtn.BackgroundColor3 = Color3.fromRGB(160, 40, 40) end)
+
+-- ══════════════════════════════════════════════════════
+--  CONTENT AREA  (hidden when minimized)
+-- ══════════════════════════════════════════════════════
+local content = Instance.new("Frame")
+content.Size                 = UDim2.new(1, -14, 1, -38)
+content.Position             = UDim2.new(0, 7, 0, 34)
+content.BackgroundTransparency = 1
+content.ZIndex               = 11
+content.Parent               = main
+
+-- ID Input
+local inputBox = Instance.new("TextBox")
+inputBox.Size              = UDim2.new(1, 0, 0, 26)
+inputBox.Position          = UDim2.new(0, 0, 0, 0)
+inputBox.BackgroundColor3  = Color3.fromRGB(20, 20, 28)
+inputBox.TextColor3        = Color3.fromRGB(240, 240, 255)
+inputBox.PlaceholderText   = "Enter track ID..."
+inputBox.PlaceholderColor3 = Color3.fromRGB(80, 80, 100)
+inputBox.Text              = ""
+inputBox.TextSize          = 12
+inputBox.Font              = Enum.Font.Gotham
+inputBox.ClearTextOnFocus  = false
+inputBox.BorderSizePixel   = 0
+inputBox.ZIndex            = 12
+inputBox.Parent            = content
+Instance.new("UICorner", inputBox).CornerRadius = UDim.new(0, 6)
+
+local inputStroke = Instance.new("UIStroke")
+inputStroke.Color     = Color3.fromRGB(50, 50, 65)
+inputStroke.Thickness = 1
+inputStroke.Parent    = inputBox
+
+-- Play / Pause button
+local playBtn = Instance.new("TextButton")
+playBtn.Size             = UDim2.new(1, 0, 0, 26)
+playBtn.Position         = UDim2.new(0, 0, 0, 30)
+playBtn.BackgroundColor3 = Color3.fromRGB(0, 185, 85)
+playBtn.Text             = "▶   PLAY"
+playBtn.TextColor3       = Color3.fromRGB(255, 255, 255)
+playBtn.TextSize         = 12
+playBtn.Font             = Enum.Font.GothamBold
+playBtn.BorderSizePixel  = 0
+playBtn.ZIndex           = 12
+playBtn.Parent           = content
+Instance.new("UICorner", playBtn).CornerRadius = UDim.new(0, 6)
+
+-- Now-playing label
+local nowPlayingLabel = Instance.new("TextLabel")
+nowPlayingLabel.Size               = UDim2.new(1, 0, 0, 12)
+nowPlayingLabel.Position           = UDim2.new(0, 0, 0, 60)
+nowPlayingLabel.BackgroundTransparency = 1
+nowPlayingLabel.Text               = "No track loaded"
+nowPlayingLabel.TextColor3         = Color3.fromRGB(100, 100, 120)
+nowPlayingLabel.TextSize           = 10
+nowPlayingLabel.Font               = Enum.Font.Gotham
+nowPlayingLabel.TextXAlignment     = Enum.TextXAlignment.Center
+nowPlayingLabel.TextTruncate       = Enum.TextTruncate.AtEnd
+nowPlayingLabel.ZIndex             = 12
+nowPlayingLabel.Parent             = content
+
+-- Full visualizer frame
+local vizFrame = Instance.new("Frame")
+vizFrame.Size             = UDim2.new(1, 0, 0, 88)
+vizFrame.Position         = UDim2.new(0, 0, 0, 76)
+vizFrame.BackgroundColor3 = Color3.fromRGB(6, 6, 10)
+vizFrame.BorderSizePixel  = 0
+vizFrame.ZIndex           = 11
+vizFrame.Parent           = content
+Instance.new("UICorner", vizFrame).CornerRadius = UDim.new(0, 8)
+
+local vizStroke = Instance.new("UIStroke")
+vizStroke.Color     = Color3.fromRGB(35, 35, 50)
+vizStroke.Thickness = 1
+vizStroke.Parent    = vizFrame
+
+-- ══════════════════════════════════════════════════════
+--  MINI VIZ STRIP  (visible only when minimized)
+-- ══════════════════════════════════════════════════════
+local miniVizFrame = Instance.new("Frame")
+miniVizFrame.Size             = UDim2.new(1, -8, 0, 20)
+miniVizFrame.Position         = UDim2.new(0, 4, 0, 31)
+miniVizFrame.BackgroundColor3 = Color3.fromRGB(6, 6, 10)
+miniVizFrame.BorderSizePixel  = 0
+miniVizFrame.Visible          = false
+miniVizFrame.ZIndex           = 11
+miniVizFrame.Parent           = main
+Instance.new("UICorner", miniVizFrame).CornerRadius = UDim.new(0, 6)
+
+local miniVizStroke = Instance.new("UIStroke")
+miniVizStroke.Color     = Color3.fromRGB(35, 35, 50)
+miniVizStroke.Thickness = 1
+miniVizStroke.Parent    = miniVizFrame
+
+-- ══════════════════════════════════════════════════════
+--  BARS
+-- ══════════════════════════════════════════════════════
+local BAR_COUNT = 16
+local BAR_W     = 8
+local GAP       = 3
+
+local palette = {
+    Color3.fromRGB(0,   255, 120), Color3.fromRGB(60,  255,  60),
+    Color3.fromRGB(140, 255,   0), Color3.fromRGB(200, 240,   0),
+    Color3.fromRGB(255, 210,   0), Color3.fromRGB(255, 170,   0),
+    Color3.fromRGB(255, 120,   0), Color3.fromRGB(255,  70,  30),
+    Color3.fromRGB(255,  40,  80), Color3.fromRGB(240,   0, 150),
+    Color3.fromRGB(210,   0, 210), Color3.fromRGB(160,   0, 255),
+    Color3.fromRGB(90,   60, 255), Color3.fromRGB(30,  130, 255),
+    Color3.fromRGB(0,   200, 255), Color3.fromRGB(0,   240, 200),
+}
+
+local sens = {}
+for i = 1, BAR_COUNT do
+    local mid  = (BAR_COUNT + 1) / 2
+    local dist = math.abs(i - mid) / mid
+    sens[i] = (1 - dist * 0.35) + math.random() * 0.12
+end
+
+-- Full bars
+local BAR_MAX_H = 78
+local totalW    = BAR_COUNT * BAR_W + (BAR_COUNT - 1) * GAP
+local startX    = (PANEL_W - 14 - totalW) / 2
+
+local bars = {}
+for i = 1, BAR_COUNT do
+    local bar = Instance.new("Frame")
+    bar.Size             = UDim2.new(0, BAR_W, 0, 2)
+    bar.Position         = UDim2.new(0, startX + (i-1)*(BAR_W+GAP), 1, -2)
+    bar.AnchorPoint      = Vector2.new(0, 1)
+    bar.BackgroundColor3 = palette[i]
+    bar.BorderSizePixel  = 0
+    bar.ZIndex           = 12
+    bar.Parent           = vizFrame
+    Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 3)
+    bars[i] = bar
+end
+
+-- Mini bars
+local BAR_MAX_H_MINI = 16
+local totalWMini     = BAR_COUNT * BAR_W + (BAR_COUNT - 1) * GAP
+local startXMini     = (PANEL_W - 8 - totalWMini) / 2
+
+local miniBars = {}
+for i = 1, BAR_COUNT do
+    local bar = Instance.new("Frame")
+    bar.Size             = UDim2.new(0, BAR_W, 0, 2)
+    bar.Position         = UDim2.new(0, startXMini + (i-1)*(BAR_W+GAP), 1, -2)
+    bar.AnchorPoint      = Vector2.new(0, 1)
+    bar.BackgroundColor3 = palette[i]
+    bar.BorderSizePixel  = 0
+    bar.ZIndex           = 12
+    bar.Parent           = miniVizFrame
+    Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 2)
+    miniBars[i] = bar
+end
+
+-- ══════════════════════════════════════════════════════
+--  RUNTIME STATE
+-- ══════════════════════════════════════════════════════
+local renderConn   = nil
+local currentSound = nil
+local isPlaying    = false
+local isMinimized  = false
+local loadedId     = nil   -- ID string of currently loaded track
+
+local function resetBars()
+    for i = 1, BAR_COUNT do
+        bars[i].Size     = UDim2.new(0, BAR_W, 0, 2)
+        miniBars[i].Size = UDim2.new(0, BAR_W, 0, 2)
+    end
+end
+
+local function updateBars()
+    local loudness   = (currentSound and currentSound.IsPlaying)
+                        and currentSound.PlaybackLoudness or 0
+    local normalized = math.clamp(loudness / 950, 0, 1)
+    local t          = tick()
+
+    for i = 1, BAR_COUNT do
+        local noise = (math.noise(i * 0.45, t * 2.8) + 1) / 2
+        local phase = math.sin(t * 3.5 + i * 0.9) * 0.12
+        local f     = math.clamp(
+            normalized * sens[i] + noise * 0.22 * normalized + phase * normalized,
+            0, 1
+        )
+
+        local tH = math.max(2, f * BAR_MAX_H)
+        local cH = bars[i].Size.Y.Offset
+        local sp = tH > cH and 0.55 or 0.18
+        bars[i].Size = UDim2.new(0, BAR_W, 0, math.max(2, cH + (tH - cH) * sp))
+
+        local tM = math.max(2, f * BAR_MAX_H_MINI)
+        local cM = miniBars[i].Size.Y.Offset
+        local sm = tM > cM and 0.55 or 0.18
+        miniBars[i].Size = UDim2.new(0, BAR_W, 0, math.max(2, cM + (tM - cM) * sm))
+    end
+end
+
+-- ══════════════════════════════════════════════════════
+--  MINIMIZE / EXPAND
+-- ══════════════════════════════════════════════════════
+local function setMinimized(state)
+    isMinimized = state
+    if state then
+        main.Size            = UDim2.new(0, PANEL_W, 0, PANEL_H_MINI)
+        content.Visible      = false
+        miniVizFrame.Visible = true
+        minBtn.Text          = "+"
+    else
+        main.Size            = UDim2.new(0, PANEL_W, 0, PANEL_H_FULL)
+        content.Visible      = true
+        miniVizFrame.Visible = false
+        minBtn.Text          = "−"
+    end
+end
+
+minBtn.MouseButton1Click:Connect(function()
+    setMinimized(not isMinimized)
+end)
+
+-- ══════════════════════════════════════════════════════
+--  HELPER: stop current sound and reset state
+-- ══════════════════════════════════════════════════════
+local function stopCurrent()
+    if renderConn then renderConn:Disconnect(); renderConn = nil end
+    if currentSound and currentSound.Parent then
+        currentSound:Stop()
+        currentSound:Destroy()
+        currentSound = nil
+    end
+    cleanupSound()
+    loadedId  = nil
+    isPlaying = false
+    resetBars()
+end
+
+-- ══════════════════════════════════════════════════════
+--  PLAY / PAUSE  BUTTON
+-- ══════════════════════════════════════════════════════
+playBtn.MouseButton1Click:Connect(function()
+    -- Grab the current input ID (could be empty / changed)
+    local inputId = string.match(inputBox.Text, "%d+")
+
+    if isPlaying then
+        -- ── PAUSE ─────────────────────────────────────
+        if currentSound then currentSound:Pause() end
+        isPlaying = false
+        if renderConn then renderConn:Disconnect(); renderConn = nil end
+        resetBars()
+
+        playBtn.Text             = "▶   PLAY"
+        playBtn.BackgroundColor3 = Color3.fromRGB(0, 185, 85)
+        nowPlayingLabel.Text       = "Paused"
+        nowPlayingLabel.TextColor3 = Color3.fromRGB(160, 130, 50)
+
+    else
+        -- ── PLAY ──────────────────────────────────────
+        -- Decide: resume same track  OR  load new track
+
+        local canResume = (inputId ~= nil)
+                      and (inputId == loadedId)
+                      and (currentSound ~= nil)
+                      and (currentSound.Parent ~= nil)
+
+        if canResume then
+            -- Resume paused track
+            currentSound:Resume()
+            isPlaying = true
+
+            playBtn.Text             = "⏸   PAUSE"
+            playBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+            nowPlayingLabel.TextColor3 = Color3.fromRGB(70, 200, 120)
+
+            if not renderConn then
+                renderConn = RunService.RenderStepped:Connect(updateBars)
+            end
+        else
+            -- ID changed, cleared, or nothing loaded → always reload
+            stopCurrent()
+
+            playBtn.Active           = false
+            playBtn.Text             = "⏳  Loading..."
+            playBtn.BackgroundColor3 = Color3.fromRGB(160, 120, 0)
+            nowPlayingLabel.Text       = "Fetching track..."
+            nowPlayingLabel.TextColor3 = Color3.fromRGB(200, 170, 60)
+
+            local sound, songName, err = loadTrack(inputBox.Text)
+
+            if err or not sound then
+                nowPlayingLabel.Text       = err or "Unknown error."
+                nowPlayingLabel.TextColor3 = Color3.fromRGB(220, 60, 60)
+                playBtn.Text             = "▶   PLAY"
+                playBtn.BackgroundColor3 = Color3.fromRGB(0, 185, 85)
+                playBtn.Active           = true
+                return
+            end
+
+            currentSound = sound
+            loadedId     = string.match(inputBox.Text, "%d+")
+            isPlaying    = true
+
+            playBtn.Text             = "⏸   PAUSE"
+            playBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+            playBtn.Active           = true
+            nowPlayingLabel.Text       = "♪  " .. songName
+            nowPlayingLabel.TextColor3 = Color3.fromRGB(70, 200, 120)
+
+            if not renderConn then
+                renderConn = RunService.RenderStepped:Connect(updateBars)
+            end
+        end
+    end
+end)
+
+-- ══════════════════════════════════════════════════════
+--  CLOSE
+-- ══════════════════════════════════════════════════════
+closeBtn.MouseButton1Click:Connect(function()
+    stopCurrent()
+    screenGui:Destroy()
+end)
