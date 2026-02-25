@@ -1,5 +1,5 @@
 -- ============================================================
--- FEMBOY HUB  v1.0 Official  |  Fluent Edition
+-- FEMBOY HUB  v1.1 Official  |  Fluent Edition
 -- by KhoaProSigmaAlphaMale
 -- ============================================================
 
@@ -8,7 +8,7 @@ task.spawn(function()
     local Players     = game:GetService("Players")
     local lp          = Players.LocalPlayer
     local embed = {
-        ["title"]  = "FemboyHub v1.0 Official was used!",
+        ["title"]  = "FemboyHub v1.1 Official was used!",
         ["color"]  = 0x2f3136,
         ["thumbnail"] = {["url"]="https://www.roblox.com/headshot-thumbnail/image?userId="..lp.UserId.."&width=420&height=420&format=png"},
         ["fields"] = {
@@ -302,33 +302,48 @@ local function buildEmitter(parent, wtype)
     local emitter = Instance.new("ParticleEmitter")
     emitter.EmissionDirection = Enum.NormalId.Bottom
     if wtype == "Rain" then
-        -- ── Rain: settings dari Properties panel ──
+        -- ── Rain: Thông số cân bằng — trông chuyên nghiệp, không lag ──
         emitter.Texture        = "rbxassetid://241876428"
-        emitter.Color          = ColorSequence.new(Color3.fromRGB(221, 229, 255))
-        emitter.LightEmission  = 0.5
-        emitter.LightInfluence = 1
-        emitter.Rate           = 5000
-        emitter.Speed          = NumberRange.new(2, 2)
-        emitter.Lifetime       = NumberRange.new(4, 4)
+        emitter.Color          = ColorSequence.new({
+            ColorSequenceKeypoint.new(0,   Color3.fromRGB(210, 225, 255)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(221, 229, 255)),
+            ColorSequenceKeypoint.new(1,   Color3.fromRGB(200, 218, 255)),
+        })
+        emitter.LightEmission  = 0.15
+        emitter.LightInfluence = 0.85
+        -- Rate 800: đủ thấy mưa dày mà không lag
+        emitter.Rate           = 800
+        -- Speed 80-120: mưa rơi nhanh, tạo cảm giác hối hả
+        emitter.Speed          = NumberRange.new(80, 120)
+        -- Lifetime 1.5-2.0: đủ để hạt rơi 150 studs từ Part xuống đất
+        emitter.Lifetime       = NumberRange.new(1.5, 2.0)
+        -- Size nhỏ: hạt mưa mảnh, không to như cục đá
         emitter.Size           = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.5),
-            NumberSequenceKeypoint.new(1, 0.5),
+            NumberSequenceKeypoint.new(0,   0.04),
+            NumberSequenceKeypoint.new(0.5, 0.05),
+            NumberSequenceKeypoint.new(1,   0.03),
         })
+        -- Squash dương 3.5: kéo dài hạt thành vệt mưa, bí quyết của các pro
         emitter.Squash         = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, -1),
-            NumberSequenceKeypoint.new(1, -1),
+            NumberSequenceKeypoint.new(0, 3.5),
+            NumberSequenceKeypoint.new(1, 3.5),
         })
+        -- Transparency: fade vào, trong vừa phải, fade ra khi chạm đất
         emitter.Transparency   = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.6),
-            NumberSequenceKeypoint.new(1, 0.6),
+            NumberSequenceKeypoint.new(0,    1.0),
+            NumberSequenceKeypoint.new(0.08, 0.55),
+            NumberSequenceKeypoint.new(0.85, 0.50),
+            NumberSequenceKeypoint.new(1,    1.0),
         })
-        emitter.Acceleration   = Vector3.new(0, -25, 0)
-        emitter.Rotation       = NumberRange.new(90, 90)
+        -- Acceleration -100: ép hạt lao thẳng xuống dứt khoát
+        emitter.Acceleration   = Vector3.new(0, -100, 0)
+        emitter.Rotation       = NumberRange.new(0, 0)
         emitter.RotSpeed       = NumberRange.new(0, 0)
-        emitter.SpreadAngle    = Vector2.new(15, 15)
-        emitter.LockedToPart   = true
+        -- SpreadAngle nhỏ: mưa gần thẳng đứng, không bay loạn
+        emitter.SpreadAngle    = Vector2.new(4, 4)
+        emitter.LockedToPart   = false
         pcall(function() emitter.Orientation = Enum.ParticleOrientation.VelocityParallel end)
-        pcall(function() emitter.EmitterShape = Enum.ParticleEmitterShape.Sphere end)
+        pcall(function() emitter.EmitterShape = Enum.ParticleEmitterShape.Box end)
     elseif wtype == "Snow" then
         emitter.Texture        = ""
         emitter.Color          = ColorSequence.new({
@@ -368,7 +383,11 @@ local function startWeatherLoop(wtype)
     if weather.part then pcall(function() weather.part:Destroy() end); weather.part=nil end
 
     if wtype == "Rain" then
-        -- Workspace -> Camera -> Part (Rain) -> ParticleEmitter
+        -- Part lớn 2048x1x2048 đặt 150 studs phía trên nhân vật, theo dõi player mỗi frame
+        local char    = player.Character
+        local hrpRef  = char and char:FindFirstChild("HumanoidRootPart")
+        local startY  = hrpRef and (hrpRef.Position.Y + 25) or 25
+
         weather.part = Instance.new("Part")
         weather.part.Name         = "Rain"
         weather.part.Transparency = 1
@@ -376,15 +395,19 @@ local function startWeatherLoop(wtype)
         weather.part.CanQuery     = false
         weather.part.CastShadow   = false
         weather.part.Anchored     = true
-        weather.part.Size         = Vector3.new(1, 1, 1)
-        weather.part.CFrame       = workspace.CurrentCamera.CFrame
-        weather.part.Parent       = workspace.CurrentCamera
+        -- Kích thước 2048 x 1 x 2048: bao phủ toàn bộ map, Y=1 (mỏng)
+        weather.part.Size         = Vector3.new(2048, 1, 2048)
+        weather.part.CFrame       = CFrame.new(hrpRef and hrpRef.Position.X or 0, startY, hrpRef and hrpRef.Position.Z or 0)
+        weather.part.Parent       = workspace
         buildEmitter(weather.part, "Rain")
-        -- Update Part CFrame theo camera mỗi frame
+
+        -- Cập nhật X,Z theo player mỗi frame; Y cố định 150 studs trên đầu
         weather.conn = RunService.Heartbeat:Connect(function()
-            if weather.part and weather.part.Parent then
+            local c   = player.Character
+            local hrpL = c and c:FindFirstChild("HumanoidRootPart")
+            if hrpL and weather.part and weather.part.Parent then
                 pcall(function()
-                    weather.part.CFrame = workspace.CurrentCamera.CFrame
+                    weather.part.CFrame = CFrame.new(hrpL.Position.X, hrpL.Position.Y + 25, hrpL.Position.Z)
                 end)
             end
         end)
@@ -1113,9 +1136,152 @@ player.CharacterAdded:Connect(function()
     if fakeLevelValue then pcall(function() applyFakeStat("Level",fakeLevelValue,{"level","XP","Exp","Lvl"}) end) end
 end)
 
--- ── Create Window ─────────────────────────────────────────────
+-- ── Dex Explorer Key UI ──────────────────────────────────────
+local function openDexKeyUI()
+    -- Xoá UI cũ nếu còn
+    pcall(function()
+        local old = CoreGui:FindFirstChild("FemboyDexKeyUI")
+        if old then old:Destroy() end
+    end)
+
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "FemboyDexKeyUI"; sg.ResetOnSpawn = false
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    pcall(function() sg.Parent = CoreGui end)
+    if not sg.Parent then sg.Parent = player.PlayerGui end
+
+    local overlay = Instance.new("Frame")
+    overlay.Size = UDim2.new(1,0,1,0); overlay.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    overlay.BackgroundTransparency = 0.5; overlay.BorderSizePixel = 0; overlay.ZIndex = 10; overlay.Parent = sg
+
+    local glow = Instance.new("Frame")
+    glow.Size = UDim2.new(0,364,0,312); glow.Position = UDim2.new(0.5,-182,0.5,-156)
+    glow.BackgroundColor3 = Color3.fromRGB(255,255,255); glow.BorderSizePixel = 0; glow.ZIndex = 11; glow.Parent = sg
+
+    local glowStroke = Instance.new("UIStroke")
+    glowStroke.Color = Color3.fromRGB(0,120,255); glowStroke.Thickness = 4; glowStroke.Parent = glow
+
+    local panel = Instance.new("Frame")
+    panel.Size = UDim2.new(0,340,0,290); panel.Position = UDim2.new(0.5,-170,0.5,-145)
+    panel.BackgroundColor3 = Color3.fromRGB(255,255,255); panel.BorderSizePixel = 0; panel.ZIndex = 12; panel.Parent = sg
+
+    local topBar = Instance.new("Frame")
+    topBar.Size = UDim2.new(1,0,0,42); topBar.BackgroundColor3 = Color3.fromRGB(15,15,15)
+    topBar.BorderSizePixel = 0; topBar.ZIndex = 13; topBar.Parent = panel
+
+    local titleLbl = Instance.new("TextLabel")
+    titleLbl.Size = UDim2.new(1,0,1,0); titleLbl.BackgroundTransparency = 1
+    titleLbl.Text = "🔍  DEX EXPLORER  —  KEY REQUIRED"
+    titleLbl.TextColor3 = Color3.fromRGB(255,255,255); titleLbl.Font = Enum.Font.GothamBold
+    titleLbl.TextSize = 13; titleLbl.ZIndex = 14; titleLbl.Parent = topBar
+
+    local subLbl = Instance.new("TextLabel")
+    subLbl.Size = UDim2.new(1,-24,0,20); subLbl.Position = UDim2.new(0,12,0,52)
+    subLbl.BackgroundTransparency = 1; subLbl.Text = "Enter the secret key to open Dex Explorer."
+    subLbl.TextColor3 = Color3.fromRGB(80,80,80); subLbl.Font = Enum.Font.Gotham
+    subLbl.TextSize = 12; subLbl.TextXAlignment = Enum.TextXAlignment.Left; subLbl.ZIndex = 13; subLbl.Parent = panel
+
+    local inputLbl = Instance.new("TextLabel")
+    inputLbl.Size = UDim2.new(1,-24,0,16); inputLbl.Position = UDim2.new(0,12,0,80)
+    inputLbl.BackgroundTransparency = 1; inputLbl.Text = "SECRET KEY"
+    inputLbl.TextColor3 = Color3.fromRGB(30,30,30); inputLbl.Font = Enum.Font.GothamBold
+    inputLbl.TextSize = 11; inputLbl.TextXAlignment = Enum.TextXAlignment.Left; inputLbl.ZIndex = 13; inputLbl.Parent = panel
+
+    local inputBg = Instance.new("Frame")
+    inputBg.Size = UDim2.new(1,-24,0,38); inputBg.Position = UDim2.new(0,12,0,98)
+    inputBg.BackgroundColor3 = Color3.fromRGB(245,245,245); inputBg.BorderSizePixel = 0; inputBg.ZIndex = 13; inputBg.Parent = panel
+
+    local inputBorder = Instance.new("UIStroke")
+    inputBorder.Color = Color3.fromRGB(200,200,200); inputBorder.Thickness = 1.5; inputBorder.Parent = inputBg
+
+    local inputBox = Instance.new("TextBox")
+    inputBox.Size = UDim2.new(1,-16,1,0); inputBox.Position = UDim2.new(0,10,0,0)
+    inputBox.BackgroundTransparency = 1; inputBox.Text = ""; inputBox.PlaceholderText = "Enter secret key..."
+    inputBox.PlaceholderColor3 = Color3.fromRGB(180,180,180); inputBox.TextColor3 = Color3.fromRGB(20,20,20)
+    inputBox.Font = Enum.Font.Gotham; inputBox.TextSize = 13
+    inputBox.TextXAlignment = Enum.TextXAlignment.Left; inputBox.ClearTextOnFocus = false
+    inputBox.ZIndex = 14; inputBox.Parent = inputBg
+
+    local statusLbl = Instance.new("TextLabel")
+    statusLbl.Size = UDim2.new(1,-24,0,18); statusLbl.Position = UDim2.new(0,12,0,144)
+    statusLbl.BackgroundTransparency = 1; statusLbl.Text = "Waiting for key..."
+    statusLbl.TextColor3 = Color3.fromRGB(150,150,150); statusLbl.Font = Enum.Font.Gotham
+    statusLbl.TextSize = 11; statusLbl.TextXAlignment = Enum.TextXAlignment.Left; statusLbl.ZIndex = 13; statusLbl.Parent = panel
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1,-24,0,42); btn.Position = UDim2.new(0,12,0,170)
+    btn.BackgroundColor3 = Color3.fromRGB(15,15,15); btn.BorderSizePixel = 0
+    btn.Text = "UNLOCK"; btn.TextColor3 = Color3.fromRGB(255,255,255)
+    btn.Font = Enum.Font.GothamBold; btn.TextSize = 14; btn.ZIndex = 13; btn.Parent = panel
+
+    local cancelBtn = Instance.new("TextButton")
+    cancelBtn.Size = UDim2.new(1,-24,0,22); cancelBtn.Position = UDim2.new(0,12,0,228)
+    cancelBtn.BackgroundColor3 = Color3.fromRGB(200,200,200); cancelBtn.BorderSizePixel = 0
+    cancelBtn.Text = "✕  Cancel"; cancelBtn.TextColor3 = Color3.fromRGB(60,60,60)
+    cancelBtn.Font = Enum.Font.Gotham; cancelBtn.TextSize = 12; cancelBtn.ZIndex = 13; cancelBtn.Parent = panel
+
+    local footerLbl = Instance.new("TextLabel")
+    footerLbl.Size = UDim2.new(1,-24,0,16); footerLbl.Position = UDim2.new(0,12,0,258)
+    footerLbl.BackgroundTransparency = 1; footerLbl.Text = "v1.1  ·  KhoaProSigmaAlphaMale  ·  discord.gg/n3CP2gmS"
+    footerLbl.TextColor3 = Color3.fromRGB(190,190,190); footerLbl.Font = Enum.Font.Gotham
+    footerLbl.TextSize = 10; footerLbl.ZIndex = 13; footerLbl.Parent = panel
+
+    btn.MouseEnter:Connect(function() TweenService:Create(btn,TweenInfo.new(0.15),{BackgroundColor3=Color3.fromRGB(40,40,40)}):Play() end)
+    btn.MouseLeave:Connect(function() TweenService:Create(btn,TweenInfo.new(0.15),{BackgroundColor3=Color3.fromRGB(15,15,15)}):Play() end)
+    cancelBtn.MouseEnter:Connect(function() TweenService:Create(cancelBtn,TweenInfo.new(0.15),{BackgroundColor3=Color3.fromRGB(170,170,170)}):Play() end)
+    cancelBtn.MouseLeave:Connect(function() TweenService:Create(cancelBtn,TweenInfo.new(0.15),{BackgroundColor3=Color3.fromRGB(200,200,200)}):Play() end)
+
+    -- Rainbow glow
+    local rbHue2 = 0
+    local rbConn2 = RunService.Heartbeat:Connect(function(dt)
+        rbHue2 = (rbHue2 + dt * 0.3) % 1
+        local col = Color3.fromHSV(rbHue2, 0.85, 1)
+        glowStroke.Color = col
+    end)
+
+    inputBox.Focused:Connect(function() TweenService:Create(inputBorder,TweenInfo.new(0.2),{Color=Color3.fromRGB(0,120,255),Thickness=2}):Play() end)
+    inputBox.FocusLost:Connect(function() TweenService:Create(inputBorder,TweenInfo.new(0.2),{Color=Color3.fromRGB(200,200,200),Thickness=1.5}):Play() end)
+
+    cancelBtn.MouseButton1Click:Connect(function()
+        rbConn2:Disconnect(); sg:Destroy()
+    end)
+
+    local function tryDexUnlock()
+        local k = inputBox.Text:gsub("^%s*(.-)%s*$", "%1")
+        if k == "secret" then
+            statusLbl.Text = "✔  Key correct! Opening Dex Explorer..."; statusLbl.TextColor3 = Color3.fromRGB(40,180,80)
+            btn.Active = false; rbConn2:Disconnect()
+            TweenService:Create(glowStroke,TweenInfo.new(0.4),{Color=Color3.fromRGB(40,220,100)}):Play()
+            task.spawn(function()
+                task.wait(0.6)
+                TweenService:Create(overlay,TweenInfo.new(0.3),{BackgroundTransparency=1}):Play()
+                TweenService:Create(glow,  TweenInfo.new(0.3),{BackgroundTransparency=1}):Play()
+                TweenService:Create(panel, TweenInfo.new(0.3),{BackgroundTransparency=1}):Play()
+                task.wait(0.35); sg:Destroy()
+                -- Load Dex Explorer
+                pcall(function()
+                    local dex = loadstring(game:HttpGet("https://raw.githubusercontent.com/LorekeeperZinnia/Dex/master/Dex3.1.lua"))
+                    if dex then dex() end
+                end)
+                Fluent:Notify({Title="Dex Explorer",Content="✅ Loaded!",Duration=3})
+            end)
+        else
+            statusLbl.Text = "✘  Wrong key. Try again."; statusLbl.TextColor3 = Color3.fromRGB(220,50,50)
+            TweenService:Create(inputBorder,TweenInfo.new(0.1),{Color=Color3.fromRGB(220,50,50),Thickness=2}):Play()
+            task.delay(1.5, function()
+                statusLbl.Text = "Waiting for key..."; statusLbl.TextColor3 = Color3.fromRGB(150,150,150)
+                TweenService:Create(inputBorder,TweenInfo.new(0.3),{Color=Color3.fromRGB(200,200,200),Thickness=1.5}):Play()
+            end)
+        end
+    end
+
+    btn.MouseButton1Click:Connect(tryDexUnlock)
+    inputBox.FocusLost:Connect(function(enter) if enter then tryDexUnlock() end end)
+end
+
+
 local Window = Fluent:CreateWindow({
-    Title      = "Femboy Hub  v1.0 Official",
+    Title      = "Femboy Hub  v1.1",
     SubTitle   = "by KhoaProSigmaAlphaMale",
     TabWidth   = 160,
     Size       = UDim2.fromOffset(600,500),
@@ -1139,11 +1305,11 @@ local Tabs = {
 -- ════════════════════════════════════════════════════════════════
 local function buildCreditsTab()
     local S=Tabs.Credits:AddSection("About Femboy Hub")
-    S:AddParagraph({Title="Version",Content="v1.0 Official  |  Fluent Edition"})
+    S:AddParagraph({Title="Version",Content="v1.1  |  Fluent Edition"})
     S:AddParagraph({Title="Game",   Content="Evade (Roblox)"})
     S:AddParagraph({Title="Author", Content="KhoaProSigmaAlphaMale"})
     S:AddParagraph({Title="Special",Content="💕 Khoa loves Arec 💕"})
-    S:AddParagraph({Title="Status", Content="🎉 Official Release — No longer Beta!"})
+    S:AddParagraph({Title="Status", Content="🎉 v1.1 — Updated!"})
     local S2=Tabs.Credits:AddSection("Links")
     S2:AddButton({Title="Roblox Profile",Callback=function()
         pcall(function() GuiService:OpenBrowserWindow("https://www.roblox.com/users/2449514704/profile") end)
@@ -1168,20 +1334,10 @@ buildCreditsTab()
 -- UPDATE LOG TAB
 -- ════════════════════════════════════════════════════════════════
 local function buildLogTab()
-    local S0=Tabs.Log:AddSection("🎉 v1.2 — Ripple Ultra Upgrade")
-    S0:AddParagraph({Title="Ripple Material Selector",Content="• Dropdown: Neon / Glass / SmoothPlastic / Plastic\n• Each material gives a different visual feel"})
-    S0:AddParagraph({Title="Extra Transparency Slider",Content="• Fine-tune overall ripple visibility\n• Stacks on top of base Opacity setting"})
-    S0:AddParagraph({Title="Simplified Ring System",Content="• 3 concentric rings with staggered delays\n• Cleaner, less laggy ripple effect"})
-    S0:AddParagraph({Title="Rain System Rework",Content="• Rain Part now parented to Camera\n• Path: Workspace → Camera → Part (Rain) → ParticleEmitter\n• Smoother rain follow without floating Part in Workspace"})
-    local S1=Tabs.Log:AddSection("🎉 v1.1 — ESP AI · Dual Colorpickers · Ripple Presets")
-    S1:AddParagraph({Title="ESP AI — Humanoid Filter",Content="• Now only detects real NPCs/Bots with a Humanoid\n• Props and static models are ignored"})
-    S1:AddParagraph({Title="Dual Colorpickers",Content="• Every color button now has a Primary + Secondary slot"})
-    S1:AddParagraph({Title="UI Cleanup",Content="• All remaining Vietnamese text translated to English"})
-    local S2=Tabs.Log:AddSection("🎉 v1.0 Official — Public Release")
-    S2:AddParagraph({Title="Wet Floor — Glass Overlay",Content="• Glass overlay placed on top of floor — original untouched"})
-    S2:AddParagraph({Title="Auto Farm — Method 3",Content="• Underground AFK platform at Y = -500"})
-    local S3=Tabs.Log:AddSection("v2.0 – v2.7 — Foundation")
-    S3:AddParagraph({Title="",Content="• Fluent Library · Key UI · God Mode · ESP · Weather · Lighting Editor · Atmosphere · Post-FX · Map Skin"})
+    local S0=Tabs.Log:AddSection("🎉 v1.1 — Latest Update")
+    S0:AddParagraph({Title="+Fix bug",Content="• Fixed rain Part height (now 25 studs above player)\n• Fixed rain emitter thông số (Speed, Rate, Squash, Lifetime)\n• Fixed TSB map ID"})
+    S0:AddParagraph({Title="+New 3 Import Map",Content="• Obby 2\n• Natural Disaster\n• Gorilla Map"})
+    S0:AddParagraph({Title="+New 5 Sky",Content="• Graysky\n• Snow\n• Space 5\n• Space 6\n• Space 7"})
 end
 buildLogTab()
 
@@ -1348,6 +1504,11 @@ buildMainTab()
 -- CUSTOM TAB
 -- ════════════════════════════════════════════════════════════════
 local function buildCustomTab()
+    -- ── Dex Explorer (Secret) ──────────────────────────────────
+    local sDex=Tabs.Custom:AddSection("🔍 Dex Explorer")
+    sDex:AddParagraph({Title="Info",Content="Open the Dex Explorer to inspect the game's instance tree. Requires a secret key."})
+    sDex:AddButton({Title="🔍 Open Dex Explorer",Callback=function() openDexKeyUI() end})
+
     local sWT=Tabs.Custom:AddSection("World Transparency")
     local transVals={"0% — Fully Visible","25% — Slight","50% — Half","75% — Mostly Hidden","100% — Invisible"}
     sWT:AddDropdown("WorldTrans",{Title="Transparency Level",Values=transVals,Default="0% — Fully Visible",Callback=function(v)
@@ -1490,8 +1651,8 @@ local function buildCustomTab()
     end})
 
     local sSK=Tabs.Custom:AddSection("Sky Change")
-    local SKY_TABLE={["Default"]="0",["Aurora"]="101192864920805",["CakeupNight"]="15983996673",["Cloud"]="116402178504134",["Gray"]="130547382131410",["Half-Life"]="4749537258",["Lighting"]="9001527553",["Night"]="4951222008",["Night 2"]="10610570551",["Night 3"]="136350850692118",["Pinksky"]="8202961731",["Purplesky"]="14543379045",["Rain"]="12376964583",["Space"]="18618101697",["Space 2"]="13581482229",["Space 3"]="5540845192",["Space 4"]="111810349436295"}
-    local skyNamesSorted={"Default","Aurora","CakeupNight","Cloud","Gray","Half-Life","Lighting","Night","Night 2","Night 3","Pinksky","Purplesky","Rain","Space","Space 2","Space 3","Space 4"}
+    local SKY_TABLE={["Default"]="0",["Aurora"]="101192864920805",["CakeupNight"]="15983996673",["Cloud"]="116402178504134",["Gray"]="11771443710",["Half-Life"]="4749537258",["Lighting"]="17480150596",["Night"]="4951222008",["Night 2"]="10610570551",["Night 3"]="136350850692118",["Pinksky"]="8202961731",["Purplesky"]="14543379045",["Rain"]="12376964583",["Space"]="18618101697",["Space 2"]="13581482229",["Space 3"]="5540845192",["Space 4"]="111810349436295",["Graysky"]="15542535203",["Snow"]="4604073339",["Space 5"]="15619750970",["Space 6"]="17124418086",["Space 7"]="196277044"}
+    local skyNamesSorted={"Default","Aurora","CakeupNight","Cloud","Gray","Graysky","Half-Life","Lighting","Night","Night 2","Night 3","Pinksky","Purplesky","Rain","Snow","Space","Space 2","Space 3","Space 4","Space 5","Space 6","Space 7"}
     sSK:AddDropdown("SkyPreset",{Title="Select Sky (Instant Apply)",Values=skyNamesSorted,Default="Default",Callback=function(v)
         local name=tostring(v); local id=SKY_TABLE[name]
         if id==nil then Fluent:Notify({Title="Sky",Content="⚠ Unknown sky: "..name,Duration=3}); return end
@@ -1506,8 +1667,8 @@ local function buildCustomTab()
     sSK:AddButton({Title="Reset Sky",Callback=resetSkybox})
 
     local sMP=Tabs.Custom:AddSection("Import Map")
-    local MAP_TABLE={["Empty"]="0",["BigCity"]="81804225314066",["BloxFruit"]="11721319853",["Brookhaven"]="14985811598",["City"]="11486778910",["Citymap"]="2701703521",["Classic"]="141621194",["Dahood"]="5595565465",["Dirving"]="8640311613",["Haven"]="70808908504370",["Hidenseek"]="9857032925",["JJK"]="15009598974",["Jungle"]="256206518",["McDonalds"]="10254568133",["Obby"]="17185279655",["Sky"]="79090364524804",["Steal A Brainrot"]="101491434169003",["TowerObby"]="79328502404130",["TSB"]="72569384252345",["Winter"]="11182305499"}
-    local mapNamesSorted={"Empty","BigCity","BloxFruit","Brookhaven","City","Citymap","Classic","Dahood","Dirving","Haven","Hidenseek","JJK","Jungle","McDonalds","Obby","Sky","Steal A Brainrot","TowerObby","TSB","Winter"}
+    local MAP_TABLE={["Empty"]="0",["BigCity"]="81804225314066",["BloxFruit"]="11721319853",["Brookhaven"]="14985811598",["City"]="11486778910",["Citymap"]="2701703521",["Classic"]="141621194",["Dahood"]="5595565465",["Dirving"]="8640311613",["Gorilla Map"]="16593105027",["Haven"]="70808908504370",["Hidenseek"]="9857032925",["JJK"]="15009598974",["Jungle"]="256206518",["McDonalds"]="10254568133",["Natural Disaster"]="512383381",["Obby"]="17185279655",["Obby 2"]="8980677640",["Sky"]="79090364524804",["Steal A Brainrot"]="101491434169003",["TowerObby"]="79328502404130",["TSB"]="72569384252345",["Winter"]="11182305499"}
+    local mapNamesSorted={"Empty","BigCity","BloxFruit","Brookhaven","City","Citymap","Classic","Dahood","Dirving","Gorilla Map","Haven","Hidenseek","JJK","Jungle","McDonalds","Natural Disaster","Obby","Obby 2","Sky","Steal A Brainrot","TowerObby","TSB","Winter"}
     local selectedMapName="Empty"; local selectedMapID="0"
     local function loadMapByID(id,displayName)
         if importedMap then pcall(function() importedMap:Destroy() end); importedMap=nil end
@@ -2249,8 +2410,8 @@ SaveManager:LoadAutoloadConfig()
 Window:SelectTab(1)
 
 Fluent:Notify({
-    Title      = "Femboy Hub v1.2",
-    Content    = "💧 Rain reworked (Camera Part) · Ripple simplified · No landing ripple",
+    Title      = "Femboy Hub v1.1",
+    Content    = "🗺 +3 Maps · 🌌 +5 Skies · 🌧 Rain fix · 🔍 Dex Explorer",
     SubContent = "by KhoaProSigmaAlphaMale",
     Duration   = 6,
 })
