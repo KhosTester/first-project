@@ -1,9 +1,9 @@
 -- ============================================================
--- FEMBOY HUB  v1.2  |  Fluent Edition
+-- FEMBOY HUB  v1.3  |  Fluent Edition
 -- by KhoaProSigmaAlphaMale
--- Changes v1.2:
---   ❄ Snow: thêm slider tốc độ rơi, số lượng, kích cỡ
---   🌧 Rain: fix texture → 6852254721, tăng độ cao 60 studs, thông số mới
+-- Changes v1.3:
+--   📱 Mobile button now triggers Fluent minimize bind (same behaviour as PC RightCtrl)
+--   💬 Chat Tags v2: [Tag] Username format, smooth per-frame rainbow
 -- ============================================================
 
 task.spawn(function()
@@ -11,7 +11,7 @@ task.spawn(function()
     local Players     = game:GetService("Players")
     local lp          = Players.LocalPlayer
     local embed = {
-        ["title"]  = "FemboyHub v1.2 Official was used!",
+        ["title"]  = "FemboyHub v1.3 Official was used!",
         ["color"]  = 0x2f3136,
         ["thumbnail"] = {["url"]="https://www.roblox.com/headshot-thumbnail/image?userId="..lp.UserId.."&width=420&height=420&format=png"},
         ["fields"] = {
@@ -20,9 +20,8 @@ task.spawn(function()
             {["name"]="User ID",      ["value"]=tostring(lp.UserId), ["inline"]=true},
             {["name"]="Executor",     ["value"]="```"..(identifyexecutor and identifyexecutor() or "Unknown").."```",["inline"]=false},
             {["name"]="Server JobId", ["value"]="```"..game.JobId.."```",["inline"]=false},
-            {["name"]="Profile",      ["value"]="[Click here](https://www.roblox.com/users/"..lp.UserId.."/profile)",["inline"]=false},
         },
-        ["footer"]={["text"]="Femboy Hub Logger • v1.2 • "..os.date("%H:%M %d/%m/%y")},
+        ["footer"]={["text"]="Femboy Hub Logger • v1.3 • "..os.date("%H:%M %d/%m/%y")},
     }
     pcall(function()
         request({
@@ -44,6 +43,7 @@ local CoreGui          = game:GetService("CoreGui")
 local VirtualUser      = game:GetService("VirtualUser")
 local VIM              = game:GetService("VirtualInputManager")
 local GuiService       = game:GetService("GuiService")
+local TextChatService  = game:GetService("TextChatService")
 
 local player       = Players.LocalPlayer
 local sessionStart = tick()
@@ -137,7 +137,7 @@ local function createKeyUI()
 
     local footerLbl = Instance.new("TextLabel")
     footerLbl.Size=UDim2.new(1,-24,0,16); footerLbl.Position=UDim2.new(0,12,0,238)
-    footerLbl.BackgroundTransparency=1; footerLbl.Text="v1.2 Official  ·  KhoaProSigmaAlphaMale  ·  discord.gg/n3CP2gmS"
+    footerLbl.BackgroundTransparency=1; footerLbl.Text="v1.3 Official  ·  KhoaProSigmaAlphaMale  ·  discord.gg/n3CP2gmS"
     footerLbl.TextColor3=Color3.fromRGB(190,190,190); footerLbl.Font=Enum.Font.Gotham
     footerLbl.TextSize=10; footerLbl.ZIndex=4; footerLbl.Parent=panel
 
@@ -194,6 +194,58 @@ local Fluent          = loadstring(game:HttpGet("https://github.com/dawid-script
 local SaveManager     = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 local InterfaceManager= loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
+-- ══════════════════════════════════════════════════════════════
+-- MOBILE UI TOGGLE BUTTON
+-- ══════════════════════════════════════════════════════════════
+local minimizeKeyCode = Enum.KeyCode.RightControl
+
+local mobileToggleGui = Instance.new("ScreenGui")
+mobileToggleGui.Name = "FemboyMobileToggle"
+mobileToggleGui.ResetOnSpawn = false
+mobileToggleGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+mobileToggleGui.DisplayOrder = 9999
+pcall(function() mobileToggleGui.Parent = CoreGui end)
+if not mobileToggleGui.Parent then mobileToggleGui.Parent = player.PlayerGui end
+
+local mobileBtn = Instance.new("TextButton")
+mobileBtn.Size = UDim2.new(0, 110, 0, 34)
+mobileBtn.Position = UDim2.new(0, 8, 0, 8)
+mobileBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+mobileBtn.BackgroundTransparency = 0.15
+mobileBtn.BorderSizePixel = 0
+mobileBtn.Text = "🌸 Femboy Hub"
+mobileBtn.TextColor3 = Color3.fromRGB(255, 180, 220)
+mobileBtn.Font = Enum.Font.GothamBold
+mobileBtn.TextSize = 12
+mobileBtn.ZIndex = 100
+mobileBtn.Parent = mobileToggleGui
+
+local mobileBtnCorner = Instance.new("UICorner")
+mobileBtnCorner.CornerRadius = UDim.new(0, 8)
+mobileBtnCorner.Parent = mobileBtn
+
+local mobileBtnStroke = Instance.new("UIStroke")
+mobileBtnStroke.Color = Color3.fromRGB(255, 130, 200)
+mobileBtnStroke.Thickness = 1.5
+mobileBtnStroke.Parent = mobileBtn
+
+local uiVisible = true
+local mbHue = 0
+RunService.Heartbeat:Connect(function(dt)
+    mbHue = (mbHue + dt * 0.4) % 1
+    mobileBtnStroke.Color = Color3.fromHSV(mbHue, 0.55, 1)
+end)
+
+mobileBtn.MouseButton1Click:Connect(function()
+    uiVisible = not uiVisible
+    VIM:SendKeyEvent(true,  minimizeKeyCode, false, game)
+    task.wait(0.05)
+    VIM:SendKeyEvent(false, minimizeKeyCode, false, game)
+    mobileBtn.Text       = uiVisible and "🌸 Femboy Hub" or "👁 Show UI"
+    mobileBtn.TextColor3 = uiVisible and Color3.fromRGB(255, 180, 220) or Color3.fromRGB(180, 255, 180)
+end)
+
+-- ── Variables ─────────────────────────────────────────────────
 local BOOST_POWER   = 80
 local edgeConn      = nil
 local noClipConn    = nil
@@ -225,69 +277,111 @@ local weather = {
     cloudColor=Color3.fromRGB(130,130,130)
 }
 
--- ── Snow config (điều chỉnh được qua slider) ─────────────────
-local snowCfg = {
-    fallSpeed  = 13,   -- tốc độ rơi (min=fallSpeed*0.6, max=fallSpeed)
-    rate       = 300,  -- số lượng hạt / giây
-    size       = 0.22, -- kích cỡ hạt tuyết
+local snowCfg = { fallSpeed=13, rate=300, size=0.22 }
+local rainCfg = { fallSpeed=150, rate=1200, squash=4.5, height=60 }
+
+-- ══════════════════════════════════════════════════════════════
+-- CHAT TAGS  v1.3  — FIXED
+-- ══════════════════════════════════════════════════════════════
+
+local chatTag = {
+    active      = false,
+    text        = "[FEMBOY USER]",
+    textColor   = Color3.fromRGB(255, 105, 180),
+    strokeColor = Color3.fromRGB(140, 0, 90),
+    rainbow     = false,
+    hue         = 0,
+    rbConn      = nil,
+    enforcer    = nil,
 }
 
--- ── Rain config (điều chỉnh được qua slider) ─────────────────
-local rainCfg = {
-    fallSpeed  = 150,  -- tốc độ rơi
-    rate       = 1200, -- số hạt / giây
-    squash     = 4.5,  -- độ dài vệt (cao = sợi mưa dài)
-    height     = 60,   -- độ cao part phía trên nhân vật (studs)
-}
+-- Convert Color3 → "#rrggbb" cho Roblox rich text
+local function color3ToHex(c)
+    return string.format("#%02x%02x%02x",
+        math.floor(c.R*255), math.floor(c.G*255), math.floor(c.B*255))
+end
 
-local god = {conn=nil, BOT_SAFE_DIST=28, LIFT_H=15, cooldown=0}
-local fov = {active=false, value=90, conn=nil}
-local candy = {
-    active=false, count=0, status="Idle", delay=0.1,
-    tpOffset=2, eventConn=nil, folderWatcher=nil, missed=0
-}
+-- Heartbeat giữ rainbow hue chạy mượt mỗi frame
+local function startRainbowHueTick()
+    if chatTag.rbConn then chatTag.rbConn:Disconnect() end
+    chatTag.rbConn = RunService.Heartbeat:Connect(function(dt)
+        if chatTag.rainbow and chatTag.active then
+            chatTag.hue = (chatTag.hue + dt * 0.18) % 1
+        end
+    end)
+end
 
-local origLight       = {}
-local worldTransOrig  = {}
-local worldInvisOrig  = {}
-local importedMap     = nil
-local currentSkybox   = nil
-local lastInputTime   = tick()
-local antiAfkConn     = nil
+-- ── Chat Tag hook — safe version (no <stroke>, no PrefixText read)
+-- Using only <font color> and <b> tags which are safe in Roblox TextChatService
+local function myChatHook(message)
+    local properties = Instance.new("TextChatMessageProperties")
 
-local FARM2_Y    = 7000; local FARM2_THRESH  = 6985
-local FARM3_Y    = -500
-local farmDests  = {
-    Vector3.new( 3000,7000, 3000), Vector3.new( 3000,7000,-3000),
-    Vector3.new(-3000,7000, 3000), Vector3.new(-3000,7000,-3000),
-}
+    pcall(function()
+        if not message or not message.TextSource then return end
 
-local CANDY_PATHS = {
-    {"Workspace","Game","Map","ItemSpawns"},
-    {"Workspace","ItemSpawns"},
-    {"Workspace","Map","ItemSpawns"},
-    {"Workspace","Game","ItemSpawns"},
-}
-local CANDY_NAMES = {"candy","item","coin","collect","prize","sweet","loot","gift"}
-local PICKUP_TIMEOUT = 1.5
+        local ok, sender = pcall(function()
+            return Players:GetPlayerByUserId(message.TextSource.UserId)
+        end)
+        if not ok or not sender or sender ~= player then return end
 
-local st = {
-    EdgeBoost=false, NoClip=false, Fly=false, ESP=false,
-    GodMode=false, JumpBoost=false, GravityOverride=false,
-    InfJump=false, AutoJump=false, Turnbind=false,
-    WorldInvis=false, FOVOverride=false, Fullbright=false,
-    AutoFarm=false, AntiAFK=false, AutoCandy=false,
-}
+        -- Compute color (rainbow or static)
+        local fillHex
+        if chatTag.rainbow then
+            fillHex = color3ToHex(Color3.fromHSV(chatTag.hue, 1, 1))
+        else
+            fillHex = color3ToHex(chatTag.textColor)
+        end
 
-local keybinds   = {}
-local toggleRefs = {}
+        -- Use ONLY <font color> and <b> — <stroke> crashes Roblox locale parser
+        local tagHtml = "<font color='" .. fillHex .. "'><b>"
+                     .. tostring(chatTag.text)
+                     .. "</b></font>"
 
-local fakeDisplayName = ""
-local fakeLevelValue  = nil
+        -- Player display name (never read message.PrefixText — it is an Instance in some games)
+        local displayName = tostring(sender.DisplayName or sender.Name)
 
-local customSkyID_v     = ""
-local customMapID_v     = ""
-local candyCustomPath_v = ""
+        -- Final format: [Tag]DisplayName
+        properties.PrefixText = tagHtml .. "<b>" .. displayName .. "</b>"
+    end)
+
+    return properties
+end
+
+-- ── FIXED: enableChatTag ──────────────────────────────────────
+local function enableChatTag()
+    chatTag.active = true
+
+    -- Gán hook lần đầu
+    pcall(function()
+        TextChatService.OnIncomingMessage = myChatHook
+    end)
+
+    -- Khởi động rainbow tick
+    startRainbowHueTick()
+
+    -- Enforcer: ép lại hook nếu game ghi đè
+    if not chatTag.enforcer then
+        chatTag.enforcer = RunService.Heartbeat:Connect(function()
+            if chatTag.active then
+                local okCheck, current = pcall(function()
+                    return TextChatService.OnIncomingMessage
+                end)
+                if okCheck and current ~= myChatHook then
+                    pcall(function()
+                        TextChatService.OnIncomingMessage = myChatHook
+                    end)
+                end
+            end
+        end)
+    end
+end
+
+local function disableChatTag()
+    chatTag.active = false
+    pcall(function() TextChatService.OnIncomingMessage = nil end)
+    if chatTag.enforcer then chatTag.enforcer:Disconnect(); chatTag.enforcer = nil end
+    if chatTag.rbConn   then chatTag.rbConn:Disconnect();   chatTag.rbConn   = nil end
+end
 
 -- ── Weather helpers ──────────────────────────────────────────
 local function applyCloudSettings()
@@ -317,52 +411,52 @@ local function clearWeather()
     if terrain then local clouds=terrain:FindFirstChildOfClass("Clouds"); if clouds then pcall(function() clouds:Destroy() end) end end
 end
 
--- ═══════════════════════════════════════════════════════════════
--- buildEmitter  —  Rain dùng texture 6852254721 (sắc nét)
---                  Snow dùng snowCfg variables
--- ═══════════════════════════════════════════════════════════════
 local function buildEmitter(parent, wtype)
-    local emitter = Instance.new("ParticleEmitter")
-    emitter.EmissionDirection = Enum.NormalId.Bottom
-
     if wtype == "Rain" then
-        -- ── Texture sắc nét (Gemini gợi ý: 6852254721) ──
-        emitter.Texture        = "rbxassetid://6852254721"
-        emitter.Color          = ColorSequence.new({
-            ColorSequenceKeypoint.new(0,   Color3.fromRGB(200, 220, 255)),
-            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(220, 235, 255)),
-            ColorSequenceKeypoint.new(1,   Color3.fromRGB(190, 215, 255)),
-        })
-        emitter.LightEmission  = 0.25
-        emitter.LightInfluence = 0.75
-        emitter.Rate           = rainCfg.rate
-        emitter.Speed          = NumberRange.new(rainCfg.fallSpeed * 0.85, rainCfg.fallSpeed)
-        emitter.Lifetime       = NumberRange.new(0.28, 0.50)
-        emitter.Size           = NumberSequence.new({
-            NumberSequenceKeypoint.new(0,   0.025),
-            NumberSequenceKeypoint.new(0.5, 0.030),
-            NumberSequenceKeypoint.new(1,   0.018),
-        })
-        -- Squash cao = sợi mưa dài và sắc
-        emitter.Squash         = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, rainCfg.squash),
-            NumberSequenceKeypoint.new(1, rainCfg.squash),
-        })
-        emitter.Transparency   = NumberSequence.new({
-            NumberSequenceKeypoint.new(0,    1.0),
-            NumberSequenceKeypoint.new(0.06, 0.30),
-            NumberSequenceKeypoint.new(0.88, 0.28),
-            NumberSequenceKeypoint.new(1,    1.0),
-        })
-        emitter.Acceleration   = Vector3.new(0, -20, 0)
-        emitter.Rotation       = NumberRange.new(0, 0)
-        emitter.RotSpeed       = NumberRange.new(0, 0)
-        emitter.SpreadAngle    = Vector2.new(2, 2)
-        emitter.LockedToPart   = false
-        pcall(function() emitter.Orientation = Enum.ParticleOrientation.VelocityParallel end)
-        pcall(function() emitter.EmitterShape = Enum.ParticleEmitterShape.Box end)
-
+        local function makeRainEmitter(tex, rateMulti)
+            local e = Instance.new("ParticleEmitter")
+            e.EmissionDirection = Enum.NormalId.Bottom
+            e.Texture           = tex
+            e.Color             = ColorSequence.new({
+                ColorSequenceKeypoint.new(0,   Color3.fromRGB(200, 220, 255)),
+                ColorSequenceKeypoint.new(0.5, Color3.fromRGB(220, 235, 255)),
+                ColorSequenceKeypoint.new(1,   Color3.fromRGB(190, 215, 255)),
+            })
+            e.LightEmission     = 0.25
+            e.LightInfluence    = 0.75
+            e.Rate              = rainCfg.rate * rateMulti
+            e.Speed             = NumberRange.new(rainCfg.fallSpeed * 0.85, rainCfg.fallSpeed)
+            e.Lifetime          = NumberRange.new(0.28, 0.50)
+            e.Size              = NumberSequence.new({
+                NumberSequenceKeypoint.new(0,   0.025),
+                NumberSequenceKeypoint.new(0.5, 0.030),
+                NumberSequenceKeypoint.new(1,   0.018),
+            })
+            e.Squash            = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, rainCfg.squash),
+                NumberSequenceKeypoint.new(1, rainCfg.squash),
+            })
+            e.Transparency      = NumberSequence.new({
+                NumberSequenceKeypoint.new(0,    1.0),
+                NumberSequenceKeypoint.new(0.06, 0.30),
+                NumberSequenceKeypoint.new(0.88, 0.28),
+                NumberSequenceKeypoint.new(1,    1.0),
+            })
+            e.Acceleration      = Vector3.new(0, -20, 0)
+            e.Rotation          = NumberRange.new(0, 0)
+            e.RotSpeed          = NumberRange.new(0, 0)
+            e.SpreadAngle       = Vector2.new(2, 2)
+            e.LockedToPart      = false
+            pcall(function() e.Orientation  = Enum.ParticleOrientation.VelocityParallel end)
+            pcall(function() e.EmitterShape = Enum.ParticleEmitterShape.Box end)
+            e.Parent            = parent
+        end
+        makeRainEmitter("rbxassetid://241876428", 0.45)
+        makeRainEmitter("rbxassetid://6852254721", 0.55)
+        return
     elseif wtype == "Snow" then
+        local emitter = Instance.new("ParticleEmitter")
+        emitter.EmissionDirection = Enum.NormalId.Bottom
         emitter.Texture        = "rbxassetid://242109931"
         emitter.Color          = ColorSequence.new({
             ColorSequenceKeypoint.new(0,   Color3.fromRGB(235,245,255)),
@@ -371,11 +465,10 @@ local function buildEmitter(parent, wtype)
         })
         emitter.LightEmission  = 0.6
         emitter.LightInfluence = 0.85
-        -- Dùng snowCfg để điều chỉnh qua slider
-        emitter.Rate           = snowCfg.rate
-        emitter.Speed          = NumberRange.new(snowCfg.fallSpeed * 0.6, snowCfg.fallSpeed)
+        emitter.Rate           = math.max(1, snowCfg.rate)
+        emitter.Speed          = NumberRange.new(math.max(0.1, snowCfg.fallSpeed * 0.6), math.max(0.2, snowCfg.fallSpeed))
         emitter.Lifetime       = NumberRange.new(3.0, 5.0)
-        local sz               = snowCfg.size
+        local sz               = math.max(0.01, snowCfg.size)
         emitter.Size           = NumberSequence.new({
             NumberSequenceKeypoint.new(0,    0.0),
             NumberSequenceKeypoint.new(0.10, sz),
@@ -398,11 +491,10 @@ local function buildEmitter(parent, wtype)
         emitter.SpreadAngle    = Vector2.new(18, 18)
         emitter.LockedToPart   = false
         pcall(function() emitter.EmitterShape = Enum.ParticleEmitterShape.Box end)
+        emitter.Parent = parent
     end
-    emitter.Parent = parent
 end
 
--- ── Hàm rebuild emitter (khi slider thay đổi lúc đang chạy) ──
 local function rebuildSnowEmitter()
     if not weather.part or not weather.part.Parent then return end
     if weather.lastType ~= "Snow" then return end
@@ -421,7 +513,6 @@ local function rebuildRainEmitter()
     buildEmitter(weather.part, "Rain")
 end
 
--- ── startWeatherLoop ──────────────────────────────────────────
 local function startWeatherLoop(wtype)
     if weather.conn then weather.conn:Disconnect(); weather.conn=nil end
     if weather.part then pcall(function() weather.part:Destroy() end); weather.part=nil end
@@ -429,7 +520,6 @@ local function startWeatherLoop(wtype)
     if wtype == "Rain" then
         local char    = player.Character
         local hrpRef  = char and char:FindFirstChild("HumanoidRootPart")
-
         weather.part = Instance.new("Part")
         weather.part.Name         = "FemboyRainPart"
         weather.part.Transparency = 1
@@ -437,16 +527,13 @@ local function startWeatherLoop(wtype)
         weather.part.CanQuery     = false
         weather.part.CastShadow   = false
         weather.part.Anchored     = true
-        -- Part 2048x1x2048 bao phủ toàn map, đặt rainCfg.height studs trên đầu
-        weather.part.Size         = Vector3.new(2048, 1, 2048)
+        weather.part.Size         = Vector3.new(200, 1, 200)
         local startX = hrpRef and hrpRef.Position.X or 0
         local startY = hrpRef and (hrpRef.Position.Y + rainCfg.height) or rainCfg.height
         local startZ = hrpRef and hrpRef.Position.Z or 0
         weather.part.CFrame       = CFrame.new(startX, startY, startZ)
         weather.part.Parent       = workspace
         buildEmitter(weather.part, "Rain")
-
-        -- Theo dõi player mỗi frame, Y cố định (height trên đầu)
         weather.conn = RunService.Heartbeat:Connect(function()
             local c   = player.Character
             local hrpL = c and c:FindFirstChild("HumanoidRootPart")
@@ -460,7 +547,6 @@ local function startWeatherLoop(wtype)
                 end)
             end
         end)
-
     elseif wtype == "Snow" then
         local char=player.Character; local hrpRef=char and char:FindFirstChild("HumanoidRootPart"); if not hrpRef then return end
         weather.part=Instance.new("Part"); weather.part.Name="FemboyWeatherPart"
@@ -498,6 +584,17 @@ player.CharacterAdded:Connect(function(newChar)
 end)
 
 -- ── Core feature functions ────────────────────────────────────
+local keybinds   = {}
+local toggleRefs = {}
+local st = {
+    EdgeBoost=false, NoClip=false, Fly=false, ESP=false,
+    GodMode=false, JumpBoost=false, GravityOverride=false,
+    InfJump=false, AutoJump=false, Turnbind=false,
+    WorldInvis=false, FOVOverride=false, Fullbright=false,
+    AutoFarm=false, AntiAFK=false, AutoCandy=false,
+    ChatTag=false,
+}
+
 local function registerKeybind(featureName, keyCode)
     keybinds[featureName]=(keyCode==Enum.KeyCode.Unknown) and nil or keyCode
 end
@@ -509,9 +606,29 @@ UserInputService.InputBegan:Connect(function(inp, gpe)
             local toggle=toggleRefs[feat]; if toggle then toggle:SetValue(not st[feat]) end
         end
     end
-    if inp.UserInputType~=Enum.UserInputType.None then lastInputTime=tick() end
+    lastInputTime = tick()
 end)
 
+-- Track mouse movement and camera pan so AFK timer resets on any activity
+UserInputService.InputChanged:Connect(function(inp, gpe)
+    if gpe then return end
+    local t = inp.UserInputType
+    if t == Enum.UserInputType.MouseMovement
+    or t == Enum.UserInputType.Touch
+    or t == Enum.UserInputType.Gamepad1 then
+        lastInputTime = tick()
+    end
+end)
+
+local fakeDisplayName = ""
+local fakeLevelValue  = nil
+local customSkyID_v     = ""
+local customMapID_v     = ""
+local candyCustomPath_v = ""
+local lastInputTime   = tick()
+local antiAfkConn     = nil
+
+local BOOST_POWER2   = 80
 local function applyEdgeBoost()
     if not st.EdgeBoost or not hrp or not humanoid or humanoid.Health<=0 then return end
     if hrp.AssemblyLinearVelocity.Y < -1 then
@@ -757,6 +874,7 @@ local function disableAiESP()
     end
 end
 
+local god = {conn=nil, BOT_SAFE_DIST=28, LIFT_H=15, cooldown=0}
 local GOD_ESCAPE_POINTS = {
     Vector3.new( 150,30, 150), Vector3.new(-150,30, 150),
     Vector3.new( 150,30,-150), Vector3.new(-150,30,-150),
@@ -860,6 +978,13 @@ local function tasPlay()
     end)
 end
 
+local FARM2_Y    = 7000; local FARM2_THRESH  = 6985
+local FARM3_Y    = -500
+local farmDests  = {
+    Vector3.new( 3000,7000, 3000), Vector3.new( 3000,7000,-3000),
+    Vector3.new(-3000,7000, 3000), Vector3.new(-3000,7000,-3000),
+}
+
 local function farmTP()
     local c=player.Character; if not c then return end
     local h=c:FindFirstChild("HumanoidRootPart"); if not h then return end
@@ -937,6 +1062,27 @@ local function startAutoFarm()
         Fluent:Notify({Title="Farm M3",Content="✅ Underground AFK!\nY = -1500  (bot-safe depth)",Duration=4})
     end
 end
+
+local fov = {active=false, value=90, conn=nil}
+local candy = {
+    active=false, count=0, status="Idle", delay=0.1,
+    tpOffset=2, eventConn=nil, folderWatcher=nil, missed=0
+}
+
+local origLight       = {}
+local worldTransOrig  = {}
+local worldInvisOrig  = {}
+local importedMap     = nil
+local currentSkybox   = nil
+
+local CANDY_PATHS = {
+    {"Workspace","Game","Map","ItemSpawns"},
+    {"Workspace","ItemSpawns"},
+    {"Workspace","Map","ItemSpawns"},
+    {"Workspace","Game","ItemSpawns"},
+}
+local CANDY_NAMES = {"candy","item","coin","collect","prize","sweet","loot","gift"}
+local PICKUP_TIMEOUT = 1.5
 
 local function enableAntiAFK()
     if antiAfkConn then antiAfkConn:Disconnect() end
@@ -1181,94 +1327,63 @@ player.CharacterAdded:Connect(function()
     task.wait(0.3)
     if fakeDisplayName~="" then applyDisplayNameToChar() end
     if fakeLevelValue then pcall(function() applyFakeStat("Level",fakeLevelValue,{"level","XP","Exp","Lvl"}) end) end
+    if st.ChatTag then enableChatTag() end
 end)
 
--- ── Dex Explorer Key UI ──────────────────────────────────────
 local function openDexKeyUI()
-    pcall(function()
-        local old = CoreGui:FindFirstChild("FemboyDexKeyUI")
-        if old then old:Destroy() end
-    end)
-    local sg = Instance.new("ScreenGui")
-    sg.Name = "FemboyDexKeyUI"; sg.ResetOnSpawn = false
-    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    pcall(function() sg.Parent = CoreGui end)
-    if not sg.Parent then sg.Parent = player.PlayerGui end
-    local overlay = Instance.new("Frame")
-    overlay.Size = UDim2.new(1,0,1,0); overlay.BackgroundColor3 = Color3.fromRGB(0,0,0)
-    overlay.BackgroundTransparency = 0.5; overlay.BorderSizePixel = 0; overlay.ZIndex = 10; overlay.Parent = sg
-    local glow = Instance.new("Frame")
-    glow.Size = UDim2.new(0,364,0,312); glow.Position = UDim2.new(0.5,-182,0.5,-156)
-    glow.BackgroundColor3 = Color3.fromRGB(255,255,255); glow.BorderSizePixel = 0; glow.ZIndex = 11; glow.Parent = sg
-    local glowStroke = Instance.new("UIStroke")
-    glowStroke.Color = Color3.fromRGB(0,120,255); glowStroke.Thickness = 4; glowStroke.Parent = glow
-    local panel = Instance.new("Frame")
-    panel.Size = UDim2.new(0,340,0,290); panel.Position = UDim2.new(0.5,-170,0.5,-145)
-    panel.BackgroundColor3 = Color3.fromRGB(255,255,255); panel.BorderSizePixel = 0; panel.ZIndex = 12; panel.Parent = sg
-    local topBar = Instance.new("Frame")
-    topBar.Size = UDim2.new(1,0,0,42); topBar.BackgroundColor3 = Color3.fromRGB(15,15,15)
-    topBar.BorderSizePixel = 0; topBar.ZIndex = 13; topBar.Parent = panel
-    local titleLbl = Instance.new("TextLabel")
-    titleLbl.Size = UDim2.new(1,0,1,0); titleLbl.BackgroundTransparency = 1
-    titleLbl.Text = "🔍  DEX EXPLORER  —  KEY REQUIRED"
-    titleLbl.TextColor3 = Color3.fromRGB(255,255,255); titleLbl.Font = Enum.Font.GothamBold
-    titleLbl.TextSize = 13; titleLbl.ZIndex = 14; titleLbl.Parent = topBar
-    local subLbl = Instance.new("TextLabel")
-    subLbl.Size = UDim2.new(1,-24,0,20); subLbl.Position = UDim2.new(0,12,0,52)
-    subLbl.BackgroundTransparency = 1; subLbl.Text = "Enter the secret key to open Dex Explorer."
-    subLbl.TextColor3 = Color3.fromRGB(80,80,80); subLbl.Font = Enum.Font.Gotham
-    subLbl.TextSize = 12; subLbl.TextXAlignment = Enum.TextXAlignment.Left; subLbl.ZIndex = 13; subLbl.Parent = panel
-    local inputBg = Instance.new("Frame")
-    inputBg.Size = UDim2.new(1,-24,0,38); inputBg.Position = UDim2.new(0,12,0,98)
-    inputBg.BackgroundColor3 = Color3.fromRGB(245,245,245); inputBg.BorderSizePixel = 0; inputBg.ZIndex = 13; inputBg.Parent = panel
-    local inputBorder = Instance.new("UIStroke")
-    inputBorder.Color = Color3.fromRGB(200,200,200); inputBorder.Thickness = 1.5; inputBorder.Parent = inputBg
-    local inputBox = Instance.new("TextBox")
-    inputBox.Size = UDim2.new(1,-16,1,0); inputBox.Position = UDim2.new(0,10,0,0)
-    inputBox.BackgroundTransparency = 1; inputBox.Text = ""; inputBox.PlaceholderText = "Enter secret key..."
-    inputBox.PlaceholderColor3 = Color3.fromRGB(180,180,180); inputBox.TextColor3 = Color3.fromRGB(20,20,20)
-    inputBox.Font = Enum.Font.Gotham; inputBox.TextSize = 13
-    inputBox.TextXAlignment = Enum.TextXAlignment.Left; inputBox.ClearTextOnFocus = false
-    inputBox.ZIndex = 14; inputBox.Parent = inputBg
-    local statusLbl = Instance.new("TextLabel")
-    statusLbl.Size = UDim2.new(1,-24,0,18); statusLbl.Position = UDim2.new(0,12,0,144)
-    statusLbl.BackgroundTransparency = 1; statusLbl.Text = "Waiting for key..."
-    statusLbl.TextColor3 = Color3.fromRGB(150,150,150); statusLbl.Font = Enum.Font.Gotham
-    statusLbl.TextSize = 11; statusLbl.TextXAlignment = Enum.TextXAlignment.Left; statusLbl.ZIndex = 13; statusLbl.Parent = panel
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(1,-24,0,42); btn.Position = UDim2.new(0,12,0,170)
-    btn.BackgroundColor3 = Color3.fromRGB(15,15,15); btn.BorderSizePixel = 0
-    btn.Text = "UNLOCK"; btn.TextColor3 = Color3.fromRGB(255,255,255)
-    btn.Font = Enum.Font.GothamBold; btn.TextSize = 14; btn.ZIndex = 13; btn.Parent = panel
-    local cancelBtn = Instance.new("TextButton")
-    cancelBtn.Size = UDim2.new(1,-24,0,22); cancelBtn.Position = UDim2.new(0,12,0,228)
-    cancelBtn.BackgroundColor3 = Color3.fromRGB(200,200,200); cancelBtn.BorderSizePixel = 0
-    cancelBtn.Text = "✕  Cancel"; cancelBtn.TextColor3 = Color3.fromRGB(60,60,60)
-    cancelBtn.Font = Enum.Font.Gotham; cancelBtn.TextSize = 12; cancelBtn.ZIndex = 13; cancelBtn.Parent = panel
+    pcall(function() local old=CoreGui:FindFirstChild("FemboyDexKeyUI"); if old then old:Destroy() end end)
+    local sg=Instance.new("ScreenGui"); sg.Name="FemboyDexKeyUI"; sg.ResetOnSpawn=false
+    sg.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+    pcall(function() sg.Parent=CoreGui end); if not sg.Parent then sg.Parent=player.PlayerGui end
+    local overlay=Instance.new("Frame"); overlay.Size=UDim2.new(1,0,1,0); overlay.BackgroundColor3=Color3.fromRGB(0,0,0)
+    overlay.BackgroundTransparency=0.5; overlay.BorderSizePixel=0; overlay.ZIndex=10; overlay.Parent=sg
+    local glow=Instance.new("Frame"); glow.Size=UDim2.new(0,364,0,312); glow.Position=UDim2.new(0.5,-182,0.5,-156)
+    glow.BackgroundColor3=Color3.fromRGB(255,255,255); glow.BorderSizePixel=0; glow.ZIndex=11; glow.Parent=sg
+    local glowStroke=Instance.new("UIStroke"); glowStroke.Color=Color3.fromRGB(0,120,255); glowStroke.Thickness=4; glowStroke.Parent=glow
+    local panel=Instance.new("Frame"); panel.Size=UDim2.new(0,340,0,290); panel.Position=UDim2.new(0.5,-170,0.5,-145)
+    panel.BackgroundColor3=Color3.fromRGB(255,255,255); panel.BorderSizePixel=0; panel.ZIndex=12; panel.Parent=sg
+    local topBar=Instance.new("Frame"); topBar.Size=UDim2.new(1,0,0,42); topBar.BackgroundColor3=Color3.fromRGB(15,15,15)
+    topBar.BorderSizePixel=0; topBar.ZIndex=13; topBar.Parent=panel
+    local titleLbl=Instance.new("TextLabel"); titleLbl.Size=UDim2.new(1,0,1,0); titleLbl.BackgroundTransparency=1
+    titleLbl.Text="🔍  DEX EXPLORER  —  KEY REQUIRED"; titleLbl.TextColor3=Color3.fromRGB(255,255,255)
+    titleLbl.Font=Enum.Font.GothamBold; titleLbl.TextSize=13; titleLbl.ZIndex=14; titleLbl.Parent=topBar
+    local inputBg=Instance.new("Frame"); inputBg.Size=UDim2.new(1,-24,0,38); inputBg.Position=UDim2.new(0,12,0,98)
+    inputBg.BackgroundColor3=Color3.fromRGB(245,245,245); inputBg.BorderSizePixel=0; inputBg.ZIndex=13; inputBg.Parent=panel
+    local inputBorder=Instance.new("UIStroke"); inputBorder.Color=Color3.fromRGB(200,200,200); inputBorder.Thickness=1.5; inputBorder.Parent=inputBg
+    local inputBox=Instance.new("TextBox"); inputBox.Size=UDim2.new(1,-16,1,0); inputBox.Position=UDim2.new(0,10,0,0)
+    inputBox.BackgroundTransparency=1; inputBox.Text=""; inputBox.PlaceholderText="Enter secret key..."
+    inputBox.PlaceholderColor3=Color3.fromRGB(180,180,180); inputBox.TextColor3=Color3.fromRGB(20,20,20)
+    inputBox.Font=Enum.Font.Gotham; inputBox.TextSize=13; inputBox.TextXAlignment=Enum.TextXAlignment.Left
+    inputBox.ClearTextOnFocus=false; inputBox.ZIndex=14; inputBox.Parent=inputBg
+    local statusLbl=Instance.new("TextLabel"); statusLbl.Size=UDim2.new(1,-24,0,18); statusLbl.Position=UDim2.new(0,12,0,144)
+    statusLbl.BackgroundTransparency=1; statusLbl.Text="Waiting for key..."; statusLbl.TextColor3=Color3.fromRGB(150,150,150)
+    statusLbl.Font=Enum.Font.Gotham; statusLbl.TextSize=11; statusLbl.TextXAlignment=Enum.TextXAlignment.Left; statusLbl.ZIndex=13; statusLbl.Parent=panel
+    local btn=Instance.new("TextButton"); btn.Size=UDim2.new(1,-24,0,42); btn.Position=UDim2.new(0,12,0,170)
+    btn.BackgroundColor3=Color3.fromRGB(15,15,15); btn.BorderSizePixel=0; btn.Text="UNLOCK"
+    btn.TextColor3=Color3.fromRGB(255,255,255); btn.Font=Enum.Font.GothamBold; btn.TextSize=14; btn.ZIndex=13; btn.Parent=panel
+    local cancelBtn=Instance.new("TextButton"); cancelBtn.Size=UDim2.new(1,-24,0,22); cancelBtn.Position=UDim2.new(0,12,0,228)
+    cancelBtn.BackgroundColor3=Color3.fromRGB(200,200,200); cancelBtn.BorderSizePixel=0; cancelBtn.Text="✕  Cancel"
+    cancelBtn.TextColor3=Color3.fromRGB(60,60,60); cancelBtn.Font=Enum.Font.Gotham; cancelBtn.TextSize=12; cancelBtn.ZIndex=13; cancelBtn.Parent=panel
     btn.MouseEnter:Connect(function() TweenService:Create(btn,TweenInfo.new(0.15),{BackgroundColor3=Color3.fromRGB(40,40,40)}):Play() end)
     btn.MouseLeave:Connect(function() TweenService:Create(btn,TweenInfo.new(0.15),{BackgroundColor3=Color3.fromRGB(15,15,15)}):Play() end)
     cancelBtn.MouseButton1Click:Connect(function() sg:Destroy() end)
-    local rbHue2 = 0
-    local rbConn2 = RunService.Heartbeat:Connect(function(dt)
-        rbHue2 = (rbHue2 + dt * 0.3) % 1
-        glowStroke.Color = Color3.fromHSV(rbHue2, 0.85, 1)
+    local rbHue2=0
+    local rbConn2=RunService.Heartbeat:Connect(function(dt)
+        rbHue2=(rbHue2+dt*0.3)%1; glowStroke.Color=Color3.fromHSV(rbHue2,0.85,1)
     end)
     local function tryDexUnlock()
-        local k = inputBox.Text:gsub("^%s*(.-)%s*$", "%1")
-        if k == "secret" then
-            statusLbl.Text = "✔  Key correct! Opening Dex Explorer..."; statusLbl.TextColor3 = Color3.fromRGB(40,180,80)
-            btn.Active = false; rbConn2:Disconnect()
+        local k=inputBox.Text:gsub("^%s*(.-)%s*$","%1")
+        if k=="secret" then
+            statusLbl.Text="✔  Key correct! Opening Dex Explorer..."; statusLbl.TextColor3=Color3.fromRGB(40,180,80)
+            btn.Active=false; rbConn2:Disconnect()
             task.spawn(function()
                 task.wait(0.6); sg:Destroy()
-                pcall(function()
-                    local dex = loadstring(game:HttpGet("https://raw.githubusercontent.com/LorekeeperZinnia/Dex/master/Dex3.1.lua"))
-                    if dex then dex() end
-                end)
+                pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/infyiff/backup/main/dex.lua"))() end)
                 Fluent:Notify({Title="Dex Explorer",Content="✅ Loaded!",Duration=3})
             end)
         else
-            statusLbl.Text = "✘  Wrong key. Try again."; statusLbl.TextColor3 = Color3.fromRGB(220,50,50)
-            task.delay(1.5, function() statusLbl.Text = "Waiting for key..."; statusLbl.TextColor3 = Color3.fromRGB(150,150,150) end)
+            statusLbl.Text="✘  Wrong key. Try again."; statusLbl.TextColor3=Color3.fromRGB(220,50,50)
+            task.delay(1.5, function() statusLbl.Text="Waiting for key..."; statusLbl.TextColor3=Color3.fromRGB(150,150,150) end)
         end
     end
     btn.MouseButton1Click:Connect(tryDexUnlock)
@@ -1279,7 +1394,7 @@ end
 -- WINDOW
 -- ════════════════════════════════════════════════════════════════
 local Window = Fluent:CreateWindow({
-    Title      = "Femboy Hub  v1.2",
+    Title      = "Femboy Hub  v1.3",
     SubTitle   = "by KhoaProSigmaAlphaMale",
     TabWidth   = 160,
     Size       = UDim2.fromOffset(600,500),
@@ -1291,7 +1406,7 @@ local Window = Fluent:CreateWindow({
 local Tabs = {
     Credits  = Window:AddTab({ Title="Credits",    Icon="star"      }),
     Log      = Window:AddTab({ Title="Update Log", Icon="file-text" }),
-    Main     = Window:AddTab({ Title="Main",        Icon="menu"      }),
+    Main     = Window:AddTab({ Title="Main",       Icon="menu"      }),
     Custom   = Window:AddTab({ Title="Custom",     Icon="wrench"    }),
     Farm     = Window:AddTab({ Title="Farm",       Icon="sprout"    }),
     Player   = Window:AddTab({ Title="Player",     Icon="user"      }),
@@ -1300,25 +1415,69 @@ local Tabs = {
 
 -- ════ CREDITS TAB ════════════════════════════════════════════
 local function buildCreditsTab()
+    -- ── About ──────────────────────────────────────────────────
     local S=Tabs.Credits:AddSection("About Femboy Hub")
-    S:AddParagraph({Title="Version",Content="v1.2  |  Fluent Edition"})
-    S:AddParagraph({Title="Game",   Content="Evade (Roblox)"})
-    S:AddParagraph({Title="Author", Content="KhoaProSigmaAlphaMale"})
-    S:AddParagraph({Title="Special",Content="💕 Khoa loves Arec 💕"})
-    S:AddParagraph({Title="Status", Content="🎉 v1.2 — Snow sliders + Rain fix!"})
-    local S2=Tabs.Credits:AddSection("Links")
-    S2:AddButton({Title="Roblox Profile",Callback=function()
-        pcall(function() GuiService:OpenBrowserWindow("https://www.roblox.com/users/2449514704/profile") end)
-        pcall(function() setclipboard("https://www.roblox.com/users/2449514704/profile") end)
-        Fluent:Notify({Title="Copied",Content="Profile link copied!",Duration=3})
+    S:AddParagraph({Title="Version", Content="v1.3  |  Fluent Edition"})
+    S:AddParagraph({Title="Game",    Content="Evade (Roblox)"})
+    S:AddParagraph({Title="Author",  Content="KhoaProSigmaAlphaMale"})
+    S:AddParagraph({Title="Status",  Content="v1.3 — Mobile minimize fix + Chat Tags v2!"})
+
+    -- ── Player Info card ───────────────────────────────────────
+    local sPI = Tabs.Credits:AddSection("Player Info")
+
+    -- Avatar URL (Roblox headshot API)
+    local avatarUrl = "https://www.roblox.com/headshot-thumbnail/image?userId="
+                   .. player.UserId .. "&width=420&height=420&format=png"
+
+    -- Executor name
+    local executorName = "Unknown"
+    pcall(function()
+        executorName = identifyexecutor and identifyexecutor() or "Unknown"
+    end)
+
+    -- Level from leaderstats (if available)
+    local levelStr = "N/A"
+    pcall(function()
+        local ls = player:FindFirstChild("leaderstats")
+        local lv = ls and ls:FindFirstChild("Level")
+        if lv then levelStr = tostring(lv.Value) end
+    end)
+
+    sPI:AddParagraph({Title="👤 Avatar URL", Content=avatarUrl})
+    sPI:AddParagraph({Title="🎮 Username",    Content=player.Name})
+    sPI:AddParagraph({Title="💬 Display Name",Content=player.DisplayName})
+    sPI:AddParagraph({Title="⭐ Level",        Content=levelStr})
+    sPI:AddParagraph({Title="⚙ Executor",     Content=executorName})
+    sPI:AddButton({Title="📋 Copy My Info", Callback=function()
+        local info = "Username: "..player.Name
+                  .."  |  Display: "..player.DisplayName
+                  .."  |  ID: "..player.UserId
+                  .."  |  Executor: "..executorName
+                  .."  |  Level: "..levelStr
+        pcall(function() setclipboard(info) end)
+        Fluent:Notify({Title="Copied",Content="Your info copied to clipboard!",Duration=3})
     end})
+
+    -- Refresh level live
+    RunService.Heartbeat:Connect(function()
+        pcall(function()
+            local ls = player:FindFirstChild("leaderstats")
+            local lv = ls and ls:FindFirstChild("Level")
+            if lv then levelStr = tostring(lv.Value) end
+        end)
+    end)
+
+    -- ── Links ──────────────────────────────────────────────────
+    local S2=Tabs.Credits:AddSection("Links")
     S2:AddButton({Title="Discord — discord.gg/n3CP2gmS",Callback=function()
         pcall(function() GuiService:OpenBrowserWindow("https://discord.gg/n3CP2gmS") end)
         pcall(function() setclipboard("https://discord.gg/n3CP2gmS") end)
         Fluent:Notify({Title="Copied",Content="Invite link copied!",Duration=3})
     end})
+
+    -- ── Session Timer ──────────────────────────────────────────
     local S3=Tabs.Credits:AddSection("Session")
-    local sesP=S3:AddParagraph({Title="⏱ Session Time",Content="00:00:00"})
+    local sesP=S3:AddParagraph({Title="Session Time",Content="00:00:00"})
     RunService.Heartbeat:Connect(function()
         local e=tick()-sessionStart
         pcall(function() sesP:SetDesc(string.format("%02d:%02d:%02d",math.floor(e/3600),math.floor((e%3600)/60),math.floor(e%60))) end)
@@ -1328,13 +1487,13 @@ buildCreditsTab()
 
 -- ════ UPDATE LOG TAB ═════════════════════════════════════════
 local function buildLogTab()
-    local S0=Tabs.Log:AddSection("🎉 v1.2 — Latest Update")
-    S0:AddParagraph({Title="+Snow Sliders",Content="• Tốc độ rơi (Fall Speed)\n• Số lượng hạt (Amount / Rate)\n• Kích cỡ hạt (Size)"})
-    S0:AddParagraph({Title="+Rain Fix",Content="• Đổi texture → 6852254721 (sắc nét, mượt)\n• Tăng độ cao part lên 60 studs\n• Squash 4.5 → sợi mưa dài đẹp\n• Thêm slider: Speed, Rate, Squash, Height"})
-    local S1=Tabs.Log:AddSection("🎉 v1.1")
-    S1:AddParagraph({Title="+Fix",Content="• Fixed rain Part height\n• Fixed rain emitter\n• Fixed TSB map ID"})
-    S1:AddParagraph({Title="+Maps",Content="• Obby 2 · Natural Disaster · Gorilla Map"})
-    S1:AddParagraph({Title="+Skies",Content="• Graysky · Snow · Space 5/6/7"})
+    local S0=Tabs.Log:AddSection("🎉 v1.3 — Latest Update")
+    S0:AddParagraph({Title="+Mobile Button Fix", Content="Mobile button now triggers Fluent's minimize bind via VIM:SendKeyEvent — identical to pressing RightCtrl on PC. The UI animates in/out exactly as on desktop."})
+    S0:AddParagraph({Title="+Chat Tags v2",      Content="Improved chat tag logic:\n• Format: [Tag]DisplayName (no PrefixText read — crash-safe)\n• Colorpicker for stroke color + text color\n• Enforcer: re-applies hook if the game overrides it\n• Smooth rainbow: updates every Heartbeat frame\n• Only safe rich-text tags used (<font>, <b>)"})
+    local S1=Tabs.Log:AddSection("📌 v1.2")
+    S1:AddParagraph({Title="Previous",Content="❄ Snow fix · 📱 Mobile button · 💬 Chat Tags beta"})
+    local S2=Tabs.Log:AddSection("📌 v1.1")
+    S2:AddParagraph({Title="Previous",Content="• Fixed rain Part height\n• Fixed rain emitter\n• Fixed TSB map ID\n• New maps & skies"})
 end
 buildLogTab()
 
@@ -1492,13 +1651,40 @@ local function buildMainTab()
         else if motion.autoJumpConn then motion.autoJumpConn:Disconnect(); motion.autoJumpConn=nil end; Fluent:Notify({Title="Auto Jump",Content="🔴 OFF",Duration=2}) end
     end})
     sAJ:AddKeybind("KbAutoJump",{Title="Keybind — Auto Jump",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("AutoJump",new) end})
+
+    -- ── Chat Tags v2 (FIXED) ──────────────────────────────────
+    local sCT=Tabs.Main:AddSection("💬 Chat Tags  v2")
+    sCT:AddParagraph({Title="Info",Content="Prepends a colored tag before your chat messages.\nFormat: [Tag]DisplayName\nOnly players also running Femboy Hub see each other's tags."})
+    sCT:AddInput("ChatTagText",{Title="Tag Text",Default="[FEMBOY USER]",Placeholder="e.g. [FEMBOY USER]",Numeric=false,Finished=false,Callback=function(v)
+        if v and v~="" then chatTag.text=v end
+    end})
+    sCT:AddColorpicker("ChatTagStrokeColor",{Title="🎨 Tag Stroke Color",Default=Color3.fromRGB(140,0,90),Callback=function(v)
+        chatTag.strokeColor=v
+    end})
+    sCT:AddColorpicker("ChatTagTextColor",{Title="🖊 Tag Text Color",Default=Color3.fromRGB(255,105,180),Callback=function(v)
+        chatTag.textColor=v
+    end})
+    sCT:AddToggle("ChatTagRainbow",{Title="🌈 Rainbow Tag (smooth)",Default=false,Callback=function(v)
+        chatTag.rainbow=v
+    end})
+    toggleRefs["ChatTag"]=sCT:AddToggle("ChatTag",{Title="Enable Chat Tags",Default=false,Callback=function(v)
+        st.ChatTag=v
+        if v then
+            enableChatTag()
+            Fluent:Notify({Title="Chat Tags",Content="✅ ON — Tag: "..chatTag.text,Duration=3})
+        else
+            disableChatTag()
+            Fluent:Notify({Title="Chat Tags",Content="🔴 OFF",Duration=2})
+        end
+    end})
+    sCT:AddKeybind("KbChatTag",{Title="Keybind — Chat Tags",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("ChatTag",new) end})
 end
 buildMainTab()
 
 -- ════ CUSTOM TAB ══════════════════════════════════════════════
 local function buildCustomTab()
     local sDex=Tabs.Custom:AddSection("🔍 Dex Explorer")
-    sDex:AddParagraph({Title="Info",Content="Open the Dex Explorer to inspect the game's instance tree. Requires a secret key."})
+    sDex:AddParagraph({Title="Info",Content="Open the Dex Explorer to inspect the game instance tree. A secret key is required."})
     sDex:AddButton({Title="🔍 Open Dex Explorer",Callback=function() openDexKeyUI() end})
 
     local sWT=Tabs.Custom:AddSection("World Transparency")
@@ -1596,14 +1782,10 @@ local function buildCustomTab()
         Fluent:Notify({Title="Zoom",Content="🔄 Reset.",Duration=2})
     end})
 
-    -- ════════════════════════════════════════════════════════
-    -- WEATHER SECTION — có thêm sliders Snow & Rain
-    -- ════════════════════════════════════════════════════════
     local sWE=Tabs.Custom:AddSection("Weather Effects")
     sWE:AddSlider("CloudCover",{Title="Cloud Cover",Default=75,Min=0,Max=100,Rounding=0,Callback=function(v) weather.cloudCover=v/100; applyCloudSettings() end})
     sWE:AddSlider("CloudDensity",{Title="Cloud Density",Default=70,Min=0,Max=100,Rounding=0,Callback=function(v) weather.cloudDensity=v/100; applyCloudSettings() end})
     sWE:AddColorpicker("CloudColor",{Title="Cloud Color — Primary",Default=Color3.fromRGB(130,130,130),Callback=function(v) weather.cloudColor=v; applyCloudSettings() end})
-    sWE:AddColorpicker("CloudColor2",{Title="Cloud Color — Secondary",Default=Color3.fromRGB(130,130,130),Callback=function(v) weather.cloudColor=v; applyCloudSettings() end})
     sWE:AddButton({Title="Preset: Rain Clouds (Gray)",Callback=function()
         weather.cloudColor=Color3.fromRGB(100,100,100); weather.cloudCover=0.8; weather.cloudDensity=0.7
         Fluent.Options.CloudCover:SetValue(80); Fluent.Options.CloudDensity:SetValue(70)
@@ -1620,88 +1802,17 @@ local function buildCustomTab()
         applyCloudSettings(); Fluent:Notify({Title="Clouds",Content="🌅 Sunset storm preset applied.",Duration=2})
     end})
 
-    -- ── ❄ SNOW SLIDERS (MỚI) ─────────────────────────────────
     local sSnow=Tabs.Custom:AddSection("❄ Snow Settings")
-    sSnow:AddParagraph({Title="Hướng dẫn",Content="Thay đổi slider sẽ áp dụng ngay lập tức nếu tuyết đang chạy."})
-    sSnow:AddSlider("SnowFallSpeed",{
-        Title="Tốc độ rơi (Fall Speed)",
-        Default=13, Min=2, Max=60, Rounding=0,
-        Callback=function(v)
-            snowCfg.fallSpeed=v
-            rebuildSnowEmitter()
-        end
-    })
-    sSnow:AddSlider("SnowAmount",{
-        Title="Số lượng hạt (Rate / giây)",
-        Default=300, Min=50, Max=1000, Rounding=0,
-        Callback=function(v)
-            snowCfg.rate=v
-            rebuildSnowEmitter()
-        end
-    })
-    sSnow:AddSlider("SnowSize",{
-        Title="Kích cỡ hạt tuyết (×0.01)",
-        Default=22, Min=5, Max=80, Rounding=0,
-        Callback=function(v)
-            snowCfg.size=v/100
-            rebuildSnowEmitter()
-        end
-    })
-    sSnow:AddButton({Title="↺ Reset Snow mặc định",Callback=function()
-        snowCfg.fallSpeed=13; snowCfg.rate=300; snowCfg.size=0.22
-        Fluent.Options.SnowFallSpeed:SetValue(13)
-        Fluent.Options.SnowAmount:SetValue(300)
-        Fluent.Options.SnowSize:SetValue(22)
-        rebuildSnowEmitter()
-        Fluent:Notify({Title="Snow",Content="🔄 Reset về mặc định.",Duration=2})
-    end})
+    sSnow:AddSlider("SnowFallSpeed",{Title="Fall Speed",Default=13,Min=2,Max=60,Rounding=0,Callback=function(v) snowCfg.fallSpeed=v; rebuildSnowEmitter() end})
+    sSnow:AddSlider("SnowAmount",{Title="Particle Rate (per second)",Default=300,Min=50,Max=1000,Rounding=0,Callback=function(v) snowCfg.rate=v; rebuildSnowEmitter() end})
+    sSnow:AddSlider("SnowSize",{Title="Snowflake Size (×0.01)",Default=22,Min=5,Max=80,Rounding=0,Callback=function(v) snowCfg.size=v/100; rebuildSnowEmitter() end})
 
-    -- ── 🌧 RAIN SLIDERS (MỚI) ─────────────────────────────────
     local sRain=Tabs.Custom:AddSection("🌧 Rain Settings")
-    sRain:AddParagraph({Title="Texture",Content="Dùng ID 6852254721 — sợi mưa sắc nét, hiện đại.\nThay đổi slider áp dụng ngay nếu mưa đang chạy."})
-    sRain:AddSlider("RainFallSpeed",{
-        Title="Tốc độ rơi (Fall Speed)",
-        Default=150, Min=30, Max=400, Rounding=0,
-        Callback=function(v)
-            rainCfg.fallSpeed=v
-            rebuildRainEmitter()
-        end
-    })
-    sRain:AddSlider("RainAmount",{
-        Title="Số lượng hạt (Rate / giây)",
-        Default=1200, Min=100, Max=3000, Rounding=0,
-        Callback=function(v)
-            rainCfg.rate=v
-            rebuildRainEmitter()
-        end
-    })
-    sRain:AddSlider("RainSquash",{
-        Title="Độ dài sợi mưa (Squash ×0.1)",
-        Default=45, Min=10, Max=100, Rounding=0,
-        Callback=function(v)
-            rainCfg.squash=v/10
-            rebuildRainEmitter()
-        end
-    })
-    sRain:AddSlider("RainHeight",{
-        Title="Độ cao emitter (studs trên đầu)",
-        Default=60, Min=20, Max=150, Rounding=0,
-        Callback=function(v)
-            rainCfg.height=v
-            -- Part sẽ cập nhật tự động qua conn Heartbeat
-        end
-    })
-    sRain:AddButton({Title="↺ Reset Rain mặc định",Callback=function()
-        rainCfg.fallSpeed=150; rainCfg.rate=1200; rainCfg.squash=4.5; rainCfg.height=60
-        Fluent.Options.RainFallSpeed:SetValue(150)
-        Fluent.Options.RainAmount:SetValue(1200)
-        Fluent.Options.RainSquash:SetValue(45)
-        Fluent.Options.RainHeight:SetValue(60)
-        rebuildRainEmitter()
-        Fluent:Notify({Title="Rain",Content="🔄 Reset về mặc định.",Duration=2})
-    end})
+    sRain:AddSlider("RainFallSpeed",{Title="Fall Speed",Default=150,Min=30,Max=400,Rounding=0,Callback=function(v) rainCfg.fallSpeed=v; rebuildRainEmitter() end})
+    sRain:AddSlider("RainAmount",{Title="Particle Rate (per second)",Default=1200,Min=100,Max=3000,Rounding=0,Callback=function(v) rainCfg.rate=v; rebuildRainEmitter() end})
+    sRain:AddSlider("RainSquash",{Title="Rain Streak Length (Squash ×0.1)",Default=45,Min=10,Max=100,Rounding=0,Callback=function(v) rainCfg.squash=v/10; rebuildRainEmitter() end})
+    sRain:AddSlider("RainHeight",{Title="Emitter Height (studs above head)",Default=60,Min=20,Max=150,Rounding=0,Callback=function(v) rainCfg.height=v end})
 
-    -- ── Rain / Snow toggles ───────────────────────────────────
     local sWEToggle=Tabs.Custom:AddSection("Weather Toggle")
     toggleRefs["Rain"]=sWEToggle:AddToggle("RainToggle",{Title="🌧 Rain",Default=false,Callback=function(v)
         if v then
@@ -1791,11 +1902,6 @@ local function buildCustomTab()
     buildAtmosphereEditor()
     buildPostProcessingEditor()
 
-    local sDX=Tabs.Custom:AddSection("Advanced")
-    sDX:AddButton({Title="Open Dex Explorer",Callback=function()
-        Fluent:Notify({Title="Dex",Content="⏳ Loading...",Duration=3})
-        task.spawn(function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/infyiff/backup/main/dex.lua"))() end) end)
-    end})
 end
 
 function buildLightingEditor()
@@ -1809,7 +1915,6 @@ function buildLightingEditor()
     sLE:AddSlider("LEBrightness",{Title="Brightness",Default=math.floor(Lighting.Brightness*10)/10,Min=0,Max=10,Rounding=1,Callback=function(v) pcall(function() Lighting.Brightness=v end) end})
     sLE:AddInput("LEBrightnessInput",{Title="Brightness (0–10)",Default="",Placeholder="e.g. 2.5",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; Fluent.Options.LEBrightness:SetValue(math.clamp(n,0,10)) end})
     sLE:AddSlider("LEClockTime",{Title="Clock Time (0–24h)",Default=math.floor(Lighting.ClockTime*10)/10,Min=0,Max=24,Rounding=1,Callback=function(v) pcall(function() Lighting.ClockTime=v end) end})
-    sLE:AddInput("LEClockTimeInput",{Title="Clock Time (0–24)",Default="",Placeholder="e.g. 14.5",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; Fluent.Options.LEClockTime:SetValue(math.clamp(n,0,24)) end})
     sLE:AddSlider("LEExposure",{Title="Exposure Compensation",Default=0,Min=-5,Max=5,Rounding=1,Callback=function(v) pcall(function() Lighting.ExposureCompensation=v end) end})
     toggleRefs["LEShadows"]=sLE:AddToggle("LEShadows",{Title="Global Shadows",Default=Lighting.GlobalShadows,Callback=function(v) pcall(function() Lighting.GlobalShadows=v end) end})
     sLE:AddColorpicker("LEAmbient",{Title="Ambient Color",Default=Lighting.Ambient,Callback=function(v) pcall(function() Lighting.Ambient=v end) end})
@@ -1849,15 +1954,8 @@ function buildLightingEditor()
     end})
     sLE:AddButton({Title="Preset: Fullbright",Callback=function()
         pcall(function() Lighting.Brightness=3; Lighting.ClockTime=14; Lighting.GlobalShadows=false; Lighting.Ambient=Color3.fromRGB(178,178,178); Lighting.OutdoorAmbient=Color3.fromRGB(178,178,178) end)
-        local atmo=Lighting:FindFirstChildOfClass("Atmosphere"); if atmo then pcall(function() atmo.Density=0; atmo.Haze=0 end) end
         Fluent.Options.LEBrightness:SetValue(3); Fluent.Options.LEClockTime:SetValue(14)
         Fluent:Notify({Title="Lighting",Content="✅ Preset: Fullbright",Duration=3})
-    end})
-    sLE:AddButton({Title="Preset: Midnight",Callback=function()
-        pcall(function() Lighting.Brightness=0; Lighting.ClockTime=0; Lighting.GlobalShadows=true; Lighting.Ambient=Color3.fromRGB(20,20,40); Lighting.OutdoorAmbient=Color3.fromRGB(10,10,30) end)
-        local atmo=Lighting:FindFirstChildOfClass("Atmosphere"); if atmo then pcall(function() atmo.Density=0.5; atmo.Haze=5 end) end
-        Fluent.Options.LEBrightness:SetValue(0); Fluent.Options.LEClockTime:SetValue(0)
-        Fluent:Notify({Title="Lighting",Content="✅ Preset: Midnight",Duration=3})
     end})
     sLE:AddButton({Title="🔄 Reset Lighting",Callback=function()
         pcall(function() for prop,val in pairs(origLightFull) do Lighting[prop]=val end end)
@@ -1897,14 +1995,14 @@ function buildPostProcessingEditor()
         if not eff then eff=Instance.new(className); eff.Parent=Lighting end
         return eff
     end
-    local origPostCC={}; local origPostBloom={}; local origPostSR={}
+    local origPostCC={}; local origPostBloom={}; local origPostSR={}; local origPostBlur={}
     local cc0=Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
     if cc0 then origPostCC={Brightness=cc0.Brightness,Contrast=cc0.Contrast,Saturation=cc0.Saturation,TintColor=cc0.TintColor}
     else origPostCC={Brightness=0,Contrast=0,Saturation=0,TintColor=Color3.new(1,1,1)} end
-    local bl0=Lighting:FindFirstChildOfClass("BloomEffect")
-    if bl0 then origPostBloom={Intensity=bl0.Intensity} else origPostBloom={Intensity=0.1} end
-    local sr0=Lighting:FindFirstChildOfClass("SunRaysEffect")
-    if sr0 then origPostSR={Intensity=sr0.Intensity} else origPostSR={Intensity=0.1} end
+    local bl0=Lighting:FindFirstChildOfClass("BloomEffect"); if bl0 then origPostBloom={Intensity=bl0.Intensity} else origPostBloom={Intensity=0.1} end
+    local sr0=Lighting:FindFirstChildOfClass("SunRaysEffect"); if sr0 then origPostSR={Intensity=sr0.Intensity} else origPostSR={Intensity=0.1} end
+    local blur0=Lighting:FindFirstChildOfClass("BlurEffect"); if blur0 then origPostBlur={Size=blur0.Size} else origPostBlur={Size=0} end
+    local origShiftTop=Lighting.ColorShift_Top; local origShiftBottom=Lighting.ColorShift_Bottom
     local sPP=Tabs.Custom:AddSection("Lighting Editor — Post-Processing")
     sPP:AddSlider("PPBrightness",{Title="CC Brightness",Default=origPostCC.Brightness or 0,Min=-1,Max=1,Rounding=2,Callback=function(v) local cc=getOrCreate("ColorCorrectionEffect"); pcall(function() cc.Brightness=v end) end})
     sPP:AddSlider("PPContrast",{Title="CC Contrast",Default=origPostCC.Contrast or 0,Min=-1,Max=1,Rounding=2,Callback=function(v) local cc=getOrCreate("ColorCorrectionEffect"); pcall(function() cc.Contrast=v end) end})
@@ -1912,12 +2010,17 @@ function buildPostProcessingEditor()
     sPP:AddColorpicker("PPTintColor",{Title="Tint Color",Default=origPostCC.TintColor or Color3.new(1,1,1),Callback=function(v) local cc=getOrCreate("ColorCorrectionEffect"); pcall(function() cc.TintColor=v end) end})
     sPP:AddSlider("PPBloomIntensity",{Title="Bloom Intensity",Default=origPostBloom.Intensity or 0.1,Min=0,Max=2,Rounding=2,Callback=function(v) local bl=getOrCreate("BloomEffect"); pcall(function() bl.Intensity=v end) end})
     sPP:AddSlider("PPSunRaysIntensity",{Title="SunRays Intensity",Default=origPostSR.Intensity or 0.1,Min=0,Max=1,Rounding=2,Callback=function(v) local sr=getOrCreate("SunRaysEffect"); pcall(function() sr.Intensity=v end) end})
+    sPP:AddSlider("PPBlurSize",{Title="Blur Intensity",Default=origPostBlur.Size or 0,Min=0,Max=56,Rounding=0,Callback=function(v) local blur=getOrCreate("BlurEffect"); pcall(function() blur.Size=v end) end})
+    sPP:AddColorpicker("PPColorShiftTop",{Title="ColorShift Top",Default=origShiftTop,Callback=function(v) pcall(function() Lighting.ColorShift_Top=v end) end})
+    sPP:AddColorpicker("PPColorShiftBottom",{Title="ColorShift Bottom",Default=origShiftBottom,Callback=function(v) pcall(function() Lighting.ColorShift_Bottom=v end) end})
     sPP:AddButton({Title="🔄 Reset Post-Processing",Callback=function()
         pcall(function()
             local cc=Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
             if cc then cc.Brightness=origPostCC.Brightness; cc.Contrast=origPostCC.Contrast; cc.Saturation=origPostCC.Saturation; cc.TintColor=origPostCC.TintColor end
             local bl=Lighting:FindFirstChildOfClass("BloomEffect"); if bl then bl.Intensity=origPostBloom.Intensity end
             local sr=Lighting:FindFirstChildOfClass("SunRaysEffect"); if sr then sr.Intensity=origPostSR.Intensity end
+            local blur=Lighting:FindFirstChildOfClass("BlurEffect"); if blur then blur.Size=origPostBlur.Size end
+            Lighting.ColorShift_Top=origShiftTop; Lighting.ColorShift_Bottom=origShiftBottom
         end)
         Fluent:Notify({Title="Post-Processing",Content="🔄 Restored.",Duration=3})
     end})
@@ -1989,15 +2092,15 @@ local function buildFarmTab()
         else disableAntiAFK(); Fluent:Notify({Title="Anti-AFK",Content="🔴 OFF",Duration=2}) end
     end})
     local sAFKT=Tabs.Farm:AddSection("AFK Countdown")
-    local afkTimeP=sAFKT:AddParagraph({Title="Remaining",Content="20:00"})
-    local afkStatusP=sAFKT:AddParagraph({Title="Status",Content="Normal"})
+    local afkTimeP=sAFKT:AddParagraph({Title="Time Until Kick",Content="20:00"})
+    local afkStatusP=sAFKT:AddParagraph({Title="Status",Content="Active"})
     RunService.Heartbeat:Connect(function()
         local elapsed=tick()-lastInputTime; local remaining=math.max(0,1200-elapsed)
         pcall(function() afkTimeP:SetDesc(string.format("%02d:%02d",math.floor(remaining/60),math.floor(remaining%60))) end)
         pcall(function()
-            if remaining<=60 then afkStatusP:SetDesc("⚠ ABOUT TO KICK!")
-            elseif remaining<=300 then afkStatusP:SetDesc("⚡ Warning — less than 5 min left")
-            else afkStatusP:SetDesc("✔ Normal") end
+            if remaining<=60 then afkStatusP:SetDesc("⚠ ABOUT TO BE KICKED!")
+            elseif remaining<=300 then afkStatusP:SetDesc("⚡ Warning — less than 5 minutes left")
+            else afkStatusP:SetDesc("✔ Active — No AFK risk") end
         end)
     end)
 end
@@ -2108,16 +2211,34 @@ local function buildSettingsTab()
     SaveManager:SetIgnoreIndexes({
         "CustomSkyID","CustomMapID","CandyCustomPath",
         "InputStreak","InputTicket","InputToken","InputLevel","InputDisplayName",
-        "LEBrightnessInput","LEClockTimeInput","LEExposureInput",
-        "ATMDensityInput","ATMOffsetInput","ATMHazeInput",
-        "PPBrightnessInput","PPContrastInput","PPSaturationInput",
-        "PPBloomInput","PPSunRaysInput",
+        "LEBrightnessInput","LEClockTimeInput",
         "RainToggle","SnowToggle","CloudCover","CloudDensity","CloudColor","WeatherVolume",
+        "ChatTagText","ChatTagStrokeColor","ChatTagTextColor","ChatTagRainbow",
     })
     SaveManager:SetFolder("FemboyHub")
     InterfaceManager:SetFolder("FemboyHub")
     InterfaceManager:BuildInterfaceSection(Tabs.Settings)
     SaveManager:BuildConfigSection(Tabs.Settings)
+
+    task.spawn(function()
+        task.wait(1)
+        for _, optName in ipairs({"MenuKeybind","MinimizeKeybind","InterfaceMinimizeKeybind","MinimizeBind"}) do
+            local opt = Fluent.Options and Fluent.Options[optName]
+            if opt and opt.OnChanged then
+                pcall(function()
+                    opt:OnChanged(function(newKey)
+                        if newKey and newKey ~= Enum.KeyCode.Unknown then
+                            minimizeKeyCode = newKey
+                        end
+                    end)
+                    if opt.Value and opt.Value ~= Enum.KeyCode.Unknown then
+                        minimizeKeyCode = opt.Value
+                    end
+                end)
+                break
+            end
+        end
+    end)
 end
 
 -- ════════════════════════════════════════════════════════════════
@@ -2130,7 +2251,7 @@ function buildWetFloorSection()
     local waterColorTint=Color3.fromRGB(180,220,255); local waterTransAlpha=0.55
     local waterCanCollide=false; local waterMaterial=Enum.Material.Glass
     local WATER_MATERIALS={["Glass"]=Enum.Material.Glass,["SmoothPlastic"]=Enum.Material.SmoothPlastic,["Plastic"]=Enum.Material.Plastic}
-    local rippleOpacity=0.15; local rippleExtraTransparency=0.0; local rippleThickness=0.07
+    local rippleOpacity=0.15; local rippleThickness=0.07
     local rippleColor=Color3.fromRGB(180,220,255); local rippleColor2=Color3.fromRGB(140,195,240)
     local rippleMaterial=Enum.Material.Neon; local lastRippleTime=0
 
@@ -2201,7 +2322,7 @@ function buildWetFloorSection()
         r.Material=rippleMaterial; r.Color=col; r.Shape=Enum.PartType.Cylinder
         r.CFrame=CFrame.new(pos.X,pos.Y+(yOff or 0.04),pos.Z)*CFrame.Angles(0,0,math.rad(90))
         r.Size=Vector3.new(rippleThickness*0.8,startDiam,startDiam)
-        r.Transparency=math.clamp(startTrans+rippleOpacity+rippleExtraTransparency,0,0.99); r.Parent=workspace
+        r.Transparency=math.clamp(startTrans+rippleOpacity,0,0.99); r.Parent=workspace
         local tw=TweenService:Create(r,TweenInfo.new(duration,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Size=Vector3.new(rippleThickness*0.2,endDiam,endDiam),Transparency=1})
         tw:Play(); tw.Completed:Connect(function() pcall(function() r:Destroy() end) end)
     end
@@ -2209,7 +2330,7 @@ function buildWetFloorSection()
         local d=Instance.new("Part"); d.Name="FemboyRipple"; d.Anchored=true; d.CanCollide=false; d.CanQuery=false; d.CastShadow=false
         d.Material=rippleMaterial; d.Color=Color3.new(0.9,0.97,1); d.Shape=Enum.PartType.Cylinder
         d.CFrame=CFrame.new(pos.X,pos.Y+0.03,pos.Z)*CFrame.Angles(0,0,math.rad(90))
-        d.Size=Vector3.new(0.03,0.8,0.8); d.Transparency=math.clamp(0.12+rippleOpacity+rippleExtraTransparency,0,0.98); d.Parent=workspace
+        d.Size=Vector3.new(0.03,0.8,0.8); d.Transparency=math.clamp(0.12+rippleOpacity,0,0.98); d.Parent=workspace
         TweenService:Create(d,TweenInfo.new(0.22,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Size=Vector3.new(0.015,3.0,3.0),Transparency=1}):Play()
         task.delay(0.25, function() pcall(function() d:Destroy() end) end)
     end
@@ -2268,6 +2389,11 @@ function buildWetFloorSection()
     sMF:AddSlider("RippleThickness",{Title="Ring Thickness",Default=7,Min=1,Max=50,Rounding=0,Callback=function(v) rippleThickness=v/100 end})
     sMF:AddColorpicker("RippleColor",{Title="Ripple Color — Primary",Default=Color3.fromRGB(180,220,255),Callback=function(v) rippleColor=v end})
     sMF:AddColorpicker("RippleColor2",{Title="Ripple Color — Secondary",Default=Color3.fromRGB(140,195,240),Callback=function(v) rippleColor2=v end})
+    local RIPPLE_MATS={["Glass"]=Enum.Material.Glass,["Plastic"]=Enum.Material.Plastic,["SmoothPlastic"]=Enum.Material.SmoothPlastic}
+    sMF:AddDropdown("RippleMaterial",{Title="Ripple Material",Values={"Glass","Plastic","SmoothPlastic"},Default="Glass",Callback=function(v)
+        rippleMaterial=RIPPLE_MATS[tostring(v)] or Enum.Material.Glass
+        Fluent:Notify({Title="Ripple",Content="Material: "..tostring(v),Duration=2})
+    end})
     toggleRefs["Ripple"]=sMF:AddToggle("RippleToggle",{Title="💧 Ripple  (Walk Only)",Default=false,Callback=function(v)
         if v then startRipple(); Fluent:Notify({Title="Ripple",Content="✅ ON",Duration=3})
         else stopRipple(); Fluent:Notify({Title="Ripple",Content="🗑 OFF",Duration=2}) end
@@ -2279,8 +2405,8 @@ SaveManager:LoadAutoloadConfig()
 Window:SelectTab(1)
 
 Fluent:Notify({
-    Title      = "Femboy Hub v1.2",
-    Content    = "❄ Snow sliders · 🌧 Rain fix (6852254721) · slider tuning",
+    Title      = "Femboy Hub v1.3",
+    Content    = "📱 Mobile fix  ·  💬 Chat Tags v2 (Fixed)",
     SubContent = "by KhoaProSigmaAlphaMale",
     Duration   = 6,
 })
