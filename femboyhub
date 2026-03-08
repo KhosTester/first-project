@@ -49,7 +49,8 @@ local InsertService    = game:GetService("InsertService")
 local Lighting         = game:GetService("Lighting")
 local CoreGui          = game:GetService("CoreGui")
 local VirtualUser      = game:GetService("VirtualUser")
-local VIM              = game:GetService("VirtualInputManager")
+local VIM = nil
+pcall(function() VIM = game:GetService("VirtualInputManager") end)
 local GuiService       = game:GetService("GuiService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -1065,19 +1066,19 @@ end
 local function startTurnbind()
     tb.conn=UserInputService.InputBegan:Connect(function(i,proc)
         if proc or not st.Turnbind then return end
-        if i.KeyCode==Enum.KeyCode.A then VIM:SendKeyEvent(true,Enum.KeyCode.Left,false,game)
-        elseif i.KeyCode==Enum.KeyCode.D then VIM:SendKeyEvent(true,Enum.KeyCode.Right,false,game) end
+        if i.KeyCode==Enum.KeyCode.A then if VIM then pcall(function() VIM:SendKeyEvent(true,Enum.KeyCode.Left,false,game) end) end
+        elseif i.KeyCode==Enum.KeyCode.D then if VIM then pcall(function() VIM:SendKeyEvent(true,Enum.KeyCode.Right,false,game) end) end end
     end)
     tb.endConn=UserInputService.InputEnded:Connect(function(i)
-        if i.KeyCode==Enum.KeyCode.A then VIM:SendKeyEvent(false,Enum.KeyCode.Left,false,game)
-        elseif i.KeyCode==Enum.KeyCode.D then VIM:SendKeyEvent(false,Enum.KeyCode.Right,false,game) end
+        if i.KeyCode==Enum.KeyCode.A then if VIM then pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.Left,false,game) end) end
+        elseif i.KeyCode==Enum.KeyCode.D then if VIM then pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.Right,false,game) end) end end
     end)
 end
 local function stopTurnbind()
     if tb.conn    then tb.conn:Disconnect();    tb.conn=nil    end
     if tb.endConn then tb.endConn:Disconnect(); tb.endConn=nil end
-    VIM:SendKeyEvent(false,Enum.KeyCode.Left,false,game)
-    VIM:SendKeyEvent(false,Enum.KeyCode.Right,false,game)
+    if VIM then pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.Left,false,game) end) end
+    if VIM then pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.Right,false,game) end) end
 end
 
 local function tasStart()
@@ -2519,16 +2520,94 @@ local function buildFarmTab()
     toggleRefs["AutoFarm"]=sFM:AddToggle("AutoFarm",{Title="Enable Auto Farm",Default=false,Callback=function(v)
         st.AutoFarm=v; if v then startAutoFarm() else stopAutoFarm() end
     end})
+
+    -- ── Auto Vote Map ──────────────────────────────────────────
+    local sVote = Tabs.Farm:AddSection("Auto Vote Map  🗺️")
+    local autoVoteConn  = nil
+    local autoVoteMode  = "Easiest First"
+    local VOTE_PRIORITIES = {
+        ["Easiest First"] = {"EASY","NORMAL","HARD","EXPERT"},
+        ["Hardest First"] = {"EXPERT","HARD","NORMAL","EASY"},
+        ["Random"]        = nil,
+    }
+
+    local function executeAutoVote()
+        if not st.AutoVote then return end
+        local playerGui = player:FindFirstChild("PlayerGui")
+        if not playerGui then return end
+        local voteFrame = nil
+        for _, desc in pairs(playerGui:GetDescendants()) do
+            if desc.Name == "Vote" and desc:IsA("Frame") and desc.Visible then
+                voteFrame = desc; break
+            end
+        end
+        if not voteFrame then return end
+        local choices = nil
+        for _ = 1, 20 do
+            choices = voteFrame:FindFirstChild("Choices")
+            if choices and #choices:GetChildren() >= 4 then break end
+            task.wait(0.2)
+        end
+        if not choices then return end
+        local slots = {}
+        for i = 1, 4 do
+            local container = choices:FindFirstChild(tostring(i))
+            if container then
+                local imgBtn = container:FindFirstChild("ImageButton")
+                           or container:FindFirstChildOfClass("ImageButton")
+                           or container
+                local diffLabel  = imgBtn and imgBtn:FindFirstChild("Difficulty")
+                local titleLabel = imgBtn and imgBtn:FindFirstChild("Title")
+                slots[i] = {
+                    button     = imgBtn,
+                    difficulty = diffLabel  and diffLabel.Text  or "UNKNOWN",
+                    mapName    = titleLabel and titleLabel.Text or "Slot "..i,
+                }
+            end
+        end
+        local target = nil
+        if autoVoteMode == "Random" then
+            local available = {}
+            for i = 1, 4 do if slots[i] then table.insert(available, slots[i]) end end
+            if #available > 0 then target = available[math.random(1,#available)] end
+        else
+            local priority = VOTE_PRIORITIES[autoVoteMode] or VOTE_PRIORITIES["Easiest First"]
+            for _, pref in ipairs(priority) do
+                for i = 1, 4 do
+                    if slots[i] and slots[i].difficulty == pref then
+                        target = slots[i]; break
+                    end
+                end
+                if target then break end
+            end
+        end
+        if not target then target = slots[4] end
+        if not target or not target.button then return end
+        local btn = target.button
+        -- Mobile-safe: use :Activate() first, VIM fallback
+        local clicked = false
+        pcall(function()
+            if btn:IsA("GuiButton") then btn:Activate(); clicked = true end
+        end)
+        if not clicked and VIM then
+            pcall(function()
+                local cx = math.floor(btn.AbsolutePosition.X + btn.AbsoluteSize.X * 0.5)
+                local cy = math.floor(btn.AbsolutePosition.Y + btn.AbsoluteSize.Y * 0.5)
+                VIM:SendMouseMovementEvent(cx, cy, false, game)
+                task.wait(0.05)
+                VIM:SendMouseButtonEvent(cx, cy, 0, true,  game, 1)
+                task.wait(0.08)
+                VIM:SendMouseButtonEvent(cx, cy, 0, false, game, 1)
+            end)
+        end
+        Fluent:Notify({Title="Auto Vote", Content="✅ "..target.mapName.." ["..target.difficulty.."]", Duration=4})
     end
 
     sVote:AddDropdown("VoteMode", {
         Title   = "Vote Priority",
         Values  = {"Easiest First", "Hardest First", "Random"},
         Default = "Easiest First",
-        Callback = function(v)
-            autoVoteMode = tostring(v)
-            
-        end,
+        Callback = function(v) autoVoteMode = tostring(v) end,
     })
 
     toggleRefs["AutoVote"] = sVote:AddToggle("AutoVote", {
@@ -2540,34 +2619,23 @@ local function buildFarmTab()
                 task.spawn(function()
                     local playerGui = player:WaitForChild("PlayerGui")
                     if autoVoteConn then autoVoteConn:Disconnect() end
-
-                    -- Continuous scan: check every 2s if Vote frame is visible
-                    -- This way it works whether toggled before or during the vote screen
                     autoVoteConn = RunService.Heartbeat:Connect(function()
                         if not st.AutoVote then return end
-                        -- Throttle to once per 2 seconds
                         if not autoVoteConn._lastCheck then autoVoteConn._lastCheck = 0 end
                         if tick() - autoVoteConn._lastCheck < 2 then return end
                         autoVoteConn._lastCheck = tick()
-
                         for _, desc in pairs(playerGui:GetDescendants()) do
                             if desc.Name == "Vote" and desc:IsA("Frame") and desc.Visible then
-                                -- Vote screen is open — vote if not already voted
                                 local choices = desc:FindFirstChild("Choices")
                                 if choices then
-                                    -- Check if already voted (any slot shows Voted=true visible)
                                     local alreadyVoted = false
                                     for i = 1, 4 do
                                         local container = choices:FindFirstChild(tostring(i))
                                         local imgBtn = container and (container:FindFirstChild("ImageButton") or container:FindFirstChildOfClass("ImageButton"))
                                         local votedLabel = imgBtn and imgBtn:FindFirstChild("Voted")
-                                        if votedLabel and votedLabel.Visible then
-                                            alreadyVoted = true; break
-                                        end
+                                        if votedLabel and votedLabel.Visible then alreadyVoted = true; break end
                                     end
-                                    if not alreadyVoted then
-                                        task.spawn(executeAutoVote)
-                                    end
+                                    if not alreadyVoted then task.spawn(executeAutoVote) end
                                 end
                                 break
                             end
@@ -2579,7 +2647,7 @@ local function buildFarmTab()
             end
         end,
     })
-    sVote:AddButton({Title="🖱 Vote Now (manual)", Callback=function()
+    sVote:AddButton({Title="Vote Now (manual)", Callback=function()
         task.spawn(executeAutoVote)
     end})
 
@@ -2744,9 +2812,9 @@ local function buildMacroTab()
     -- ── Send a single key press+release ───────────────────────
     local function sendKey(kc)
         pcall(function()
-            VIM:SendKeyEvent(true,  kc, false, game)
+            if VIM then pcall(function() VIM:SendKeyEvent(true,  kc, false, game) end) end
             task.wait(0.04)
-            VIM:SendKeyEvent(false, kc, false, game)
+            if VIM then pcall(function() VIM:SendKeyEvent(false, kc, false, game) end) end
         end)
     end
 
