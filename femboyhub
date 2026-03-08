@@ -273,9 +273,27 @@ createKeyUI()
 repeat task.wait(0.1) until keyUnlocked
 task.wait(0.3)
 
-local Fluent          = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-local SaveManager     = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-local InterfaceManager= loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+-- Safe loadstring wrapper for mobile executors
+local function safeLoad(url, label)
+    local ok, result = pcall(function() return game:HttpGet(url) end)
+    if not ok or not result or result == "" then
+        error("[FemboyHub] Failed to fetch: " .. (label or url), 2)
+    end
+    local fn, err = loadstring(result)
+    if not fn then
+        error("[FemboyHub] loadstring failed for " .. (label or url) .. ": " .. tostring(err), 2)
+    end
+    local ok2, mod = pcall(fn)
+    if not ok2 then
+        error("[FemboyHub] Module error for " .. (label or url) .. ": " .. tostring(mod), 2)
+    end
+    return mod
+end
+
+local Fluent           = safeLoad("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua",           "Fluent")
+local SaveManager      = safeLoad("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua",      "SaveManager")
+local InterfaceManager = safeLoad("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua", "InterfaceManager")
+print("[FemboyHub] ✅ Libraries loaded")
 
 
 -- ── Variables ─────────────────────────────────────────────────
@@ -2001,6 +2019,7 @@ local function buildEmoteTab()
 
         local ecOldNC
         local hookOk=pcall(function()
+            if not hookmetamethod then error("hookmetamethod not supported") end
             ecOldNC=hookmetamethod(game,"__namecall",function(self,...)
                 local m; pcall(function() m=getnamecallmethod() end)
                 local args={...}
@@ -2013,7 +2032,7 @@ local function buildEmoteTab()
                         end
                     end
                 end
-                return ecOldNC(self,...)
+                if ecOldNC then return ecOldNC(self,...) end
             end)
         end)
 
@@ -3074,13 +3093,6 @@ local function buildSettingsTab()
     InterfaceManager:SetFolder("FemboyHub")
     InterfaceManager:BuildInterfaceSection(Tabs.Settings)
     SaveManager:BuildConfigSection(Tabs.Settings)
-
-    task.spawn(function()
-        task.wait(1)
-                break
-            end
-        end
-    end)
 end
 
 -- ════════════════════════════════════════════════════════════════
