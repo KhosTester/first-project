@@ -1,5 +1,5 @@
 -- ============================================================
--- FEMBOY HUB  v1.6  |  Mobile Edition
+-- FEMBOY HUB  v1.6  |  Fluent Edition
 -- by KhoaProSigmaAlphaMale
 -- Changelog v1.6:
 --   +Fix bug  Macro keybind toggle (was trigger-once, now ON/OFF)
@@ -49,8 +49,7 @@ local InsertService    = game:GetService("InsertService")
 local Lighting         = game:GetService("Lighting")
 local CoreGui          = game:GetService("CoreGui")
 local VirtualUser      = game:GetService("VirtualUser")
-local VIM = nil
-pcall(function() VIM = game:GetService("VirtualInputManager") end)
+local VIM              = game:GetService("VirtualInputManager")
 local GuiService       = game:GetService("GuiService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -273,28 +272,11 @@ createKeyUI()
 repeat task.wait(0.1) until keyUnlocked
 task.wait(0.3)
 
--- Safe loadstring wrapper for mobile executors
-local function safeLoad(url, label)
-    local ok, result = pcall(function() return game:HttpGet(url) end)
-    if not ok or not result or result == "" then
-        error("[FemboyHub] Failed to fetch: " .. (label or url), 2)
-    end
-    local fn, err = loadstring(result)
-    if not fn then
-        error("[FemboyHub] loadstring failed for " .. (label or url) .. ": " .. tostring(err), 2)
-    end
-    local ok2, mod = pcall(fn)
-    if not ok2 then
-        error("[FemboyHub] Module error for " .. (label or url) .. ": " .. tostring(mod), 2)
-    end
-    return mod
-end
+local Fluent          = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager     = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager= loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
-local Fluent           = safeLoad("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua",           "Fluent")
-local SaveManager      = safeLoad("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua",      "SaveManager")
-local InterfaceManager = safeLoad("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua", "InterfaceManager")
-print("[FemboyHub] ✅ Libraries loaded")
-
+local minimizeKeyCode = Enum.KeyCode.RightControl
 
 -- ── Variables ─────────────────────────────────────────────────
 local BOOST_POWER   = 80
@@ -504,6 +486,7 @@ player.CharacterAdded:Connect(function(newChar)
 end)
 
 -- ── Core feature functions ────────────────────────────────────
+local keybinds   = {}
 local toggleRefs = {}
 local st = {
     EdgeBoost=false, NoClip=false, Fly=false, ESP=false,
@@ -514,6 +497,9 @@ local st = {
     BetterBounce=false, AirStrafe=false, StrafeBoost=false, EmoteWalk=false,
 }
 
+local function registerKeybind(featureName, keyCode)
+    keybinds[featureName]=(keyCode==Enum.KeyCode.Unknown) and nil or keyCode
+end
 
 UserInputService.InputBegan:Connect(function(inp, gpe)
     if gpe then return end
@@ -1084,19 +1070,19 @@ end
 local function startTurnbind()
     tb.conn=UserInputService.InputBegan:Connect(function(i,proc)
         if proc or not st.Turnbind then return end
-        if i.KeyCode==Enum.KeyCode.A then if VIM then pcall(function() VIM:SendKeyEvent(true,Enum.KeyCode.Left,false,game) end) end
-        elseif i.KeyCode==Enum.KeyCode.D then if VIM then pcall(function() VIM:SendKeyEvent(true,Enum.KeyCode.Right,false,game) end) end end
+        if i.KeyCode==Enum.KeyCode.A then VIM:SendKeyEvent(true,Enum.KeyCode.Left,false,game)
+        elseif i.KeyCode==Enum.KeyCode.D then VIM:SendKeyEvent(true,Enum.KeyCode.Right,false,game) end
     end)
     tb.endConn=UserInputService.InputEnded:Connect(function(i)
-        if i.KeyCode==Enum.KeyCode.A then if VIM then pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.Left,false,game) end) end
-        elseif i.KeyCode==Enum.KeyCode.D then if VIM then pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.Right,false,game) end) end end
+        if i.KeyCode==Enum.KeyCode.A then VIM:SendKeyEvent(false,Enum.KeyCode.Left,false,game)
+        elseif i.KeyCode==Enum.KeyCode.D then VIM:SendKeyEvent(false,Enum.KeyCode.Right,false,game) end
     end)
 end
 local function stopTurnbind()
     if tb.conn    then tb.conn:Disconnect();    tb.conn=nil    end
     if tb.endConn then tb.endConn:Disconnect(); tb.endConn=nil end
-    if VIM then pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.Left,false,game) end) end
-    if VIM then pcall(function() VIM:SendKeyEvent(false,Enum.KeyCode.Right,false,game) end) end
+    VIM:SendKeyEvent(false,Enum.KeyCode.Left,false,game)
+    VIM:SendKeyEvent(false,Enum.KeyCode.Right,false,game)
 end
 
 local function tasStart()
@@ -1757,12 +1743,13 @@ end)
 -- WINDOW
 -- ════════════════════════════════════════════════════════════════
 local Window = Fluent:CreateWindow({
-    Title      = "Femboy Hub  v1.6  |  Mobile",
+    Title      = "Femboy Hub  v1.6",
     SubTitle   = "by KhoaProSigmaAlphaMale",
-    TabWidth   = 140,
-    Size       = UDim2.fromOffset(480, 420),
+    TabWidth   = 160,
+    Size       = UDim2.fromOffset(600,500),
     Acrylic    = false,
     Theme      = "Dark",
+    MinimizeKey= Enum.KeyCode.RightControl,
 })
 
 local Tabs = {
@@ -1912,6 +1899,234 @@ local function buildMainTab()
             if edgeConn then edgeConn:Disconnect(); edgeConn=nil end
         end
     end})
+    sEB:AddKeybind("KbEdgeBoost",{Title="Keybind — Edge Boost",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("EdgeBoost",new) end})
+
+    local sNC=Tabs.Main:AddSection("No Clip")
+    toggleRefs["NoClip"]=sNC:AddToggle("NoClip",{Title="🚫 Enable No Clip",Default=false,Callback=function(v)
+        st.NoClip=v
+        if v then enableNoClip()
+        else disableNoClip() end
+    end})
+    sNC:AddKeybind("KbNoClip",{Title="Keybind — No Clip",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("NoClip",new) end})
+
+    local sAB=Tabs.Main:AddSection("Avoid Bot  🛡️")
+    sAB:AddSlider("AvoidBotTrigger",{Title="🎯 Trigger Distance (studs)",Default=15,Min=5,Max=50,Rounding=0,Callback=function(v)
+        avoidBot.TRIGGER_DIST=v
+        pcall(function() Fluent.Options.AvoidBotTriggerInput:SetValue(tostring(v)) end)
+    end})
+    sAB:AddInput("AvoidBotTriggerInput",{Title="↳ Enter value",Default="15",Placeholder="5 – 50",Numeric=false,Finished=false,Callback=function(v)
+        local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),5,50)
+        avoidBot.TRIGGER_DIST=n; pcall(function() Fluent.Options.AvoidBotTrigger:SetValue(n) end)
+    end})
+    sAB:AddSlider("AvoidBotOrbit",{Title="🔄 Orbit Radius (studs)",Default=20,Min=8,Max=60,Rounding=0,Callback=function(v)
+        avoidBot.ORBIT_RADIUS=v
+        pcall(function() Fluent.Options.AvoidBotOrbitInput:SetValue(tostring(v)) end)
+    end})
+    sAB:AddInput("AvoidBotOrbitInput",{Title="↳ Enter value",Default="20",Placeholder="8 – 60",Numeric=false,Finished=false,Callback=function(v)
+        local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),8,60)
+        avoidBot.ORBIT_RADIUS=n; pcall(function() Fluent.Options.AvoidBotOrbit:SetValue(n) end)
+    end})
+    toggleRefs["AvoidBot"]=sAB:AddToggle("AvoidBot",{Title="🛡️ Enable Avoid Bot",Default=false,Callback=function(v)
+        st.AvoidBot=v
+        if v then enableAvoidBot()
+        else disableAvoidBot() end
+    end})
+    sAB:AddKeybind("KbAvoidBot",{Title="Keybind — Avoid Bot",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("AvoidBot",new) end})
+
+    local sTB=Tabs.Main:AddSection("Turnbind")
+    toggleRefs["Turnbind"]=sTB:AddToggle("Turnbind",{Title="↩ Enable Turnbind",Default=false,Callback=function(v)
+        st.Turnbind=v
+        if v then startTurnbind()
+        else stopTurnbind() end
+    end})
+    sTB:AddKeybind("KbTurnbind",{Title="Keybind — Turnbind",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("Turnbind",new) end})
+
+    local sTAS=Tabs.Main:AddSection("TAS Recorder")
+    sTAS:AddButton({Title="🔴 Start Recording",Callback=tasStart})
+    sTAS:AddButton({Title="⏹ Stop Recording", Callback=tasStop})
+    sTAS:AddButton({Title="▶ Play TAS",        Callback=tasPlay})
+    local tasStartKC, tasStopKC, tasPlayKC = nil, nil, nil
+    sTAS:AddKeybind("KbTASStart",{Title="Keybind — Start Recording",Default="None",Callback=function() end,ChangedCallback=function(new) tasStartKC=(new~=Enum.KeyCode.Unknown) and new or nil end})
+    sTAS:AddKeybind("KbTASStop", {Title="Keybind — Stop Recording", Default="None",Callback=function() end,ChangedCallback=function(new) tasStopKC =(new~=Enum.KeyCode.Unknown) and new or nil end})
+    sTAS:AddKeybind("KbTASPlay", {Title="Keybind — Play TAS",        Default="None",Callback=function() end,ChangedCallback=function(new) tasPlayKC =(new~=Enum.KeyCode.Unknown) and new or nil end})
+    UserInputService.InputBegan:Connect(function(inp, gpe)
+        if gpe then return end
+        if tasStartKC and inp.KeyCode==tasStartKC then tasStart() end
+        if tasStopKC  and inp.KeyCode==tasStopKC  then tasStop()  end
+        if tasPlayKC  and inp.KeyCode==tasPlayKC  then tasPlay()  end
+    end)
+
+    local sFly=Tabs.Main:AddSection("Fly")
+    sFly:AddSlider("FlySpeed",{Title="Fly Speed",Default=50,Min=1,Max=200,Rounding=0,Callback=function(v)
+        fly.speed=v; pcall(function() Fluent.Options.FlySpeedInput:SetValue(tostring(v)) end)
+    end})
+    sFly:AddInput("FlySpeedInput",{Title="↳ Enter value",Default="50",Placeholder="1 – 200",Numeric=false,Finished=false,Callback=function(v)
+        local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),1,200)
+        fly.speed=n; pcall(function() Fluent.Options.FlySpeed:SetValue(n) end)
+    end})
+    toggleRefs["Fly"]=sFly:AddToggle("Fly",{Title="🕊 Enable Fly",Default=false,Callback=function(v)
+        st.Fly=v
+        if v then enableFly()
+        else disableFly() end
+    end})
+    sFly:AddKeybind("KbFly",{Title="Keybind — Fly",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("Fly",new) end})
+
+    local sESP=Tabs.Main:AddSection("ESP")
+    toggleRefs["ESP"]=sESP:AddToggle("ESP",{Title="👁 Enable ESP (Players)",Default=false,Callback=function(v)
+        st.ESP=v
+        if v then buildESP()
+        else removeESP() end
+    end})
+    sESP:AddKeybind("KbESP",{Title="Keybind — ESP",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("ESP",new) end})
+
+    local sEAI=Tabs.Main:AddSection("ESP AI  🤖")
+    toggleRefs["ESPAI"]=sEAI:AddToggle("ESPAI",{Title="🤖 Enable ESP AI  (Outline + Distance)",Default=false,Callback=function(v)
+        -- Force outline-only + distance labels every time
+        espAi.FILL_TRANS    = 1.0
+        espAi.OUTLINE_TRANS = 0.0
+        if v then
+            enableAiESP()
+        else
+            disableAiESP()
+        end
+    end})
+    sEAI:AddKeybind("KbESPAI",{Title="Keybind — ESP AI",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("ESPAI",new) end})
+    sEAI:AddButton({Title="🔄 Force Rescan Bots",Callback=function()
+        disableAiESP(); task.wait(0.1); enableAiESP()
+        Fluent:Notify({Title="ESP AI",Content="🔄 Rescanned!",Duration=2})
+    end})
+
+    local sJB=Tabs.Main:AddSection("Jump Boost")
+    sJB:AddSlider("JumpPower",{Title="Jump Power",Default=50,Min=0,Max=400,Rounding=0,Callback=function(v)
+        motion.jumpPower=v
+        if st.JumpBoost and humanoid then pcall(function() humanoid.UseJumpPower=true; humanoid.JumpPower=v end) end
+        pcall(function() Fluent.Options.JumpPowerInput:SetValue(tostring(v)) end)
+    end})
+    sJB:AddInput("JumpPowerInput",{Title="↳ Enter value",Default="50",Placeholder="0 – 400",Numeric=false,Finished=false,Callback=function(v)
+        local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),0,400)
+        motion.jumpPower=n; if st.JumpBoost and humanoid then pcall(function() humanoid.UseJumpPower=true; humanoid.JumpPower=n end) end
+        pcall(function() Fluent.Options.JumpPower:SetValue(n) end)
+    end})
+    toggleRefs["JumpBoost"]=sJB:AddToggle("JumpBoost",{Title="⬆ Enable Jump Boost",Default=false,Callback=function(v)
+        st.JumpBoost=v
+        if v then pcall(function() humanoid.UseJumpPower=true; humanoid.JumpPower=motion.jumpPower end); Fluent:Notify({Title="Jump",Content="✅ Power: "..motion.jumpPower,Duration=2})
+        else pcall(function() humanoid.UseJumpPower=true; humanoid.JumpPower=motion.ORIG_JUMP end) end
+    end})
+    sJB:AddKeybind("KbJumpBoost",{Title="Keybind — Jump Boost",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("JumpBoost",new) end})
+
+    local sGV=Tabs.Main:AddSection("Gravity")
+    sGV:AddSlider("GravityValue",{Title="Gravity",Default=196,Min=-400,Max=400,Rounding=0,Callback=function(v)
+        motion.gravValue=v; if st.GravityOverride then pcall(function() workspace.Gravity=v end) end
+        pcall(function() Fluent.Options.GravityValueInput:SetValue(tostring(v)) end)
+    end})
+    sGV:AddInput("GravityValueInput",{Title="↳ Enter value",Default="196",Placeholder="-400 – 400",Numeric=false,Finished=false,Callback=function(v)
+        local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),-400,400)
+        motion.gravValue=n; if st.GravityOverride then pcall(function() workspace.Gravity=n end) end
+        pcall(function() Fluent.Options.GravityValue:SetValue(n) end)
+    end})
+    toggleRefs["GravityOverride"]=sGV:AddToggle("GravityOverride",{Title="🌍 Enable Gravity Override",Default=false,Callback=function(v)
+        st.GravityOverride=v
+        if v then
+            if motion.gravConn then motion.gravConn:Disconnect() end
+            motion.gravConn=RunService.Stepped:Connect(function() if st.GravityOverride then pcall(function() workspace.Gravity=motion.gravValue end) end end)
+            Fluent:Notify({Title="Gravity",Content="✅ Value: "..motion.gravValue,Duration=2})
+        else
+            if motion.gravConn then motion.gravConn:Disconnect(); motion.gravConn=nil end
+            pcall(function() workspace.Gravity=motion.ORIG_GRAV end)
+            
+        end
+    end})
+    sGV:AddKeybind("KbGravity",{Title="Keybind — Gravity Override",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("GravityOverride",new) end})
+    sGV:AddButton({Title="🔄 Reset Gravity",Callback=function()
+        st.GravityOverride=false; if toggleRefs.GravityOverride then toggleRefs.GravityOverride:SetValue(false) end
+        if motion.gravConn then motion.gravConn:Disconnect(); motion.gravConn=nil end
+        pcall(function() workspace.Gravity=motion.ORIG_GRAV end)
+        Fluent.Options.GravityValue:SetValue(196)
+        Fluent:Notify({Title="Gravity",Content="🔄 Reset.",Duration=2})
+    end})
+
+    local sIJ=Tabs.Main:AddSection("Infinity Jump")
+    sIJ:AddSlider("InfJumpPower",{Title="Inf Jump Power",Default=80,Min=10,Max=200,Rounding=0,Callback=function(v)
+        motion.infJumpPower=v; pcall(function() Fluent.Options.InfJumpPowerInput:SetValue(tostring(v)) end)
+    end})
+    sIJ:AddInput("InfJumpPowerInput",{Title="↳ Enter value",Default="80",Placeholder="10 – 200",Numeric=false,Finished=false,Callback=function(v)
+        local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),10,200)
+        motion.infJumpPower=n; pcall(function() Fluent.Options.InfJumpPower:SetValue(n) end)
+    end})
+    toggleRefs["InfJump"]=sIJ:AddToggle("InfJump",{Title="♾ Enable Inf Jump",Default=false,Callback=function(v)
+        st.InfJump=v
+        if v then
+            if motion.infJumpConn then motion.infJumpConn:Disconnect() end
+            motion.infJumpConn=UserInputService.InputBegan:Connect(function(i,gpe)
+                if gpe then return end
+                if i.KeyCode==Enum.KeyCode.Space and hrp and humanoid and humanoid.Health>0 then
+                    hrp.AssemblyLinearVelocity=Vector3.new(hrp.AssemblyLinearVelocity.X,motion.infJumpPower,hrp.AssemblyLinearVelocity.Z)
+                end
+            end)
+            Fluent:Notify({Title="Inf Jump",Content="✅ Power: "..motion.infJumpPower,Duration=2})
+        else
+            if motion.infJumpConn then motion.infJumpConn:Disconnect(); motion.infJumpConn=nil end
+            
+        end
+    end})
+    sIJ:AddKeybind("KbInfJump",{Title="Keybind — Inf Jump",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("InfJump",new) end})
+
+    local sAJ=Tabs.Main:AddSection("Auto Jump")
+    local ajVals={}; for ms=100,1000,50 do table.insert(ajVals,ms.."ms") end
+    sAJ:AddDropdown("AutoJumpDelay",{Title="Jump Delay",Values=ajVals,Default="300ms",Callback=function(v)
+        local ms=tonumber(tostring(v):match("%d+")); if ms then motion.autoJumpDelay=ms/1000 end
+    end})
+    toggleRefs["AutoJump"]=sAJ:AddToggle("AutoJump",{Title="🏃 Enable Auto Jump",Default=false,Callback=function(v)
+        st.AutoJump=v
+        if v then buildAutoJump()
+        else if motion.autoJumpConn then motion.autoJumpConn:Disconnect(); motion.autoJumpConn=nil end end
+    end})
+    sAJ:AddKeybind("KbAutoJump",{Title="Keybind — Auto Jump",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("AutoJump",new) end})
+
+    local sBB = Tabs.Main:AddSection("Better Bounce  🚀")
+    sBB:AddSlider("BBYBoost",{Title="🔺 Jump Height Multiplier (higher = bounce higher)",Default=14,Min=10,Max=30,Rounding=0,Callback=function(v) bb.yBoost=v/10 end})
+    sBB:AddSlider("BBRetain",{Title="🌀 Air Speed Retention (%)",Default=70,Min=0,Max=100,Rounding=0,Callback=function(v) bb.retainFactor=v/100 end})
+    sBB:AddSlider("BBLanding",{Title="🏃 Landing Momentum Keep (%)",Default=55,Min=0,Max=90,Rounding=0,Callback=function(v) bb.landingKeep=v/100 end})
+    sBB:AddSlider("BBTriggerY",{Title="⚡ Bounce Detection Threshold (lower = more sensitive)",Default=8,Min=3,Max=30,Rounding=0,Callback=function(v) bb.minTriggerY=v end})
+    sBB:AddDropdown("BBPreset",{Title="🎯 Preset",Values={"Custom","Gentle (Subtle boost)","Standard (Balanced)","Aggressive (Max trimp)"},Default="Standard (Balanced)",Callback=function(v)
+        local s=tostring(v)
+        if s:find("Gentle") then
+            bb.yBoost=1.2; bb.retainFactor=0.45; bb.landingKeep=0.35; bb.minTriggerY=6
+            Fluent.Options.BBYBoost:SetValue(12); Fluent.Options.BBRetain:SetValue(45)
+            Fluent.Options.BBLanding:SetValue(35); Fluent.Options.BBTriggerY:SetValue(6)
+            Fluent:Notify({Title="Better Bounce",Content="🟢 Preset: Gentle",Duration=2})
+        elseif s:find("Standard") then
+            bb.yBoost=1.4; bb.retainFactor=0.70; bb.landingKeep=0.55; bb.minTriggerY=8
+            Fluent.Options.BBYBoost:SetValue(14); Fluent.Options.BBRetain:SetValue(70)
+            Fluent.Options.BBLanding:SetValue(55); Fluent.Options.BBTriggerY:SetValue(8)
+            Fluent:Notify({Title="Better Bounce",Content="🔵 Preset: Standard",Duration=2})
+        elseif s:find("Aggressive") then
+            bb.yBoost=1.8; bb.retainFactor=0.90; bb.landingKeep=0.75; bb.minTriggerY=5
+            Fluent.Options.BBYBoost:SetValue(18); Fluent.Options.BBRetain:SetValue(90)
+            Fluent.Options.BBLanding:SetValue(75); Fluent.Options.BBTriggerY:SetValue(5)
+            Fluent:Notify({Title="Better Bounce",Content="🔴 Preset: Aggressive",Duration=2})
+        end
+    end})
+    toggleRefs["BetterBounce"]=sBB:AddToggle("BetterBounce",{Title="Enable Better Bounce",Default=false,Callback=function(v)
+        st.BetterBounce=v
+        if v then character,hrp,humanoid=getChar(); enableBetterBounce()
+        else disableBetterBounce() end
+    end})
+    sBB:AddKeybind("KbBetterBounce",{Title="Keybind — Better Bounce",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("BetterBounce",new) end})
+
+    -- ── Strafe Boost ──────────────────────────────────────────
+    local sSB = Tabs.Main:AddSection("Strafe Boost  💨")
+    sSB:AddSlider("SBMultiplier", {
+        Title    = "Boost Power  (higher = more speed when strafing)",
+        Default  = 10,
+        Min      = 1,
+        Max      = 50,
+        Rounding = 0,
+        Callback = function(v)
+            sb.multiplier = v
+            pcall(function() Fluent.Options.SBMultiplierInput:SetValue(tostring(v)) end)
+        end,
+    })
     sSB:AddInput("SBMultiplierInput", {
         Title    = "↳ Type exact value",
         Default  = "10",
@@ -1955,6 +2170,12 @@ local function buildMainTab()
                 disableStrafeBoost()
             end
         end,
+    })
+    sSB:AddKeybind("KbStrafeBoost", {
+        Title   = "Keybind — Strafe Boost",
+        Default = "None",
+        Callback = function() end,
+        ChangedCallback = function(new) registerKeybind("StrafeBoost", new) end,
     })
 end
 buildMainTab()
@@ -2019,7 +2240,6 @@ local function buildEmoteTab()
 
         local ecOldNC
         local hookOk=pcall(function()
-            if not hookmetamethod then error("hookmetamethod not supported") end
             ecOldNC=hookmetamethod(game,"__namecall",function(self,...)
                 local m; pcall(function() m=getnamecallmethod() end)
                 local args={...}
@@ -2032,7 +2252,7 @@ local function buildEmoteTab()
                         end
                     end
                 end
-                if ecOldNC then return ecOldNC(self,...) end
+                return ecOldNC(self,...)
             end)
         end)
 
@@ -2131,6 +2351,12 @@ local function buildEmoteTab()
             if v then enableEmoteWalk()
             else disableEmoteWalk() end
         end,
+    })
+    sEW:AddKeybind("KbEmoteWalk", {
+        Title   = "Keybind — Emote Walk Bypass",
+        Default = "None",
+        Callback = function() end,
+        ChangedCallback = function(new) registerKeybind("EmoteWalk", new) end,
     })
 
     -- ── Animation Override ────────────────────────────────────
@@ -2539,14 +2765,16 @@ local function buildFarmTab()
     toggleRefs["AutoFarm"]=sFM:AddToggle("AutoFarm",{Title="Enable Auto Farm",Default=false,Callback=function(v)
         st.AutoFarm=v; if v then startAutoFarm() else stopAutoFarm() end
     end})
+    sFM:AddKeybind("KbAutoFarm",{Title="Keybind — Auto Farm",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("AutoFarm",new) end})
 
-    -- ── Auto Vote Map ──────────────────────────────────────────
+    -- ── Auto Vote Map ─────────────────────────────────────────
     local sVote = Tabs.Farm:AddSection("Auto Vote Map  🗺️")
     local autoVoteConn  = nil
     local autoVoteMode  = "Easiest First"
+
     local VOTE_PRIORITIES = {
-        ["Easiest First"] = {"EASY","NORMAL","HARD","EXPERT"},
-        ["Hardest First"] = {"EXPERT","HARD","NORMAL","EASY"},
+        ["Easiest First"] = {"EASY", "NORMAL", "HARD", "EXPERT"},
+        ["Hardest First"] = {"EXPERT", "HARD", "NORMAL", "EASY"},
         ["Random"]        = nil,
     }
 
@@ -2554,6 +2782,8 @@ local function buildFarmTab()
         if not st.AutoVote then return end
         local playerGui = player:FindFirstChild("PlayerGui")
         if not playerGui then return end
+
+        -- Find Vote frame (confirmed path: PlayerGui.Global.CanDisable.Vote)
         local voteFrame = nil
         for _, desc in pairs(playerGui:GetDescendants()) do
             if desc.Name == "Vote" and desc:IsA("Frame") and desc.Visible then
@@ -2561,17 +2791,26 @@ local function buildFarmTab()
             end
         end
         if not voteFrame then return end
+
+        -- Wait until Choices has all 4 slots populated
         local choices = nil
         for _ = 1, 20 do
             choices = voteFrame:FindFirstChild("Choices")
             if choices and #choices:GetChildren() >= 4 then break end
             task.wait(0.2)
         end
-        if not choices then return end
+        if not choices then
+            Fluent:Notify({Title="Auto Vote", Content="⚠ Choices not found in Vote frame", Duration=3})
+            return
+        end
+
+        -- Read all 4 slots
+        -- Path: Choices → "1"/"2"/"3"/"4" → ImageButton → Difficulty / Title
         local slots = {}
         for i = 1, 4 do
             local container = choices:FindFirstChild(tostring(i))
             if container then
+                -- The child named "ImageButton" (confirmed from logs)
                 local imgBtn = container:FindFirstChild("ImageButton")
                            or container:FindFirstChildOfClass("ImageButton")
                            or container
@@ -2584,11 +2823,13 @@ local function buildFarmTab()
                 }
             end
         end
+
+        -- Pick target by mode
         local target = nil
         if autoVoteMode == "Random" then
             local available = {}
             for i = 1, 4 do if slots[i] then table.insert(available, slots[i]) end end
-            if #available > 0 then target = available[math.random(1,#available)] end
+            if #available > 0 then target = available[math.random(1, #available)] end
         else
             local priority = VOTE_PRIORITIES[autoVoteMode] or VOTE_PRIORITIES["Easiest First"]
             for _, pref in ipairs(priority) do
@@ -2600,33 +2841,39 @@ local function buildFarmTab()
                 if target then break end
             end
         end
+
+        -- Fallback slot 4
         if not target then target = slots[4] end
-        if not target or not target.button then return end
-        local btn = target.button
-        -- Mobile-safe: use :Activate() first, VIM fallback
-        local clicked = false
-        pcall(function()
-            if btn:IsA("GuiButton") then btn:Activate(); clicked = true end
-        end)
-        if not clicked and VIM then
-            pcall(function()
-                local cx = math.floor(btn.AbsolutePosition.X + btn.AbsoluteSize.X * 0.5)
-                local cy = math.floor(btn.AbsolutePosition.Y + btn.AbsoluteSize.Y * 0.5)
-                VIM:SendMouseMovementEvent(cx, cy, false, game)
-                task.wait(0.05)
-                VIM:SendMouseButtonEvent(cx, cy, 0, true,  game, 1)
-                task.wait(0.08)
-                VIM:SendMouseButtonEvent(cx, cy, 0, false, game, 1)
-            end)
+        if not target or not target.button then
+            Fluent:Notify({Title="Auto Vote", Content="⚠ No valid slot found — retrying...", Duration=3})
+            return
         end
-        Fluent:Notify({Title="Auto Vote", Content="✅ "..target.mapName.." ["..target.difficulty.."]", Duration=4})
+
+        local btn = target.button
+        local cx  = math.floor(btn.AbsolutePosition.X + btn.AbsoluteSize.X * 0.5)
+        local cy  = math.floor(btn.AbsolutePosition.Y + btn.AbsoluteSize.Y * 0.5)
+        pcall(function() VIM:SendMouseMovementEvent(cx, cy, false, game) end)
+        task.wait(0.05)
+        pcall(function()
+            VIM:SendMouseButtonEvent(cx, cy, 0, true,  game, 1)
+            task.wait(0.08)
+            VIM:SendMouseButtonEvent(cx, cy, 0, false, game, 1)
+        end)
+        Fluent:Notify({
+            Title   = "Auto Vote",
+            Content = "✅ Voted: "..target.mapName.." ["..target.difficulty.."]",
+            Duration = 4,
+        })
     end
 
     sVote:AddDropdown("VoteMode", {
         Title   = "Vote Priority",
         Values  = {"Easiest First", "Hardest First", "Random"},
         Default = "Easiest First",
-        Callback = function(v) autoVoteMode = tostring(v) end,
+        Callback = function(v)
+            autoVoteMode = tostring(v)
+            
+        end,
     })
 
     toggleRefs["AutoVote"] = sVote:AddToggle("AutoVote", {
@@ -2638,23 +2885,34 @@ local function buildFarmTab()
                 task.spawn(function()
                     local playerGui = player:WaitForChild("PlayerGui")
                     if autoVoteConn then autoVoteConn:Disconnect() end
+
+                    -- Continuous scan: check every 2s if Vote frame is visible
+                    -- This way it works whether toggled before or during the vote screen
                     autoVoteConn = RunService.Heartbeat:Connect(function()
                         if not st.AutoVote then return end
+                        -- Throttle to once per 2 seconds
                         if not autoVoteConn._lastCheck then autoVoteConn._lastCheck = 0 end
                         if tick() - autoVoteConn._lastCheck < 2 then return end
                         autoVoteConn._lastCheck = tick()
+
                         for _, desc in pairs(playerGui:GetDescendants()) do
                             if desc.Name == "Vote" and desc:IsA("Frame") and desc.Visible then
+                                -- Vote screen is open — vote if not already voted
                                 local choices = desc:FindFirstChild("Choices")
                                 if choices then
+                                    -- Check if already voted (any slot shows Voted=true visible)
                                     local alreadyVoted = false
                                     for i = 1, 4 do
                                         local container = choices:FindFirstChild(tostring(i))
                                         local imgBtn = container and (container:FindFirstChild("ImageButton") or container:FindFirstChildOfClass("ImageButton"))
                                         local votedLabel = imgBtn and imgBtn:FindFirstChild("Voted")
-                                        if votedLabel and votedLabel.Visible then alreadyVoted = true; break end
+                                        if votedLabel and votedLabel.Visible then
+                                            alreadyVoted = true; break
+                                        end
                                     end
-                                    if not alreadyVoted then task.spawn(executeAutoVote) end
+                                    if not alreadyVoted then
+                                        task.spawn(executeAutoVote)
+                                    end
                                 end
                                 break
                             end
@@ -2666,7 +2924,7 @@ local function buildFarmTab()
             end
         end,
     })
-    sVote:AddButton({Title="Vote Now (manual)", Callback=function()
+    sVote:AddButton({Title="🖱 Vote Now (manual)", Callback=function()
         task.spawn(executeAutoVote)
     end})
 
@@ -2696,6 +2954,12 @@ local function buildFarmTab()
             ticketFarm.enabled = v
             if v then startTicketFarm() else stopTicketFarm() end
         end,
+    })
+    sTF:AddKeybind("KbTicketFarm", {
+        Title   = "Keybind — Auto Ticket Farm",
+        Default = "None",
+        Callback = function() end,
+        ChangedCallback = function(new) registerKeybind("TicketFarm", new) end,
     })
 
     local sAFK=Tabs.Farm:AddSection("Anti-AFK")
@@ -2831,9 +3095,9 @@ local function buildMacroTab()
     -- ── Send a single key press+release ───────────────────────
     local function sendKey(kc)
         pcall(function()
-            if VIM then pcall(function() VIM:SendKeyEvent(true,  kc, false, game) end) end
+            VIM:SendKeyEvent(true,  kc, false, game)
             task.wait(0.04)
-            if VIM then pcall(function() VIM:SendKeyEvent(false, kc, false, game) end) end
+            VIM:SendKeyEvent(false, kc, false, game)
         end)
     end
 
@@ -3018,6 +3282,12 @@ local function buildMacroTab()
         Default = false,
         Callback = function(v) setMacro(v) end,
     })
+    sEnable:AddKeybind("MacroKeybind", {
+        Title   = "Keybind — Toggle Macro",
+        Default = "None",
+        Callback = function() end,
+        ChangedCallback = function(new) rebuildMacroKeybind(new) end,
+    })
     toggleRefs["MacroMobileBtn"] = sEnable:AddToggle("MacroMobileBtn", {
         Title   = "Mobile Button",
         Default = false,
@@ -3093,6 +3363,20 @@ local function buildSettingsTab()
     InterfaceManager:SetFolder("FemboyHub")
     InterfaceManager:BuildInterfaceSection(Tabs.Settings)
     SaveManager:BuildConfigSection(Tabs.Settings)
+
+    task.spawn(function()
+        task.wait(1)
+        for _,optName in ipairs({"MenuKeybind","MinimizeKeybind","InterfaceMinimizeKeybind","MinimizeBind"}) do
+            local opt=Fluent.Options and Fluent.Options[optName]
+            if opt and opt.OnChanged then
+                pcall(function()
+                    opt:OnChanged(function(newKey) if newKey and newKey~=Enum.KeyCode.Unknown then minimizeKeyCode=newKey end end)
+                    if opt.Value and opt.Value~=Enum.KeyCode.Unknown then minimizeKeyCode=opt.Value end
+                end)
+                break
+            end
+        end
+    end)
 end
 
 -- ════════════════════════════════════════════════════════════════
@@ -3330,110 +3614,9 @@ buildSettingsTab()
 SaveManager:LoadAutoloadConfig()
 Window:SelectTab(1)
 
--- ════════════════════════════════════════════════════════════════
--- MOBILE TOGGLE BUTTON
--- Floating button bottom-right — tap to show/hide the Hub UI
--- ════════════════════════════════════════════════════════════════
-task.spawn(function()
-    local playerGui = player:WaitForChild("PlayerGui")
-
-    -- Remove old button if re-injecting
-    local old = playerGui:FindFirstChild("FemboyMobileToggle")
-    if old then old:Destroy() end
-
-    local gui = Instance.new("ScreenGui")
-    gui.Name           = "FemboyMobileToggle"
-    gui.ResetOnSpawn   = false
-    gui.DisplayOrder   = 999
-    gui.IgnoreGuiInset = true
-    gui.Parent         = playerGui
-
-    -- Draggable container
-    local btn = Instance.new("TextButton")
-    btn.Size              = UDim2.fromOffset(72, 72)
-    btn.Position          = UDim2.new(1, -88, 1, -120)
-    btn.AnchorPoint       = Vector2.new(0, 1)
-    btn.BackgroundColor3  = Color3.fromRGB(25, 25, 32)
-    btn.BorderSizePixel   = 0
-    btn.Text              = ""
-    btn.ZIndex            = 10
-    btn.Active            = true
-    btn.Parent            = gui
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 20)
-
-    -- Stroke
-    local stroke = Instance.new("UIStroke")
-    stroke.Color     = Color3.fromRGB(180, 60, 60)
-    stroke.Thickness = 2
-    stroke.Parent    = btn
-
-    -- Icon label
-    local icon = Instance.new("TextLabel")
-    icon.Size                  = UDim2.fromScale(1, 0.55)
-    icon.Position              = UDim2.fromScale(0, 0.08)
-    icon.BackgroundTransparency = 1
-    icon.Text                  = "🌸"
-    icon.TextScaled            = true
-    icon.Font                  = Enum.Font.GothamBold
-    icon.Parent                = btn
-
-    -- Label
-    local lbl = Instance.new("TextLabel")
-    lbl.Size                  = UDim2.new(1, 0, 0.38, 0)
-    lbl.Position              = UDim2.fromScale(0, 0.62)
-    lbl.BackgroundTransparency = 1
-    lbl.Text                  = "HUB"
-    lbl.TextColor3            = Color3.fromRGB(220, 220, 230)
-    lbl.TextScaled            = true
-    lbl.Font                  = Enum.Font.GothamBold
-    lbl.Parent                = btn
-
-    -- Drag support
-    local dragging, dragStart, startPos = false, nil, nil
-    btn.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.Touch
-        or inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging  = true
-            dragStart = inp.Position
-            startPos  = btn.Position
-        end
-    end)
-    btn.InputChanged:Connect(function(inp)
-        if dragging and (inp.UserInputType == Enum.UserInputType.Touch
-        or inp.UserInputType == Enum.UserInputType.MouseMove) then
-            local delta = inp.Position - dragStart
-            btn.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
-    btn.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.Touch
-        or inp.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
-    end)
-
-    -- Toggle Hub UI visibility
-    local hubVisible = true
-    btn.MouseButton1Click:Connect(function()
-        hubVisible = not hubVisible
-        -- Toggle all Hub ScreenGuis except this button
-        for _, sg in pairs(playerGui:GetChildren()) do
-            if sg:IsA("ScreenGui") and sg.Name ~= "FemboyMobileToggle" and sg.Name ~= "FemboyAvatarInTab" then
-                sg.Enabled = hubVisible
-            end
-        end
-        -- Update button color to reflect state
-        btn.BackgroundColor3 = hubVisible
-            and Color3.fromRGB(25, 25, 32)
-            or  Color3.fromRGB(60, 20, 20)
-        stroke.Color = hubVisible
-            and Color3.fromRGB(180, 60, 60)
-            or  Color3.fromRGB(80, 80, 90)
-        lbl.Text = hubVisible and "HUB" or "OFF"
-    end)
-end)
+Fluent:Notify({
+    Title      = "Femboy Hub v1.6",
+    Content    = "✅ Edge Boost Presets (Light/Medium/Heavy)\n✅ Auto Ticket Farm (workspace scan)\n✅ Auto Vote Map (frame name fix)\n✅ Full English UI",
+    SubContent = "by KhoaProSigmaAlphaMale",
+    Duration   = 6,
+})
