@@ -476,7 +476,7 @@ local function setWeather(wtype)
     if wtype=="Snow" then
         weather.isSnow=true; createClouds(0.60,0.50,Color3.fromRGB(240,245,255))
         weather.sound.SoundId="rbxassetid://1340194740"; weather.sound:Play()
-        startWeatherLoop(); Fluent:Notify({Title="Weather",Content="❄ Snowfall started!",Duration=3})
+        startWeatherLoop(); 
     end
 end
 
@@ -1087,7 +1087,7 @@ end
 
 local function tasStart()
     tas.frames={}; tas.running=true; tas.timeStart=tick()
-    Fluent:Notify({Title="TAS",Content="🔴 Recording started!",Duration=2})
+    
     task.spawn(function()
         while tas.running do
             RunService.Heartbeat:Wait()
@@ -1098,10 +1098,10 @@ local function tasStart()
         end
     end)
 end
-local function tasStop() tas.running=false; Fluent:Notify({Title="TAS",Content="⏹ Stopped — "..#tas.frames.." frames.",Duration=3}) end
+local function tasStop() tas.running=false;  end
 local function tasPlay()
-    if #tas.frames==0 then Fluent:Notify({Title="TAS",Content="⚠ No frames recorded.",Duration=3}); return end
-    Fluent:Notify({Title="TAS",Content="▶ Playing "..#tas.frames.." frames...",Duration=3})
+    if #tas.frames==0 then return end
+    
     local timePlay=tick(); local fc=#tas.frames; local of=1
     local loop; loop=RunService.Heartbeat:Connect(function()
         if (tick()-timePlay)>=tas.frames[fc][3] then loop:Disconnect(); return end
@@ -1138,7 +1138,7 @@ local function stopAutoFarm()
     if farm.conn3     then farm.conn3:Disconnect();     farm.conn3=nil     end
     if farm.platform  then pcall(function() farm.platform:Destroy() end);  farm.platform=nil  end
     if farm.plat3     then pcall(function() farm.plat3:Destroy() end);     farm.plat3=nil     end
-    farm.phase=1; Fluent:Notify({Title="Farm",Content="🔴 Auto Farm stopped.",Duration=2})
+    farm.phase=1; 
 end
 
 local function startAutoFarm()
@@ -1162,7 +1162,7 @@ local function startAutoFarm()
                 task.spawn(function() task.wait(0.05); farmTP() end)
             end
         end)
-        Fluent:Notify({Title="Farm",Content="✅ Auto Farm M1 started!",Duration=2})
+        
     elseif farm.method==2 then
         local c=player.Character
         if c then local h=c:FindFirstChild("HumanoidRootPart")
@@ -1179,7 +1179,7 @@ local function startAutoFarm()
             local h=c2:FindFirstChild("HumanoidRootPart"); if not h then return end
             if h.Position.Y<FARM2_THRESH then h.CFrame=CFrame.new(3000,FARM2_Y+1,3000); h.AssemblyLinearVelocity=Vector3.new() end
         end)
-        Fluent:Notify({Title="Farm",Content="✅ Auto Farm M2 started!",Duration=2})
+        
     elseif farm.method==3 then
         if farm.plat3 then pcall(function() farm.plat3:Destroy() end) end
         local c=player.Character; local h=c and c:FindFirstChild("HumanoidRootPart")
@@ -1198,7 +1198,7 @@ local function startAutoFarm()
             local dy=math.abs(h2.Position.Y-playerY); local dx=math.abs(h2.Position.X-targetX); local dz=math.abs(h2.Position.Z-targetZ)
             if dy>8 or dx>15 or dz>15 then h2.CFrame=CFrame.new(targetX,playerY,targetZ); h2.AssemblyLinearVelocity=Vector3.new() end
         end)
-        Fluent:Notify({Title="Farm M3",Content="✅ Underground AFK!\nY = -1500  (bot-safe depth)",Duration=4})
+        
     end
 end
 
@@ -1246,7 +1246,7 @@ local function startTicketFarm()
     local char = player.Character
     local hrp  = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then
-        Fluent:Notify({Title="Ticket Farm", Content="⚠ No character found.", Duration=3})
+        
         return
     end
 
@@ -1341,11 +1341,7 @@ local function startTicketFarm()
         end
     end)
 
-    Fluent:Notify({
-        Title   = "Ticket Farm",
-        Content = "✅ ON — Collects tickets then hides underground.\nAFK position saved.",
-        Duration = 4,
-    })
+    
 end
 
 local function stopTicketFarm()
@@ -1356,11 +1352,7 @@ local function stopTicketFarm()
     end
     ticketFarm.afkPos  = nil
     ticketFarm.status  = "Idle"
-    Fluent:Notify({
-        Title   = "Ticket Farm",
-        Content = "🔴 OFF — Total collected: " .. ticketFarm.count,
-        Duration = 3,
-    })
+    
 end
 
 local origLight       = {}
@@ -1388,9 +1380,9 @@ end
 
 local function applySkybox(idRaw, displayName)
     local idStr=tostring(idRaw):match("%d+")
-    if not idStr or idStr=="" then Fluent:Notify({Title="Sky",Content="⚠ Invalid ID.",Duration=3}); return end
+    if not idStr or idStr=="" then return end
     displayName=displayName or idStr; clearSkybox()
-    Fluent:Notify({Title="Sky",Content="⏳ Loading "..displayName.."...",Duration=3})
+    
     local ok,result=pcall(function()
         local objs=game:GetObjects("rbxassetid://"..idStr)
         if not objs or #objs==0 then return nil end
@@ -1398,12 +1390,12 @@ local function applySkybox(idRaw, displayName)
         for _,obj in ipairs(objs) do local sky=obj:FindFirstChildOfClass("Sky"); if sky then return sky end end
         return nil
     end)
-    if ok and result then result.Parent=Lighting; currentSkybox=result; Fluent:Notify({Title="Sky",Content="✅ "..displayName,Duration=3})
-    else Fluent:Notify({Title="Sky",Content="❌ Failed: "..displayName.."\n(ID: "..idStr..")",Duration=5}) end
+    if ok and result then result.Parent=Lighting; currentSkybox=result; 
+    else  end
 end
 
 local function resetSkybox()
-    clearSkybox(); Fluent:Notify({Title="Sky",Content="🔄 Sky reset.",Duration=2})
+    clearSkybox(); 
 end
 
 local function applyFakeStat(statName, value, aliases)
@@ -1421,7 +1413,6 @@ local function applyFakeStat(statName, value, aliases)
         end
     end
 end
-
 
 local function isBotDangerousAt(pos)
     if not st.AvoidBot then return false end
@@ -1569,7 +1560,7 @@ local function openDexKeyUI()
             task.spawn(function()
                 task.wait(0.6); sg:Destroy()
                 pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/infyiff/backup/main/dex.lua"))() end)
-                Fluent:Notify({Title="Dex Explorer",Content="✅ Loaded!",Duration=3})
+                
             end)
         else
             errorLbl.Text="✘  Wrong key. Try again."; errorLbl.TextColor3=Color3.fromRGB(200,0,0)
@@ -1760,7 +1751,7 @@ local Tabs = {
     Custom   = Window:AddTab({ Title="Custom",       Icon="wrench"    }),
     Farm     = Window:AddTab({ Title="Farm",         Icon="sprout"    }),
     Player   = Window:AddTab({ Title="Player",       Icon="user"      }),
-    Macro    = Window:AddTab({ Title="Macro",        Icon="zap"       }),
+    Macro    = Window:AddTab({ Title="Macro",        Icon="bot"       }),
     Settings = Window:AddTab({ Title="Settings",     Icon="settings"  }),
 }
 
@@ -1821,21 +1812,35 @@ local function buildCreditsTab()
     sPI:AddButton({Title="📋 Copy My Info", Callback=function()
         local info = "Username: "..player.Name.."  |  Display: "..player.DisplayName.."  |  ID: "..player.UserId.."  |  Executor: "..executorName.."  |  Level: "..levelStr
         pcall(function() setclipboard(info) end)
-        Fluent:Notify({Title="Copied",Content="Your info copied to clipboard!",Duration=3})
+        
     end})
 
     local S2=Tabs.Credits:AddSection("Links")
     S2:AddButton({Title="Discord — discord.gg/n3CP2gmS",Callback=function()
         pcall(function() GuiService:OpenBrowserWindow("https://discord.gg/n3CP2gmS") end)
         pcall(function() setclipboard("https://discord.gg/n3CP2gmS") end)
-        Fluent:Notify({Title="Copied",Content="Invite link copied!",Duration=3})
+        
     end})
 
     local S3=Tabs.Credits:AddSection("Session")
-    local sesP=S3:AddParagraph({Title="Session Time",Content="00:00:00"})
-    RunService.Heartbeat:Connect(function()
-        local e=tick()-sessionStart
-        pcall(function() sesP:SetDesc(string.format("%02d:%02d:%02d",math.floor(e/3600),math.floor((e%3600)/60),math.floor(e%60))) end)
+    local sesP = S3:AddParagraph({Title="Session Time", Content="00:00:00"})
+    local fpsP = S3:AddParagraph({Title="FPS",          Content="--"})
+    local _fpsSamples = {}
+    task.spawn(function()
+        while true do
+            local t0 = tick()
+            RunService.Heartbeat:Wait()
+            local dt = tick() - t0
+            table.insert(_fpsSamples, 1/math.max(dt, 0.001))
+            if #_fpsSamples > 20 then table.remove(_fpsSamples, 1) end
+            local avg = 0
+            for _, v in ipairs(_fpsSamples) do avg = avg + v end
+            avg = math.floor(avg / #_fpsSamples)
+            local e = tick() - sessionStart
+            pcall(function() sesP:SetDesc(string.format("%02d:%02d:%02d", math.floor(e/3600), math.floor((e%3600)/60), math.floor(e%60))) end)
+            pcall(function() fpsP:SetDesc(tostring(avg).." fps") end)
+            task.wait(0.5)
+        end
     end)
 end
 buildCreditsTab()
@@ -1878,9 +1883,9 @@ local function buildMainTab()
             else edgeBoostMode = "Manual" end
             -- Show/hide slider hint
             if edgeBoostMode == "Manual" then
-                Fluent:Notify({Title="Edge Boost", Content="Manual mode — use the slider below to set power.", Duration=3})
+                
             else
-                Fluent:Notify({Title="Edge Boost", Content=edgeBoostMode.." mode — power randomized each boost.", Duration=3})
+                
             end
         end,
     })
@@ -1993,7 +1998,7 @@ local function buildMainTab()
     sEAI:AddKeybind("KbESPAI",{Title="Keybind — ESP AI",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("ESPAI",new) end})
     sEAI:AddButton({Title="🔄 Force Rescan Bots",Callback=function()
         disableAiESP(); task.wait(0.1); enableAiESP()
-        Fluent:Notify({Title="ESP AI",Content="🔄 Rescanned!",Duration=2})
+        
     end})
 
     local sJB=Tabs.Main:AddSection("Jump Boost")
@@ -2009,7 +2014,7 @@ local function buildMainTab()
     end})
     toggleRefs["JumpBoost"]=sJB:AddToggle("JumpBoost",{Title="⬆ Enable Jump Boost",Default=false,Callback=function(v)
         st.JumpBoost=v
-        if v then pcall(function() humanoid.UseJumpPower=true; humanoid.JumpPower=motion.jumpPower end); Fluent:Notify({Title="Jump",Content="✅ Power: "..motion.jumpPower,Duration=2})
+        if v then pcall(function() humanoid.UseJumpPower=true; humanoid.JumpPower=motion.jumpPower end); 
         else pcall(function() humanoid.UseJumpPower=true; humanoid.JumpPower=motion.ORIG_JUMP end) end
     end})
     sJB:AddKeybind("KbJumpBoost",{Title="Keybind — Jump Boost",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("JumpBoost",new) end})
@@ -2029,7 +2034,7 @@ local function buildMainTab()
         if v then
             if motion.gravConn then motion.gravConn:Disconnect() end
             motion.gravConn=RunService.Stepped:Connect(function() if st.GravityOverride then pcall(function() workspace.Gravity=motion.gravValue end) end end)
-            Fluent:Notify({Title="Gravity",Content="✅ Value: "..motion.gravValue,Duration=2})
+            
         else
             if motion.gravConn then motion.gravConn:Disconnect(); motion.gravConn=nil end
             pcall(function() workspace.Gravity=motion.ORIG_GRAV end)
@@ -2042,7 +2047,7 @@ local function buildMainTab()
         if motion.gravConn then motion.gravConn:Disconnect(); motion.gravConn=nil end
         pcall(function() workspace.Gravity=motion.ORIG_GRAV end)
         Fluent.Options.GravityValue:SetValue(196)
-        Fluent:Notify({Title="Gravity",Content="🔄 Reset.",Duration=2})
+        
     end})
 
     local sIJ=Tabs.Main:AddSection("Infinity Jump")
@@ -2063,7 +2068,7 @@ local function buildMainTab()
                     hrp.AssemblyLinearVelocity=Vector3.new(hrp.AssemblyLinearVelocity.X,motion.infJumpPower,hrp.AssemblyLinearVelocity.Z)
                 end
             end)
-            Fluent:Notify({Title="Inf Jump",Content="✅ Power: "..motion.infJumpPower,Duration=2})
+            
         else
             if motion.infJumpConn then motion.infJumpConn:Disconnect(); motion.infJumpConn=nil end
             
@@ -2094,17 +2099,17 @@ local function buildMainTab()
             bb.yBoost=1.2; bb.retainFactor=0.45; bb.landingKeep=0.35; bb.minTriggerY=6
             Fluent.Options.BBYBoost:SetValue(12); Fluent.Options.BBRetain:SetValue(45)
             Fluent.Options.BBLanding:SetValue(35); Fluent.Options.BBTriggerY:SetValue(6)
-            Fluent:Notify({Title="Better Bounce",Content="🟢 Preset: Gentle",Duration=2})
+            
         elseif s:find("Standard") then
             bb.yBoost=1.4; bb.retainFactor=0.70; bb.landingKeep=0.55; bb.minTriggerY=8
             Fluent.Options.BBYBoost:SetValue(14); Fluent.Options.BBRetain:SetValue(70)
             Fluent.Options.BBLanding:SetValue(55); Fluent.Options.BBTriggerY:SetValue(8)
-            Fluent:Notify({Title="Better Bounce",Content="🔵 Preset: Standard",Duration=2})
+            
         elseif s:find("Aggressive") then
             bb.yBoost=1.8; bb.retainFactor=0.90; bb.landingKeep=0.75; bb.minTriggerY=5
             Fluent.Options.BBYBoost:SetValue(18); Fluent.Options.BBRetain:SetValue(90)
             Fluent.Options.BBLanding:SetValue(75); Fluent.Options.BBTriggerY:SetValue(5)
-            Fluent:Notify({Title="Better Bounce",Content="🔴 Preset: Aggressive",Duration=2})
+            
         end
     end})
     toggleRefs["BetterBounce"]=sBB:AddToggle("BetterBounce",{Title="Enable Better Bounce",Default=false,Callback=function(v)
@@ -2155,7 +2160,7 @@ local function buildMainTab()
             sb.multiplier = val
             pcall(function() Fluent.Options.SBMultiplier:SetValue(val) end)
             pcall(function() Fluent.Options.SBMultiplierInput:SetValue(tostring(val)) end)
-            Fluent:Notify({Title="Strafe Boost", Content="Preset: "..s, Duration=2})
+            
         end,
     })
     toggleRefs["StrafeBoost"] = sSB:AddToggle("StrafeBoost", {
@@ -2177,6 +2182,71 @@ local function buildMainTab()
         Callback = function() end,
         ChangedCallback = function(new) registerKeybind("StrafeBoost", new) end,
     })
+
+    -- Lag Switch
+    local sLS = Tabs.Main:AddSection("Lag Switch")
+    local lagSwitch = { ms=100, running=false }
+
+    -- Fire once: busy-wait blocks main thread for X ms then stops
+    local function fireLagSwitch()
+        if lagSwitch.running then return end
+        lagSwitch.running = true
+        local duration = lagSwitch.ms / 1000
+        local t0 = tick()
+        while tick() - t0 < duration do end
+        lagSwitch.running = false
+        -- Auto reset toggle to OFF after firing
+        pcall(function() toggleRefs["LagSwitch"]:SetValue(false) end)
+
+    end
+
+    local lagKeyConn = nil
+    local function rebuildLagKeybind(kc)
+        if lagKeyConn then lagKeyConn:Disconnect(); lagKeyConn = nil end
+        if not kc or kc == Enum.KeyCode.Unknown then return end
+        lagKeyConn = UserInputService.InputBegan:Connect(function(inp, gpe)
+            if gpe then return end
+            if inp.KeyCode ~= kc then return end
+            task.spawn(fireLagSwitch)
+        end)
+    end
+
+    sLS:AddSlider("LagSwitchMS", {
+        Title    = "Freeze Duration (ms)",
+        Default  = 100, Min = 10, Max = 500, Rounding = 0,
+        Callback = function(v)
+            lagSwitch.ms = v
+            pcall(function() Fluent.Options.LagSwitchMSInput:SetValue(tostring(v)) end)
+        end,
+    })
+    sLS:AddInput("LagSwitchMSInput", {
+        Title       = "Type exact value",
+        Default     = "100",
+        Placeholder = "10 - 500",
+        Numeric     = false, Finished = false,
+        Callback    = function(v)
+            local n = tonumber(v)
+            if not n then return end
+            n = math.clamp(math.floor(n), 10, 500)
+            lagSwitch.ms = n
+            pcall(function() Fluent.Options.LagSwitchMS:SetValue(n) end)
+        end,
+    })
+    -- Toggle fires once then auto-resets
+    toggleRefs["LagSwitch"] = sLS:AddToggle("LagSwitch", {
+        Title    = "Lag Switch",
+        Default  = false,
+        Callback = function(v)
+            if v then task.spawn(fireLagSwitch) end
+        end,
+    })
+    sLS:AddKeybind("KbLagSwitch", {
+        Title           = "Keybind",
+        Default         = "None",
+        Callback        = function() end,
+        ChangedCallback = function(new) rebuildLagKeybind(new) end,
+    })
+
 end
 buildMainTab()
 
@@ -2256,7 +2326,7 @@ local function buildEmoteTab()
             end)
         end)
 
-        if not hookOk then Fluent:Notify({Title="Emote Change",Content="⚠ Executor does not support hookmetamethod.\nTry Emote Swapper below.",Duration=6}) end
+        if not hookOk then  end
 
         if player.Character then task.spawn(ecRespawn) end
         player.CharacterAdded:Connect(function() task.wait(1); ecRespawn() end)
@@ -2287,11 +2357,11 @@ local function buildEmoteTab()
         local msg=ok>0 and ("✅ "..ok.." mapping(s) applied") or ""
         if fail>0 then msg=msg..(msg~="" and "\n" or "").."⚠ "..fail.." failed (invalid/same name)" end
         if msg=="" then msg="⚠ No valid emote pairs found" end
-        Fluent:Notify({Title="Emote Change",Content=msg,Duration=5})
+        
     end})
     sECBtn:AddButton({Title="🔄 Reset All Mappings",Callback=function()
         for i=1,12 do ecCurrent[i]=""; ecSelect[i]=""; ecEnabled[i]=false end
-        Fluent:Notify({Title="Emote Change",Content="🔄 All mappings cleared.",Duration=3})
+        
     end})
 
     local sSwap=Tabs.Emote:AddSection("Emote Swapper  (Global — ReplicatedStorage)")
@@ -2330,11 +2400,11 @@ local function buildEmoteTab()
         local msg=sc>0 and ("✅ Swapped "..sc.." emote(s)") or ""
         if fc>0 then msg=msg..(msg~="" and " | " or "").."❌ Failed "..fc end
         if msg=="" then msg="⚠ No emotes specified" end
-        Fluent:Notify({Title="Emote Swapper",Content=msg,Duration=3})
+        
     end})
     sSWBtn:AddButton({Title="🔄 Reset Emote Swap",Callback=function()
-        if resetSwap() then swPairs={}; for i=1,12 do swCur[i]=""; swSel[i]="" end; Fluent:Notify({Title="Emote Swapper",Content="🔄 All emotes restored!",Duration=3})
-        else Fluent:Notify({Title="Emote Swapper",Content="❌ Failed to reset!",Duration=3}) end
+        if resetSwap() then swPairs={}; for i=1,12 do swCur[i]=""; swSel[i]="" end; 
+        else  end
     end})
 
     player.CharacterRemoving:Connect(function() if next(swPairs) then pcall(resetSwap) end end)
@@ -2422,11 +2492,11 @@ local function buildCustomTab()
                 end
             end
         end)
-        Fluent:Notify({Title="World Trans",Content="→ "..level.."%",Duration=2})
+        
     end})
     sWT:AddButton({Title="Restore Visibility",Callback=function()
         for _,d in pairs(worldTransOrig) do pcall(function() if d.p and d.p.Parent then d.p.Transparency=d.t end end) end
-        worldTransOrig={}; Fluent:Notify({Title="World Trans",Content="🔄 Restored.",Duration=2})
+        worldTransOrig={}; 
     end})
 
     local sWI=Tabs.Custom:AddSection("World Invisibility")
@@ -2440,10 +2510,10 @@ local function buildCustomTab()
                     worldInvisOrig[obj]=obj.Transparency; pcall(function() obj.Transparency=1 end)
                 end
             end
-            Fluent:Notify({Title="World",Content="✅ Hidden!",Duration=2})
+            
         else
             for obj,t in pairs(worldInvisOrig) do pcall(function() if obj and obj.Parent then obj.Transparency=t end end) end
-            worldInvisOrig={}; Fluent:Notify({Title="World",Content="🔄 Visible.",Duration=2})
+            worldInvisOrig={}; 
         end
     end})
 
@@ -2463,35 +2533,29 @@ local function buildCustomTab()
                     Lighting.Ambient=origLight.Ambient; Lighting.OutdoorAmbient=origLight.OutdoorAmbient
                 end
             end)
-            Fluent:Notify({Title="Full Bright",Content="🔄 Restored.",Duration=2})
+            
         end
     end})
 
     local sFV=Tabs.Custom:AddSection("FOV Override")
-    sFV:AddSlider("FOVValue",{Title="FOV",Default=90,Min=80,Max=140,Rounding=0,Callback=function(v) fov.value=v; if fov.active then pcall(function() workspace.CurrentCamera.FieldOfView=v end) end; pcall(function() Fluent.Options.FOVValueInput:SetValue(tostring(v)) end) end})
-    sFV:AddInput("FOVValueInput",{Title="↳ Enter value",Default="90",Placeholder="80 – 140",Numeric=false,Finished=false,Callback=function(v)
-        local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),80,140)
-        fov.value=n; if fov.active then pcall(function() workspace.CurrentCamera.FieldOfView=n end) end
+    local function applyFOV(v)
+        fov.value = v
+        pcall(function() workspace.CurrentCamera.FieldOfView = v end)
+    end
+    sFV:AddSlider("FOVValue",{Title="FOV",Default=90,Min=70,Max=140,Rounding=0,Callback=function(v)
+        applyFOV(v)
+        pcall(function() Fluent.Options.FOVValueInput:SetValue(tostring(v)) end)
+    end})
+    sFV:AddInput("FOVValueInput",{Title="↳ Enter value",Default="90",Placeholder="70 – 140",Numeric=false,Finished=false,Callback=function(v)
+        local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),70,140)
+        applyFOV(n)
         pcall(function() Fluent.Options.FOVValue:SetValue(n) end)
     end})
-    toggleRefs["FOVOverride"]=sFV:AddToggle("FOVOverride",{Title="🔭 Enable FOV Override",Default=false,Callback=function(v)
-        st.FOVOverride=v; fov.active=v
-        if v then
-            if fov.conn then fov.conn:Disconnect() end
-            fov.conn=RunService.RenderStepped:Connect(function() if fov.active then pcall(function() workspace.CurrentCamera.FieldOfView=fov.value end) end end)
-            Fluent:Notify({Title="FOV",Content="✅ "..fov.value,Duration=2})
-        else
-            if fov.conn then fov.conn:Disconnect(); fov.conn=nil end
-            pcall(function() workspace.CurrentCamera.FieldOfView=70 end)
-            Fluent:Notify({Title="FOV",Content="🔴 Reset to 70.",Duration=2})
-        end
-    end})
     sFV:AddButton({Title="🔄 Reset FOV",Callback=function()
-        fov.active=false; if toggleRefs.FOVOverride then toggleRefs.FOVOverride:SetValue(false) end
-        if fov.conn then fov.conn:Disconnect(); fov.conn=nil end
-        pcall(function() workspace.CurrentCamera.FieldOfView=70 end)
-        Fluent.Options.FOVValue:SetValue(90)
-        Fluent:Notify({Title="FOV",Content="🔄 Reset → 70.",Duration=2})
+        applyFOV(70)
+        pcall(function() Fluent.Options.FOVValue:SetValue(70) end)
+        pcall(function() Fluent.Options.FOVValueInput:SetValue("70") end)
+        
     end})
 
     local sZM=Tabs.Custom:AddSection("Zoom Distance")
@@ -2501,7 +2565,7 @@ local function buildCustomTab()
     sZM:AddInput("MaxZoomInput",{Title="↳ Enter value",Default="100",Placeholder="0 – 100",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),0,100); pcall(function() player.CameraMaxZoomDistance=n end); pcall(function() Fluent.Options.MaxZoom:SetValue(n) end) end})
     sZM:AddButton({Title="🔄 Reset Zoom",Callback=function()
         pcall(function() player.CameraMinZoomDistance=0.5; player.CameraMaxZoomDistance=400 end)
-        Fluent:Notify({Title="Zoom",Content="🔄 Reset.",Duration=2})
+        
     end})
 
     local sWE=Tabs.Custom:AddSection("Weather Effects — Cloud Settings")
@@ -2513,12 +2577,12 @@ local function buildCustomTab()
     sWE:AddButton({Title="☁ Preset: Snow Clouds (White)",Callback=function()
         weather.cloudColor=Color3.fromRGB(240,245,255); weather.cloudCover=0.65; weather.cloudDensity=0.55
         Fluent.Options.CloudCover:SetValue(65); Fluent.Options.CloudDensity:SetValue(55)
-        applyCloudSettings(); Fluent:Notify({Title="Clouds",Content="🌨 Snow cloud preset applied.",Duration=2})
+        applyCloudSettings(); 
     end})
     sWE:AddButton({Title="🌅 Preset: Sunset Storm (Orange)",Callback=function()
         weather.cloudColor=Color3.fromRGB(230,130,50); weather.cloudCover=0.9; weather.cloudDensity=0.85
         Fluent.Options.CloudCover:SetValue(90); Fluent.Options.CloudDensity:SetValue(85)
-        applyCloudSettings(); Fluent:Notify({Title="Clouds",Content="🌅 Sunset storm preset applied.",Duration=2})
+        applyCloudSettings(); 
     end})
 
     local sSnow=Tabs.Custom:AddSection("❄ Snow Settings")
@@ -2540,7 +2604,7 @@ local function buildCustomTab()
     sWEToggle:AddButton({Title="🔄 Clear Weather",Callback=function()
         weather.switching=false
         if toggleRefs["Snow"] then toggleRefs["Snow"]:SetValue(false) end
-        clearWeather(); Fluent:Notify({Title="Weather",Content="🔄 Weather cleared.",Duration=2})
+        clearWeather(); 
     end})
 
     local sSK=Tabs.Custom:AddSection("Sky Change")
@@ -2548,13 +2612,13 @@ local function buildCustomTab()
     local skyNamesSorted={"Default","Aurora","CakeupNight","Cloud","Gray","Graysky","Half-Life","Lighting","Night","Night 2","Night 3","Pinksky","Purplesky","Snow","Space","Space 2","Space 3","Space 4","Space 5","Space 6","Space 7"}
     sSK:AddDropdown("SkyPreset",{Title="Select Sky",Values=skyNamesSorted,Default="Default",Callback=function(v)
         local name=tostring(v); local id=SKY_TABLE[name]
-        if id==nil then Fluent:Notify({Title="Sky",Content="⚠ Unknown sky: "..name,Duration=3}); return end
+        if id==nil then return end
         if id=="0" then resetSkybox() else task.spawn(function() applySkybox(id,name) end) end
     end})
     sSK:AddInput("CustomSkyID",{Title="Custom Sky AssetID",Default="",Placeholder="e.g. 15983968922",Numeric=false,Finished=false,Callback=function(v) customSkyID_v=v end})
     sSK:AddButton({Title="Apply Custom Sky",Callback=function()
         local id=customSkyID_v or ''
-        if id=='' then Fluent:Notify({Title="Sky",Content="⚠ Enter an ID first.",Duration=3}); return end
+        if id=='' then return end
         task.spawn(function() applySkybox(id,"Custom:"..id) end)
     end})
     sSK:AddButton({Title="Reset Sky",Callback=resetSkybox})
@@ -2587,32 +2651,32 @@ local function buildCustomTab()
     local function loadMapByID(id,displayName)
         if importedMap then pcall(function() importedMap:Destroy() end); importedMap=nil end
         local parsedID=tostring(id):match("%d+")
-        if not parsedID then Fluent:Notify({Title="Map",Content="❌ Invalid ID: "..tostring(id),Duration=4}); return end
-        Fluent:Notify({Title="Map",Content="⏳ Loading "..displayName.."...",Duration=3})
+        if not parsedID then return end
+        
         local ok,result=pcall(function() local objs=game:GetObjects("rbxassetid://"..parsedID); return objs and objs[1] end)
-        if ok and result then result.Name="FemboyImportedMap"; result.Parent=workspace; importedMap=result; Fluent:Notify({Title="Map",Content="✅ Loaded: "..displayName,Duration=3})
-        else Fluent:Notify({Title="Map",Content="❌ Failed: "..displayName,Duration=5}) end
+        if ok and result then result.Name="FemboyImportedMap"; result.Parent=workspace; importedMap=result; 
+        else  end
     end
     sMP:AddDropdown("MapPreset",{Title="Select Map",Values=mapNamesSorted,Default="Empty",Callback=function(v)
         local name=tostring(v); local id=MAP_TABLE[name]; if id==nil then return end
         selectedMapName=name; selectedMapID=id
-        Fluent:Notify({Title="Map",Content="📌 Selected: "..name..(id=="0" and "" or "\nClick Apply to load."),Duration=3})
+        
     end})
     sMP:AddButton({Title="✅ Apply Selected Map",Callback=function()
         if selectedMapID=="0" then
             if importedMap then pcall(function() importedMap:Destroy() end); importedMap=nil end
-            Fluent:Notify({Title="Map",Content="🗑 Map removed.",Duration=2})
+            
         else task.spawn(function() loadMapByID(selectedMapID,selectedMapName) end) end
     end})
     sMP:AddInput("CustomMapID",{Title="Custom Asset ID",Default="",Placeholder="e.g. 12345678",Numeric=false,Finished=false,Callback=function(v) customMapID_v=v end})
     sMP:AddButton({Title="Import Custom Map",Callback=function()
         local id=customMapID_v or ''
-        if id=='' then Fluent:Notify({Title="Map",Content="⚠ Enter an Asset ID first.",Duration=3}); return end
+        if id=='' then return end
         task.spawn(function() loadMapByID(id,id) end)
     end})
     sMP:AddButton({Title="Remove Map",Callback=function()
-        if importedMap then pcall(function() importedMap:Destroy() end); importedMap=nil; Fluent:Notify({Title="Map",Content="🗑 Removed.",Duration=2})
-        else Fluent:Notify({Title="Map",Content="⚠ No map loaded.",Duration=2}) end
+        if importedMap then pcall(function() importedMap:Destroy() end); importedMap=nil; 
+        else  end
     end})
 
     buildLightingEditor()
@@ -2640,47 +2704,47 @@ function buildLightingEditor()
     sLE:AddDropdown("QuickColorPreset",{Title="Quick Color Preset",Values={"Night (Realistic)","Sunset (Realistic)","Sunrise (Realistic)","Rainy (Realistic)","Cloudy (Realistic)"},Default="Night (Realistic)",Callback=function(v) end})
     sLE:AddButton({Title="✅ Apply Selected Preset",Callback=function()
         local sel=Fluent.Options.QuickColorPreset and tostring(Fluent.Options.QuickColorPreset.Value) or ""
-        if sel=="" then Fluent:Notify({Title="Preset",Content="⚠ Select a preset first.",Duration=2}); return end
+        if sel=="" then return end
         local atmo=Lighting:FindFirstChildOfClass("Atmosphere")
         local cc=getOrCreate("ColorCorrectionEffect"); local bl=getOrCreate("BloomEffect"); local sr=getOrCreate("SunRaysEffect")
         if sel=="Night (Realistic)" then
             pcall(function() Lighting.Brightness=0.2; Lighting.ClockTime=21; Lighting.GlobalShadows=true; Lighting.Ambient=Color3.fromRGB(10,15,40); Lighting.OutdoorAmbient=Color3.fromRGB(5,8,25) end)
             if atmo then pcall(function() atmo.Density=0.45; atmo.Haze=1.5; atmo.Color=Color3.fromRGB(10,18,55) end) end
             pcall(function() cc.Brightness=-0.1; cc.Saturation=-0.15; bl.Intensity=0.4; sr.Intensity=0.05 end)
-            Fluent:Notify({Title="Preset",Content="🌃 Night (Realistic)",Duration=4})
+            
         elseif sel=="Sunset (Realistic)" then
             pcall(function() Lighting.Brightness=1.8; Lighting.ClockTime=18.5 end)
             if atmo then pcall(function() atmo.Density=0.28; atmo.Haze=3.0; atmo.Color=Color3.fromRGB(255,130,50) end) end
             pcall(function() cc.Brightness=0.06; cc.Saturation=0.30; bl.Intensity=1.0; sr.Intensity=0.75 end)
-            Fluent:Notify({Title="Preset",Content="🌅 Sunset (Realistic)",Duration=4})
+            
         elseif sel=="Sunrise (Realistic)" then
             pcall(function() Lighting.Brightness=1.2; Lighting.ClockTime=5.5 end)
             if atmo then pcall(function() atmo.Density=0.18; atmo.Haze=2.2; atmo.Color=Color3.fromRGB(255,160,100) end) end
             pcall(function() cc.Brightness=0.03; cc.Saturation=0.15; bl.Intensity=0.65; sr.Intensity=0.55 end)
-            Fluent:Notify({Title="Preset",Content="🌄 Sunrise (Realistic)",Duration=4})
+            
         elseif sel=="Rainy (Realistic)" then
             pcall(function() Lighting.Brightness=0.8; Lighting.ClockTime=14 end)
             if atmo then pcall(function() atmo.Density=0.68; atmo.Haze=4.5; atmo.Color=Color3.fromRGB(100,110,135) end) end
             pcall(function() cc.Brightness=-0.05; cc.Saturation=-0.28; bl.Intensity=0.08; sr.Intensity=0.0 end)
-            Fluent:Notify({Title="Preset",Content="🌧 Rainy (Realistic)",Duration=4})
+            
         elseif sel=="Cloudy (Realistic)" then
             pcall(function() Lighting.Brightness=1.5; Lighting.ClockTime=12 end)
             if atmo then pcall(function() atmo.Density=0.30; atmo.Haze=2.0; atmo.Color=Color3.fromRGB(160,168,180) end) end
             pcall(function() cc.Brightness=0.0; cc.Saturation=-0.10; bl.Intensity=0.18; sr.Intensity=0.08 end)
-            Fluent:Notify({Title="Preset",Content="⛅ Cloudy (Realistic)",Duration=4})
+            
         end
     end})
     sLE:AddButton({Title="Preset: Fullbright",Callback=function()
         pcall(function() Lighting.Brightness=3; Lighting.ClockTime=14; Lighting.GlobalShadows=false; Lighting.Ambient=Color3.fromRGB(178,178,178); Lighting.OutdoorAmbient=Color3.fromRGB(178,178,178) end)
         Fluent.Options.LEBrightness:SetValue(3); Fluent.Options.LEClockTime:SetValue(14)
-        Fluent:Notify({Title="Lighting",Content="✅ Preset: Fullbright",Duration=3})
+        
     end})
     sLE:AddButton({Title="🔄 Reset Lighting",Callback=function()
         pcall(function() for prop,val in pairs(origLightFull) do Lighting[prop]=val end end)
         Fluent.Options.LEBrightness:SetValue(math.floor(origLightFull.Brightness*10)/10)
         Fluent.Options.LEClockTime:SetValue(math.floor(origLightFull.ClockTime*10)/10)
         if toggleRefs.LEShadows then toggleRefs.LEShadows:SetValue(origLightFull.GlobalShadows) end
-        Fluent:Notify({Title="Lighting",Content="🔄 Restored.",Duration=4})
+        
     end})
 end
 
@@ -2701,12 +2765,12 @@ function buildAtmosphereEditor()
     sATM:AddButton({Title="⚡ Clear All Fog",Callback=function()
         local a=Lighting:FindFirstChildOfClass("Atmosphere")
         if a then pcall(function() a.Density=0; a.Haze=0; a.Offset=0 end); Fluent.Options.ATMDensity:SetValue(0); Fluent.Options.ATMHaze:SetValue(0); Fluent.Options.ATMOffset:SetValue(0) end
-        Fluent:Notify({Title="Atmosphere",Content="✅ Fog cleared.",Duration=3})
+        
     end})
     sATM:AddButton({Title="🔄 Reset Atmosphere",Callback=function()
         local a=Lighting:FindFirstChildOfClass("Atmosphere")
         if a then pcall(function() a.Density=origAtmo.Density; a.Offset=origAtmo.Offset; a.Haze=origAtmo.Haze; a.Color=origAtmo.Color; a.Decay=origAtmo.Decay end) end
-        Fluent:Notify({Title="Atmosphere",Content="🔄 Restored.",Duration=3})
+        
     end})
 end
 
@@ -2749,7 +2813,7 @@ function buildPostProcessingEditor()
             local blur=Lighting:FindFirstChildOfClass("BlurEffect"); if blur then blur.Size=origPostBlur.Size end
             Lighting.ColorShift_Top=origShiftTop; Lighting.ColorShift_Bottom=origShiftBottom
         end)
-        Fluent:Notify({Title="Post-Processing",Content="🔄 Restored.",Duration=3})
+        
     end})
 end
 buildCustomTab()
@@ -2800,7 +2864,7 @@ local function buildFarmTab()
             task.wait(0.2)
         end
         if not choices then
-            Fluent:Notify({Title="Auto Vote", Content="⚠ Choices not found in Vote frame", Duration=3})
+            
             return
         end
 
@@ -2845,7 +2909,7 @@ local function buildFarmTab()
         -- Fallback slot 4
         if not target then target = slots[4] end
         if not target or not target.button then
-            Fluent:Notify({Title="Auto Vote", Content="⚠ No valid slot found — retrying...", Duration=3})
+            
             return
         end
 
@@ -2859,11 +2923,7 @@ local function buildFarmTab()
             task.wait(0.08)
             VIM:SendMouseButtonEvent(cx, cy, 0, false, game, 1)
         end)
-        Fluent:Notify({
-            Title   = "Auto Vote",
-            Content = "✅ Voted: "..target.mapName.." ["..target.difficulty.."]",
-            Duration = 4,
-        })
+        
     end
 
     sVote:AddDropdown("VoteMode", {
@@ -2888,12 +2948,12 @@ local function buildFarmTab()
 
                     -- Continuous scan: check every 2s if Vote frame is visible
                     -- This way it works whether toggled before or during the vote screen
+                    local voteLastCheck = 0
                     autoVoteConn = RunService.Heartbeat:Connect(function()
                         if not st.AutoVote then return end
                         -- Throttle to once per 2 seconds
-                        if not autoVoteConn._lastCheck then autoVoteConn._lastCheck = 0 end
-                        if tick() - autoVoteConn._lastCheck < 2 then return end
-                        autoVoteConn._lastCheck = tick()
+                        if tick() - voteLastCheck < 2 then return end
+                        voteLastCheck = tick()
 
                         for _, desc in pairs(playerGui:GetDescendants()) do
                             if desc.Name == "Vote" and desc:IsA("Frame") and desc.Visible then
@@ -2929,22 +2989,25 @@ local function buildFarmTab()
     end})
 
     sFM:AddButton({Title="Reset Phase 1 (M1)",Callback=function()
-        if farm.active and farm.method==1 then farm.phase=1; farmTP(); Fluent:Notify({Title="Farm",Content="🔄 Reset to Phase 1.",Duration=2}) end
+        if farm.active and farm.method==1 then farm.phase=1; farmTP();  end
     end})
     sFM:AddButton({Title="Return to Surface (M3)",Callback=function()
         if farm.method==3 then
             local c=player.Character; if not c then return end
             local h=c:FindFirstChild("HumanoidRootPart")
-            if h then h.CFrame=CFrame.new(0,5,0); h.AssemblyLinearVelocity=Vector3.new(); Fluent:Notify({Title="Farm M3",Content="🔄 Returned to surface.",Duration=2}) end
+            if h then h.CFrame=CFrame.new(0,5,0); h.AssemblyLinearVelocity=Vector3.new();  end
         end
     end})
 
     local sTF = Tabs.Farm:AddSection("Auto Ticket Farm  🎫")
     local tfStatusPara = sTF:AddParagraph({Title="Status",  Content="Idle"})
     local tfCountPara  = sTF:AddParagraph({Title="Collected",Content="0"})
-    RunService.Heartbeat:Connect(function()
-        pcall(function() tfStatusPara:SetDesc(ticketFarm.status) end)
-        pcall(function() tfCountPara:SetDesc(tostring(ticketFarm.count)) end)
+    task.spawn(function()
+        while true do
+            task.wait(0.5)
+            pcall(function() tfStatusPara:SetDesc(ticketFarm.status) end)
+            pcall(function() tfCountPara:SetDesc(tostring(ticketFarm.count)) end)
+        end
     end)
     toggleRefs["TicketFarm"] = sTF:AddToggle("TicketFarm", {
         Title    = "🎫 Enable Auto Ticket Farm",
@@ -2989,320 +3052,51 @@ local function buildPlayerTab()
     local sStreak=Tabs.Player:AddSection("Streak")
     sStreak:AddInput("InputStreak",{Title="Streak Value",Default="",Placeholder="e.g. 9999",Numeric=false,Finished=false,Callback=function(v) inputStreak_v=v end})
     sStreak:AddButton({Title="Apply Streak",Callback=function()
-        local v=tonumber(inputStreak_v); if not v then Fluent:Notify({Title="Streak",Content="⚠ Enter a valid number.",Duration=2}); return end
-        applyFakeStat("Streak",v,{"streak","CurrentStreak","BestStreak"}); Fluent:Notify({Title="Streak",Content="✅ Streak → "..v,Duration=3})
+        local v=tonumber(inputStreak_v); if not v then return end
+        applyFakeStat("Streak",v,{"streak","CurrentStreak","BestStreak"}); 
     end})
     local inputTicket_v=""
     local sTicket=Tabs.Player:AddSection("Ticket")
     sTicket:AddInput("InputTicket",{Title="Ticket Value",Default="",Placeholder="e.g. 9999",Numeric=false,Finished=false,Callback=function(v) inputTicket_v=v end})
     sTicket:AddButton({Title="Apply Ticket",Callback=function()
-        local v=tonumber(inputTicket_v); if not v then Fluent:Notify({Title="Ticket",Content="⚠ Enter a valid number.",Duration=2}); return end
-        applyFakeStat("Ticket",v,{"Tickets","ticket","tickets"}); Fluent:Notify({Title="Ticket",Content="✅ Ticket → "..v,Duration=3})
+        local v=tonumber(inputTicket_v); if not v then return end
+        applyFakeStat("Ticket",v,{"Tickets","ticket","tickets"}); 
     end})
     local inputToken_v=""
     local sToken=Tabs.Player:AddSection("Token")
     sToken:AddInput("InputToken",{Title="Token Value",Default="",Placeholder="e.g. 9999",Numeric=false,Finished=false,Callback=function(v) inputToken_v=v end})
     sToken:AddButton({Title="Apply Token",Callback=function()
-        local v=tonumber(inputToken_v); if not v then Fluent:Notify({Title="Token",Content="⚠ Enter a valid number.",Duration=2}); return end
-        applyFakeStat("Token",v,{"Tokens","token","tokens"}); Fluent:Notify({Title="Token",Content="✅ Token → "..v,Duration=3})
+        local v=tonumber(inputToken_v); if not v then return end
+        applyFakeStat("Token",v,{"Tokens","token","tokens"}); 
     end})
     local inputLevel_v=""
     local sLevel=Tabs.Player:AddSection("Level")
     sLevel:AddInput("InputLevel",{Title="Level Value",Default="",Placeholder="e.g. 100",Numeric=false,Finished=false,Callback=function(v) inputLevel_v=v end})
     sLevel:AddButton({Title="Apply Level",Callback=function()
-        local v=tonumber(inputLevel_v); if not v then Fluent:Notify({Title="Level",Content="⚠ Enter a valid number.",Duration=2}); return end
-        fakeLevelValue=v; applyFakeStat("Level",v,{"level","XP","Exp","Experience","Lvl"}); Fluent:Notify({Title="Level",Content="✅ Level → "..v,Duration=3})
+        local v=tonumber(inputLevel_v); if not v then return end
+        fakeLevelValue=v; applyFakeStat("Level",v,{"level","XP","Exp","Experience","Lvl"}); 
     end})
     local inputDN_v=""
     local sDN=Tabs.Player:AddSection("Display Name  (Local Only)")
     sDN:AddInput("InputDisplayName",{Title="New Display Name",Default="",Placeholder="e.g. KhoaProSigma",Numeric=false,Finished=false,Callback=function(v) inputDN_v=v end})
     sDN:AddButton({Title="Apply Display Name",Callback=function()
-        if inputDN_v=="" then Fluent:Notify({Title="Name",Content="⚠ Enter a name first.",Duration=2}); return end
+        if inputDN_v=="" then return end
         fakeDisplayName=inputDN_v; applyDisplayNameToChar()
-        Fluent:Notify({Title="Display Name",Content="✅ Name set to: "..fakeDisplayName,Duration=3})
+        
     end})
     local sReset=Tabs.Player:AddSection("Reset")
     sReset:AddButton({Title="Reset All Player Changes",Callback=function()
         fakeDisplayName=""; fakeLevelValue=nil
-        Fluent:Notify({Title="Player Reset",Content="✅ All fake stats cleared.",Duration=4})
+        
     end})
 end
 buildPlayerTab()
-
--- ════ MACRO TAB ═══════════════════════════════════════════════
-local function buildMacroTab()
-    local macro = {
-        enabled      = false,
-        loopEnabled  = false,
-        keyDelay     = 0.08,   -- seconds between keys in combo
-        loopDelay    = 0.20,   -- seconds between loop iterations
-        selectedPreset = "Custom",
-        customKeys   = {},
-        loopThread   = nil,
-    }
-
-    -- ── Key presets ───────────────────────────────────────────
-    local PRESETS = {
-        ["Ctrl"]               = {Enum.KeyCode.LeftControl},
-        ["Space"]              = {Enum.KeyCode.Space},
-        ["G → 1"]              = {Enum.KeyCode.G, Enum.KeyCode.One},
-        ["G → 2"]              = {Enum.KeyCode.G, Enum.KeyCode.Two},
-        ["G → 3"]              = {Enum.KeyCode.G, Enum.KeyCode.Three},
-        ["G → 4"]              = {Enum.KeyCode.G, Enum.KeyCode.Four},
-        ["G → 5"]              = {Enum.KeyCode.G, Enum.KeyCode.Five},
-        ["G → 6"]              = {Enum.KeyCode.G, Enum.KeyCode.Six},
-        ["G → 1→2→3→4→5→6"]   = {
-            Enum.KeyCode.G, Enum.KeyCode.One,
-            Enum.KeyCode.G, Enum.KeyCode.Two,
-            Enum.KeyCode.G, Enum.KeyCode.Three,
-            Enum.KeyCode.G, Enum.KeyCode.Four,
-            Enum.KeyCode.G, Enum.KeyCode.Five,
-            Enum.KeyCode.G, Enum.KeyCode.Six,
-        },
-        ["Custom"] = {},
-    }
-    local PRESET_NAMES = {
-        "Ctrl","Space",
-        "G → 1","G → 2","G → 3","G → 4","G → 5","G → 6",
-        "G → 1→2→3→4→5→6",
-        "Custom",
-    }
-
-    -- ── Key name resolver ─────────────────────────────────────
-    local KEY_MAP = {
-        space=Enum.KeyCode.Space, ctrl=Enum.KeyCode.LeftControl,
-        leftcontrol=Enum.KeyCode.LeftControl, rightcontrol=Enum.KeyCode.RightControl,
-        shift=Enum.KeyCode.LeftShift, leftshift=Enum.KeyCode.LeftShift,
-        rightshift=Enum.KeyCode.RightShift, alt=Enum.KeyCode.LeftAlt,
-        e=Enum.KeyCode.E, f=Enum.KeyCode.F, g=Enum.KeyCode.G, q=Enum.KeyCode.Q,
-        r=Enum.KeyCode.R, t=Enum.KeyCode.T, x=Enum.KeyCode.X, z=Enum.KeyCode.Z,
-        ["1"]=Enum.KeyCode.One,   ["2"]=Enum.KeyCode.Two,   ["3"]=Enum.KeyCode.Three,
-        ["4"]=Enum.KeyCode.Four,  ["5"]=Enum.KeyCode.Five,  ["6"]=Enum.KeyCode.Six,
-        ["7"]=Enum.KeyCode.Seven, ["8"]=Enum.KeyCode.Eight, ["9"]=Enum.KeyCode.Nine,
-        ["0"]=Enum.KeyCode.Zero,
-        w=Enum.KeyCode.W, a=Enum.KeyCode.A, s=Enum.KeyCode.S, d=Enum.KeyCode.D,
-    }
-    local function resolveKey(str)
-        local s = str:lower():gsub("%s+","")
-        if s == "" then return nil end
-        local kc = KEY_MAP[s]
-        if kc then return kc end
-        local ok, val = pcall(function() return Enum.KeyCode[str] end)
-        if ok and val then return val end
-        return nil
-    end
-
-    -- ── Send a single key press+release ───────────────────────
-    local function sendKey(kc)
-        pcall(function()
-            VIM:SendKeyEvent(true,  kc, false, game)
-            task.wait(0.04)
-            VIM:SendKeyEvent(false, kc, false, game)
-        end)
-    end
-
-    -- ── Run the full combo once ────────────────────────────────
-    local function runCombo()
-        local keys = macro.selectedPreset == "Custom"
-            and macro.customKeys
-            or  (PRESETS[macro.selectedPreset] or {})
-        if #keys == 0 then return end
-        for _, kc in ipairs(keys) do
-            if not macro.enabled then break end
-            sendKey(kc)
-            task.wait(macro.keyDelay)
-        end
-    end
-
-    -- ── Loop control ──────────────────────────────────────────
-    local function stopLoop()
-        if macro.loopThread then
-            pcall(function() task.cancel(macro.loopThread) end)
-            macro.loopThread = nil
-        end
-    end
-
-    local function startLoop()
-        stopLoop()
-        macro.loopThread = task.spawn(function()
-            while macro.enabled and macro.loopEnabled do
-                runCombo()
-                task.wait(macro.loopDelay)
-            end
-            macro.loopThread = nil
-        end)
-    end
-
-    -- ── Toggle macro on/off ───────────────────────────────────
-    local function setMacro(v)
-        macro.enabled = v
-        pcall(function() toggleRefs["MacroEnable"]:SetValue(v) end)
-        if v then
-            if macro.loopEnabled then startLoop() end
-        else
-            stopLoop()
-        end
-    end
-
-    -- ── Keybind ───────────────────────────────────────────────
-    local macroKeyConn = nil
-    local function rebuildMacroKeybind(kc)
-        if macroKeyConn then macroKeyConn:Disconnect(); macroKeyConn = nil end
-        if not kc or kc == Enum.KeyCode.Unknown then return end
-        macroKeyConn = UserInputService.InputBegan:Connect(function(inp, gpe)
-            if gpe then return end
-            if inp.KeyCode ~= kc then return end
-            setMacro(not macro.enabled)
-        end)
-    end
-
-    -- ── Mobile button ─────────────────────────────────────────
-    local mobileGui = nil
-    local function destroyMobileBtn()
-        if mobileGui then pcall(function() mobileGui:Destroy() end); mobileGui = nil end
-    end
-    local function createMobileBtn()
-        destroyMobileBtn()
-        mobileGui = Instance.new("ScreenGui")
-        mobileGui.Name = "FemboyMacroBtn"; mobileGui.ResetOnSpawn = false
-        mobileGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-        pcall(function() mobileGui.Parent = player:WaitForChild("PlayerGui") end)
-        local btn = Instance.new("TextButton")
-        btn.Size = UDim2.fromOffset(64, 64)
-        btn.Position = UDim2.new(1, -160, 1, -140)
-        btn.AnchorPoint = Vector2.new(0, 1)
-        btn.BorderSizePixel = 0; btn.TextSize = 11
-        btn.Font = Enum.Font.GothamBold
-        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        btn.ZIndex = 10; btn.Text = "MACRO"; btn.Parent = mobileGui
-        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
-        local function refresh()
-            btn.BackgroundColor3 = macro.enabled
-                and Color3.fromRGB(80, 200, 100)
-                or  Color3.fromRGB(40, 40, 50)
-        end
-        btn.MouseButton1Click:Connect(function() setMacro(not macro.enabled); refresh() end)
-        RunService.Heartbeat:Connect(refresh)
-    end
-
-    -- ════ UI ══════════════════════════════════════════════════
-
-    -- Preset selector
-    local sPreset = Tabs.Macro:AddSection("Combo Preset")
-    sPreset:AddDropdown("MacroPreset", {
-        Title   = "Select Preset",
-        Values  = PRESET_NAMES,
-        Default = "Custom",
-        Callback = function(v) macro.selectedPreset = tostring(v) end,
-    })
-
-    -- Custom keys
-    local sCustom = Tabs.Macro:AddSection("Custom Keys")
-    local customRaw = ""
-    sCustom:AddInput("MacroCustomRaw", {
-        Title   = "Key sequence (comma separated)",
-        Default = "",
-        Placeholder = "e.g.  G,1  or  Ctrl  or  Space",
-        Numeric = false, Finished = false,
-        Callback = function(v) customRaw = v end,
-    })
-    sCustom:AddButton({Title="Apply Custom Keys", Callback=function()
-        local parts = {}
-        for seg in customRaw:gmatch("[^,]+") do
-            local t = seg:match("^%s*(.-)%s*$")
-            if t ~= "" then table.insert(parts, t) end
-        end
-        macro.customKeys = {}
-        local ok, fail = 0, 0
-        for _, name in ipairs(parts) do
-            local kc = resolveKey(name)
-            if kc then table.insert(macro.customKeys, kc); ok = ok + 1
-            else fail = fail + 1 end
-        end
-        local msg = ok.." key(s) applied"
-        if fail > 0 then msg = msg .. " | "..fail.." unrecognized" end
-        pcall(function() Fluent.Options.MacroPreviewPara:SetDesc(msg) end)
-    end})
-    sCustom:AddButton({Title="Clear Custom Keys", Callback=function()
-        macro.customKeys = {}
-        pcall(function() Fluent.Options.MacroPreviewPara:SetDesc("Custom keys cleared.") end)
-    end})
-
-    -- Delays
-    local sDelay = Tabs.Macro:AddSection("Timing")
-    sDelay:AddSlider("MacroKeyDelay", {
-        Title    = "Delay between keys (ms)",
-        Default  = 80, Min = 10, Max = 500, Rounding = 0,
-        Callback = function(v) macro.keyDelay = v / 1000 end,
-    })
-    sDelay:AddSlider("MacroLoopDelay", {
-        Title    = "Delay between loop repeats (ms)",
-        Default  = 200, Min = 50, Max = 2000, Rounding = 0,
-        Callback = function(v) macro.loopDelay = v / 1000 end,
-    })
-
-    -- Loop toggle
-    local sLoop = Tabs.Macro:AddSection("Loop")
-    toggleRefs["MacroLoop"] = sLoop:AddToggle("MacroLoop", {
-        Title   = "Infinite Loop",
-        Default = false,
-        Callback = function(v)
-            macro.loopEnabled = v
-            if macro.enabled then
-                if v then startLoop() else stopLoop() end
-            end
-        end,
-    })
-
-    -- Preview
-    local sPreview = Tabs.Macro:AddSection("Preview")
-    local previewPara = sPreview:AddParagraph({Title="Current Combo", Content="(none)"})
-    sPreview:AddButton({Title="View Combo", Callback=function()
-        local keys = macro.selectedPreset == "Custom"
-            and macro.customKeys
-            or  (PRESETS[macro.selectedPreset] or {})
-        if #keys == 0 then
-            pcall(function() previewPara:SetDesc("⚠ No keys configured") end); return
-        end
-        local names = {}
-        for _, kc in ipairs(keys) do
-            table.insert(names, tostring(kc):match("%.(%w+)$") or "?")
-        end
-        local txt = "["..macro.selectedPreset.."]\n"..table.concat(names, " → ")
-        pcall(function() previewPara:SetDesc(txt) end)
-    end})
-    sPreview:AddButton({Title="Fire Once (manual)", Callback=function()
-        task.spawn(runCombo)
-    end})
-
-    -- Activate
-    local sEnable = Tabs.Macro:AddSection("Activate")
-    toggleRefs["MacroEnable"] = sEnable:AddToggle("MacroEnable", {
-        Title   = "Enable Macro",
-        Default = false,
-        Callback = function(v) setMacro(v) end,
-    })
-    sEnable:AddKeybind("MacroKeybind", {
-        Title   = "Keybind — Toggle Macro",
-        Default = "None",
-        Callback = function() end,
-        ChangedCallback = function(new) rebuildMacroKeybind(new) end,
-    })
-    toggleRefs["MacroMobileBtn"] = sEnable:AddToggle("MacroMobileBtn", {
-        Title   = "Mobile Button",
-        Default = false,
-        Callback = function(v)
-            if v then createMobileBtn() else destroyMobileBtn() end
-        end,
-    })
-end
-buildMacroTab()
 
 -- ════ SETTINGS TAB ════════════════════════════════════════════
 local function buildSettingsTab()
     local sMU=Tabs.Settings:AddSection("Music Player")
     sMU:AddButton({Title="🎵 Open Music UI",Callback=function()
-        Fluent:Notify({Title="Music",Content="⏳ Loading Music UI...",Duration=3})
+        
         task.spawn(function() pcall(function() loadstring(game:HttpGet("https://raw.githubusercontent.com/KhosTester/first-project/948e3f71acfa0ca5c33beea0b461232e9d74b4b1/music%20UI%20loader"))() end) end)
     end})
 
@@ -3321,7 +3115,7 @@ local function buildSettingsTab()
                     end
                 end; task.wait()
             end
-            Fluent:Notify({Title="Wall Remover",Content="✅ Done!",Duration=3})
+            
         end)
     end})
 
@@ -3345,7 +3139,7 @@ local function buildSettingsTab()
                     end
                 end; task.wait()
             end
-            Fluent:Notify({Title="FPS Boost",Content="✅ Applied!",Duration=5})
+            
         end)
     end})
 
@@ -3449,12 +3243,12 @@ function buildWetFloorSection()
     end
 
     local function applyWaterOverlay()
-        if waterApplied then Fluent:Notify({Title="Wet Floor",Content="⚠ Already applied! Reset first.",Duration=3}); return end
+        if waterApplied then return end
         waterParts={}; wetComplexObjs={}
-        Fluent:Notify({Title="Wet Floor",Content="⏳ Scanning floors...",Duration=2})
+        
         task.spawn(function()
             local floors=findFloorsByRaycast()
-            if #floors==0 then Fluent:Notify({Title="Wet Floor",Content="❌ No floors found!",Duration=5}); return end
+            if #floors==0 then return end
             local countOverlay,countComplex=0,0
             for _,orig in ipairs(floors) do
                 if isComplexObject(orig) then pcall(function() applyComplexWet(orig) end); countComplex=countComplex+1
@@ -3462,12 +3256,12 @@ function buildWetFloorSection()
                 if (countOverlay+countComplex)%60==0 then task.wait() end
             end
             waterApplied=true
-            Fluent:Notify({Title="Wet Floor",Content="💧 Done!\n✅ Overlay: "..countOverlay.." parts\n🔷 Complex (material): "..countComplex,Duration=5})
+            
         end)
     end
 
     local function resetWaterOverlay()
-        if not waterApplied and #waterParts==0 and #wetComplexObjs==0 then Fluent:Notify({Title="Wet Floor",Content="⚠ Nothing to reset.",Duration=2}); return end
+        if not waterApplied and #waterParts==0 and #wetComplexObjs==0 then return end
         local removed=0
         for _,wp in ipairs(waterParts) do if wp and wp.Parent then pcall(function() wp:Destroy() end); removed=removed+1 end end
         waterParts={}
@@ -3480,7 +3274,7 @@ function buildWetFloorSection()
             end
         end
         wetComplexObjs={}; waterApplied=false
-        Fluent:Notify({Title="Wet Floor",Content="🗑 Removed "..removed.." overlays\n🔄 Restored "..restored.." complex objects",Duration=4})
+        
     end
 
     local function spawnRippleRing(pos,startDiam,endDiam,duration,startTrans,col,yOff)
@@ -3566,13 +3360,13 @@ function buildWetFloorSection()
             local origRef=obj.Reflectance; table.insert(reflectOriginals,{obj=obj,origRef=origRef})
             pcall(function() obj.Reflectance=reflectGroundLevel end)
         end)
-        Fluent:Notify({Title="Reflective Ground",Content="🪞 Applied to all "..#reflectOriginals.." surfaces\nLevel: "..math.floor(reflectGroundLevel*100).."%",Duration=4})
+        
     end
 
     local function disableReflectiveGround()
         if reflectDescConn then reflectDescConn:Disconnect(); reflectDescConn=nil end
         local count=#reflectOriginals; setGroundReflective(0)
-        Fluent:Notify({Title="Reflective Ground",Content="🔄 Restored "..count.." objects.",Duration=3})
+        
     end
 
     sRG:AddSlider("ReflectLevel",{Title="Reflection Level",Default=50,Min=0,Max=100,Rounding=0,Callback=function(v)
@@ -3592,8 +3386,8 @@ function buildWetFloorSection()
     local ccStatePara=sCC2:AddParagraph({Title="Info",Content="Toggle whether the water overlay blocks your movement."})
     sCC2:AddButton({Title="🔀 Toggle: Walk Through / Solid",Callback=function()
         waterCanCollide=not waterCanCollide; refreshAllWaterParts()
-        if not waterCanCollide then Fluent:Notify({Title="Water CanCollide",Content="🔴 Solid.",Duration=2}); pcall(function() ccStatePara:SetDesc("🔴 Solid (CanCollide ON)") end)
-        else Fluent:Notify({Title="Water CanCollide",Content="🟢 Pass-through.",Duration=2}); pcall(function() ccStatePara:SetDesc("🟢 Pass-through (CanCollide OFF)") end) end
+        if not waterCanCollide then pcall(function() ccStatePara:SetDesc("🔴 Solid (CanCollide ON)") end)
+        else pcall(function() ccStatePara:SetDesc("🟢 Pass-through (CanCollide OFF)") end) end
     end})
 
     sMF:AddSlider("RippleOpacity",{Title="Ripple Opacity",Default=15,Min=0,Max=90,Rounding=0,Callback=function(v) rippleOpacity=v/100; pcall(function() Fluent.Options.RippleOpacityInput:SetValue(tostring(v)) end) end})
@@ -3608,15 +3402,381 @@ function buildWetFloorSection()
         if v then startRipple()
         else stopRipple() end
     end})
+
+    -- ── FPS Overlay UI ────────────────────────────────────────
+    local sFPSOv = Tabs.Settings:AddSection("FPS Overlay")
+    local fpsOverlayGui = nil
+    local fpsOverlayConn = nil
+
+    local function destroyFPSOverlay()
+        if fpsOverlayConn then fpsOverlayConn:Disconnect(); fpsOverlayConn = nil end
+        if fpsOverlayGui then pcall(function() fpsOverlayGui:Destroy() end); fpsOverlayGui = nil end
+    end
+
+    local function createFPSOverlay()
+        destroyFPSOverlay()
+        fpsOverlayGui = Instance.new("ScreenGui")
+        fpsOverlayGui.Name = "FemboyFPSOverlay"
+        fpsOverlayGui.ResetOnSpawn = false
+        fpsOverlayGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        pcall(function() fpsOverlayGui.Parent = CoreGui end)
+        if not fpsOverlayGui.Parent then fpsOverlayGui.Parent = player.PlayerGui end
+
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.fromOffset(90, 36)
+        frame.Position = UDim2.new(0, 10, 0, 10)
+        frame.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
+        frame.BackgroundTransparency = 0.15
+        frame.BorderSizePixel = 0
+        frame.ZIndex = 20
+        frame.Parent = fpsOverlayGui
+        Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+
+        local stroke = Instance.new("UIStroke", frame)
+        stroke.Color = Color3.fromRGB(180, 0, 0)
+        stroke.Thickness = 1.5
+
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(1, 0, 0.5, 0)
+        label.Position = UDim2.new(0, 0, 0, 0)
+        label.BackgroundTransparency = 1
+        label.Text = "FPS"
+        label.TextColor3 = Color3.fromRGB(160, 160, 160)
+        label.TextSize = 10
+        label.Font = Enum.Font.GothamBold
+        label.ZIndex = 21
+        label.Parent = frame
+
+        local value = Instance.new("TextLabel")
+        value.Size = UDim2.new(1, 0, 0.5, 0)
+        value.Position = UDim2.new(0, 0, 0.5, 0)
+        value.BackgroundTransparency = 1
+        value.Text = "--"
+        value.TextColor3 = Color3.fromRGB(255, 255, 255)
+        value.TextSize = 15
+        value.Font = Enum.Font.GothamBold
+        value.ZIndex = 21
+        value.Parent = frame
+
+        -- Sample FPS from Heartbeat, update every 0.3s
+        local samples = {}
+        local lastUpdate = 0
+        fpsOverlayConn = RunService.Heartbeat:Connect(function(dt)
+            table.insert(samples, 1/math.max(dt, 0.001))
+            if #samples > 30 then table.remove(samples, 1) end
+            local now = tick()
+            if now - lastUpdate < 0.3 then return end
+            lastUpdate = now
+            local avg = 0
+            for _, v in ipairs(samples) do avg = avg + v end
+            avg = math.floor(avg / #samples)
+            local color = avg >= 50 and Color3.fromRGB(80,220,100)
+                       or avg >= 30 and Color3.fromRGB(255,200,0)
+                       or              Color3.fromRGB(220,60,60)
+            value.Text = tostring(avg)
+            value.TextColor3 = color
+        end)
+    end
+
+    toggleRefs["FPSOverlay"] = sFPSOv:AddToggle("FPSOverlay", {
+        Title   = "FPS Overlay",
+        Default = false,
+        Callback = function(v)
+            if v then createFPSOverlay() else destroyFPSOverlay() end
+        end,
+    })
+
+    -- ── Delete UI ─────────────────────────────────────────────
+    local sDel = Tabs.Settings:AddSection("Delete UI")
+    sDel:AddButton({Title="🗑 Delete UI — Remove Everything", Callback=function()
+        -- 1. Disconnect all active connections
+        pcall(function() if fpsOverlayConn then fpsOverlayConn:Disconnect(); fpsOverlayConn = nil end end)
+        -- 2. Stop all toggles / loops cleanly
+        for key, ref in pairs(toggleRefs) do
+            pcall(function() ref:SetValue(false) end)
+        end
+        -- 3. Reset game properties modified by hub
+        pcall(function() workspace.Gravity = 196.2 end)
+        pcall(function() game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 16 end)
+        pcall(function() game.Players.LocalPlayer.Character.Humanoid.JumpPower = 50 end)
+        pcall(function() workspace.CurrentCamera.FieldOfView = 70 end)
+        -- 4. Destroy all Femboy/Fluent GUIs from CoreGui
+        for _, g in pairs(CoreGui:GetChildren()) do
+            if g.Name:find("Femboy") or g.Name:find("Fluent") or g.Name:find("FemboyHub") then
+                pcall(function() g:Destroy() end)
+            end
+        end
+        -- 5. Destroy all Femboy/Fluent GUIs from PlayerGui
+        for _, g in pairs(player.PlayerGui:GetChildren()) do
+            if g.Name:find("Femboy") or g.Name:find("Fluent") then
+                pcall(function() g:Destroy() end)
+            end
+        end
+    end})
 end
 buildSettingsTab()
 
+-- ════ MACRO TAB ════════════════════════════════════════════════
+local function buildMacroTab()
+    -- ── State ──────────────────────────────────────────────────
+    local macro = {
+        running      = false,    -- true while combo is executing (blocks re-entry)
+        shouldStop   = false,    -- set true when user wants to stop after current combo
+        loopEnabled  = false,
+        keyDelay     = 0.08,     -- delay between keys inside combo
+        loopDelay    = 0.50,     -- delay between loop iterations
+        selectedPreset = "G → 1",
+        customKeys   = {},
+        loopThread   = nil,
+    }
+
+    -- ── Presets ────────────────────────────────────────────────
+    local PRESETS = {
+        ["G → 1"] = {Enum.KeyCode.G, Enum.KeyCode.One},
+        ["G → 2"] = {Enum.KeyCode.G, Enum.KeyCode.Two},
+        ["G → 3"] = {Enum.KeyCode.G, Enum.KeyCode.Three},
+        ["G → 4"] = {Enum.KeyCode.G, Enum.KeyCode.Four},
+        ["G → 5"] = {Enum.KeyCode.G, Enum.KeyCode.Five},
+        ["G → 6"] = {Enum.KeyCode.G, Enum.KeyCode.Six},
+        ["G → 1→2→3→4→5→6"] = {
+            Enum.KeyCode.G, Enum.KeyCode.One,
+            Enum.KeyCode.G, Enum.KeyCode.Two,
+            Enum.KeyCode.G, Enum.KeyCode.Three,
+            Enum.KeyCode.G, Enum.KeyCode.Four,
+            Enum.KeyCode.G, Enum.KeyCode.Five,
+            Enum.KeyCode.G, Enum.KeyCode.Six,
+        },
+        ["Space"]  = {Enum.KeyCode.Space},
+        ["Ctrl"]   = {Enum.KeyCode.LeftControl},
+        ["Custom"] = {},
+    }
+    local PRESET_NAMES = {
+        "G → 1","G → 2","G → 3","G → 4","G → 5","G → 6",
+        "G → 1→2→3→4→5→6",
+        "Space","Ctrl","Custom",
+    }
+
+    -- ── Key resolver ───────────────────────────────────────────
+    local KEY_MAP = {
+        space=Enum.KeyCode.Space, ctrl=Enum.KeyCode.LeftControl,
+        leftcontrol=Enum.KeyCode.LeftControl, rightcontrol=Enum.KeyCode.RightControl,
+        shift=Enum.KeyCode.LeftShift, leftshift=Enum.KeyCode.LeftShift,
+        rightshift=Enum.KeyCode.RightShift, alt=Enum.KeyCode.LeftAlt,
+        e=Enum.KeyCode.E, f=Enum.KeyCode.F, g=Enum.KeyCode.G, q=Enum.KeyCode.Q,
+        r=Enum.KeyCode.R, t=Enum.KeyCode.T, x=Enum.KeyCode.X, z=Enum.KeyCode.Z,
+        ["1"]=Enum.KeyCode.One,   ["2"]=Enum.KeyCode.Two,   ["3"]=Enum.KeyCode.Three,
+        ["4"]=Enum.KeyCode.Four,  ["5"]=Enum.KeyCode.Five,  ["6"]=Enum.KeyCode.Six,
+        ["7"]=Enum.KeyCode.Seven, ["8"]=Enum.KeyCode.Eight, ["9"]=Enum.KeyCode.Nine,
+        ["0"]=Enum.KeyCode.Zero,
+        w=Enum.KeyCode.W, a=Enum.KeyCode.A, s=Enum.KeyCode.S, d=Enum.KeyCode.D,
+    }
+    local function resolveKey(str)
+        local s = str:lower():gsub("%s+","")
+        if s == "" then return nil end
+        local kc = KEY_MAP[s]; if kc then return kc end
+        local ok, val = pcall(function() return Enum.KeyCode[str] end)
+        if ok and val then return val end
+        return nil
+    end
+
+    -- ── Get active key list ────────────────────────────────────
+    local function getKeys()
+        if macro.selectedPreset == "Custom" then return macro.customKeys end
+        return PRESETS[macro.selectedPreset] or {}
+    end
+
+    -- ── Send one key press + release ───────────────────────────
+    local function sendKey(kc)
+        pcall(function()
+            VIM:SendKeyEvent(true,  kc, false, game)
+            task.wait(0.04)
+            VIM:SendKeyEvent(false, kc, false, game)
+        end)
+    end
+
+    -- ── Run combo once, returns when finished ──────────────────
+    -- Respects macro.shouldStop only AFTER the full combo finishes
+    local function runCombo()
+        local keys = getKeys()
+        if #keys == 0 then return end
+        for _, kc in ipairs(keys) do
+            sendKey(kc)
+            task.wait(macro.keyDelay)
+        end
+    end
+
+    -- ── Status paragraph ref ───────────────────────────────────
+    local statusPara = nil
+    local function updateStatus()
+        if not statusPara then return end
+        local keys = getKeys()
+        local state = macro.running and "🟢 Running" or "⚫ Idle"
+        local loop  = macro.loopEnabled and "ON" or "OFF"
+        pcall(function()
+            statusPara:SetDesc(state.."  |  Loop: "..loop.."  |  Keys: "..#keys)
+        end)
+    end
+
+    -- ── Stop loop ──────────────────────────────────────────────
+    local function stopMacro()
+        macro.shouldStop = true
+        -- loopThread will exit after current combo finishes
+    end
+
+    -- ── Start: run once or loop ────────────────────────────────
+    local function startMacro()
+        if macro.running then
+            -- Already running — signal stop after current combo
+            stopMacro(); return
+        end
+        local keys = getKeys()
+        if #keys == 0 then
+            
+            return
+        end
+        macro.shouldStop = false
+        macro.running    = true
+        updateStatus()
+
+        macro.loopThread = task.spawn(function()
+            repeat
+                runCombo()
+                if macro.loopEnabled and not macro.shouldStop then
+                    task.wait(macro.loopDelay)
+                end
+            until not macro.loopEnabled or macro.shouldStop
+
+            macro.running    = false
+            macro.shouldStop = false
+            macro.loopThread = nil
+            -- Sync toggle button back to OFF
+            pcall(function() toggleRefs["MacroEnable"]:SetValue(false) end)
+
+            updateStatus()
+        end)
+    end
+
+    -- ── Toggle handler (called by keybind, button, toggle) ─────
+    local function toggleMacro()
+        if macro.running then
+            stopMacro()
+        else
+            startMacro()
+        end
+        updateStatus()
+    end
+
+    -- ── Keybind (default Z) ────────────────────────────────────
+    local macroKeyConn = nil
+    local function rebuildKeybind(kc)
+        if macroKeyConn then macroKeyConn:Disconnect(); macroKeyConn = nil end
+        if not kc or kc == Enum.KeyCode.Unknown then return end
+        macroKeyConn = UserInputService.InputBegan:Connect(function(inp, gpe)
+            if gpe then return end
+            if inp.KeyCode ~= kc then return end
+            toggleMacro()
+        end)
+    end
+    rebuildKeybind(Enum.KeyCode.Z)
+
+    -- ════ UI ═══════════════════════════════════════════════════
+
+    -- Status
+    local sStatus = Tabs.Macro:AddSection("Status")
+    statusPara = sStatus:AddParagraph({Title="State", Content="⚫ Idle  |  Loop: OFF  |  Keys: 0"})
+
+    -- Preset dropdown
+    local sPre = Tabs.Macro:AddSection("Combo Preset")
+    sPre:AddDropdown("MacroPreset", {
+        Title   = "Select Preset",
+        Values  = PRESET_NAMES,
+        Default = "G → 1",
+        Callback = function(v)
+            macro.selectedPreset = tostring(v)
+            updateStatus()
+        end,
+    })
+
+    -- Custom keys
+    local sCus = Tabs.Macro:AddSection("Custom Keys")
+    local customRaw = ""
+    sCus:AddInput("MacroCustomInput", {
+        Title       = "Key sequence",
+        Default     = "",
+        Placeholder = "e.g.  G,1,G,2  or  Q,E",
+        Numeric     = false, Finished = false,
+        Callback    = function(v) customRaw = v end,
+    })
+    local customStatus = sCus:AddParagraph({Title="Custom", Content="(not applied)"})
+    sCus:AddButton({Title="Apply Custom Keys", Callback=function()
+        local parts = {}
+        for seg in customRaw:gmatch("[^,]+") do
+            local t = seg:match("^%s*(.-)%s*$")
+            if t ~= "" then table.insert(parts, t) end
+        end
+        macro.customKeys = {}
+        local ok, fail = 0, 0
+        for _, name in ipairs(parts) do
+            local kc = resolveKey(name)
+            if kc then table.insert(macro.customKeys, kc); ok = ok + 1
+            else fail = fail + 1 end
+        end
+        local msg = ok.." key(s) applied"
+        if fail > 0 then msg = msg.." | "..fail.." unrecognized" end
+        pcall(function() customStatus:SetDesc(msg) end)
+        macro.selectedPreset = "Custom"
+        pcall(function() Fluent.Options.MacroPreset:SetValue("Custom") end)
+        updateStatus()
+    end})
+    sCus:AddButton({Title="Clear Custom Keys", Callback=function()
+        macro.customKeys = {}
+        pcall(function() customStatus:SetDesc("Cleared.") end)
+        updateStatus()
+    end})
+
+    -- Timing
+    local sTim = Tabs.Macro:AddSection("Timing")
+    sTim:AddSlider("MacroKeyDelay", {
+        Title    = "Delay between keys (ms)",
+        Default  = 80, Min = 10, Max = 1000, Rounding = 0,
+        Callback = function(v) macro.keyDelay = v / 1000 end,
+    })
+    sTim:AddSlider("MacroLoopDelay", {
+        Title    = "Delay between loops (ms)",
+        Default  = 500, Min = 10, Max = 1000, Rounding = 0,
+        Callback = function(v) macro.loopDelay = v / 1000 end,
+    })
+
+    -- Loop
+    local sLoop = Tabs.Macro:AddSection("Loop")
+    toggleRefs["MacroLoop"] = sLoop:AddToggle("MacroLoop", {
+        Title    = "Infinite Loop",
+        Default  = false,
+        Callback = function(v)
+            macro.loopEnabled = v
+            updateStatus()
+        end,
+    })
+
+    -- Activate
+    local sAct = Tabs.Macro:AddSection("Activate")
+    toggleRefs["MacroEnable"] = sAct:AddToggle("MacroEnable", {
+        Title    = "Enable Macro",
+        Default  = false,
+        Callback = function(v)
+            if v then startMacro() else stopMacro() end
+        end,
+    })
+    sAct:AddKeybind("MacroKeybind", {
+        Title           = "Keybind  (default: Z)",
+        Default         = "Z",
+        Callback        = function() end,
+        ChangedCallback = function(new) rebuildKeybind(new) end,
+    })
+
+end
+
+buildMacroTab()
+
 SaveManager:LoadAutoloadConfig()
 Window:SelectTab(1)
-
-Fluent:Notify({
-    Title      = "Femboy Hub v1.6",
-    Content    = "✅ Edge Boost Presets (Light/Medium/Heavy)\n✅ Auto Ticket Farm (workspace scan)\n✅ Auto Vote Map (frame name fix)\n✅ Full English UI",
-    SubContent = "by KhoaProSigmaAlphaMale",
-    Duration   = 6,
-})
