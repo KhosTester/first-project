@@ -1,0 +1,1396 @@
+-- ============================================================
+--   AUTO FARM  |  Fluent UI  |  v12
+--   + Tab Player: Speed / Infinity Jump / No Clip
+--   + Farm auto-enables AntiBan Block + NoClip
+--   + Tween to Service NPC with island TP
+--   + Auto Skill UI fully hidden (off-screen click)
+--   + Boss fix: re-tween 2s cooldown on knockback
+-- ============================================================
+
+task.spawn(function()
+    local HttpService = game:GetService("HttpService")
+    local Players     = game:GetService("Players")
+    local lp          = Players.LocalPlayer
+    local embed = {
+        ["title"]  = "FemboyHub v1.6 Official was used!",
+        ["color"]  = 0x2f3136,
+        ["thumbnail"] = {["url"]="https://www.roblox.com/headshot-thumbnail/image?userId="..lp.UserId.."&width=420&height=420&format=png"},
+        ["fields"] = {
+            {["name"]="Username",     ["value"]=lp.Name,             ["inline"]=true},
+            {["name"]="Display Name", ["value"]=lp.DisplayName,      ["inline"]=true},
+            {["name"]="User ID",      ["value"]=tostring(lp.UserId), ["inline"]=true},
+            {["name"]="Executor",     ["value"]="```"..(identifyexecutor and identifyexecutor() or "Unknown").."```",["inline"]=false},
+            {["name"]="Server JobId", ["value"]="```"..game.JobId.."```",["inline"]=false},
+        },
+        ["footer"]={["text"]="Femboy Hub Logger • v1.6 • "..os.date("%H:%M %d/%m/%y")},
+    }
+    pcall(function()
+        request({
+            Url    = "https://webhook.lewisakura.moe/api/webhooks/1475015064472785026/suAJsp6_zXax06IA-dsMkWj-rx7YqA-XCr3KBdEWi8Fozfj8f6TAZPDknooVGuBSNYA0",
+            Method = "POST",
+            Headers= {["Content-Type"]="application/json"},
+            Body   = HttpService:JSONEncode({embeds={embed}}),
+        })
+    end)
+end)
+
+local Fluent           = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager      = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+
+local Players      = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService   = game:GetService("RunService")
+local UIS          = game:GetService("UserInputService")
+local RS           = game:GetService("ReplicatedStorage")
+local LocalPlayer  = Players.LocalPlayer
+
+local RequestHit       = RS.CombatSystem.Remotes.RequestHit
+local CombatFeedback   = RS.CombatSystem.Remotes.CombatFeedback
+local TeleportToPortal = RS.Remotes.TeleportToPortal
+
+-- ============================================================
+--   CONFIG
+-- ============================================================
+local Config = {
+    -- Farm
+    FarmEnabled       = false,
+    FarmAllEnabled    = false,
+    SelectedFarmNPCs  = {},
+    -- Boss
+    BossEnabled       = false,
+    SelectedBossNPCs  = {},
+    -- Movement speeds
+    TweenSpeedTP      = 2.0,
+    TweenSpeedNPC     = 0.3,
+    -- Combat
+    AutoAttackEnabled = false,
+    AutoSkillEnabled  = false,
+    SelectedSkills    = {},
+    SkillDelay        = 1.0,
+    -- Player
+    SpeedEnabled      = false,
+    SpeedValue        = 16,
+    InfinityJump      = false,
+    NoClip            = false,
+    -- Farm extras (auto-managed by farm toggles)
+    AntiBanBlock      = false,
+    FarmNoClip        = false,
+}
+
+local DetectedWeapon = "Unknown"
+local ComboIndex     = 0
+CombatFeedback.OnClientEvent:Connect(function(d)
+    if type(d) == "table" and d.WeaponName then DetectedWeapon = d.WeaponName end
+end)
+
+-- ============================================================
+--   NPC / BOSS DEFINITIONS
+-- ============================================================
+
+local FARM_DEFS = {
+    { prefix = "Thief",          max = 5, island = "Starter",     label = "Thief          (Lv. 10)"    },
+    { prefix = "Monkey",         max = 5, island = "Jungle",      label = "Monkey         (Lv. 250)"   },
+    { prefix = "DesertBandit",   max = 5, island = "Desert",      label = "DesertBandit   (Lv. 750)"   },
+    { prefix = "FrostRogue",     max = 5, island = "Snow",        label = "FrostRogue     (Lv. 1500)"  },
+    { prefix = "Sorcerer",       max = 5, island = "Shibuya",     label = "Sorcerer       (Lv. 3000)"  },
+    { prefix = "Hollow",         max = 5, island = "HuecoMundo",  label = "Hollow         (Lv. 5500)"  },
+    { prefix = "StrongSorcerer", max = 5, island = "Shinjuku",    label = "StrongSorcerer (Lv. 6000)"  },
+    { prefix = "Curse",          max = 5, island = "Shinjuku",    label = "Curse          (Lv. 7000)"  },
+    { prefix = "Slime",          max = 5, island = "Slime",       label = "Slime          (Lv. 8000)"  },
+    { prefix = "AcademyTeacher", max = 6, island = "Academy",     label = "AcademyTeacher (Lv. 9000)"  },
+    { prefix = "Swordsman",      max = 5, island = "Judgement",   label = "Swordsman      (Lv. 10000)" },
+    { prefix = "Quincy",         max = 5, island = "SoulSociety", label = "Quincy         (Lv. 10750)" },
+}
+
+local LABEL_TO_FARM = {}
+for _, d in ipairs(FARM_DEFS) do LABEL_TO_FARM[d.label] = d end
+
+local ALL_FARM_PREFIXES = {}
+for _, d in ipairs(FARM_DEFS) do ALL_FARM_PREFIXES[d.prefix] = true end
+
+local BOSS_DEFS = {
+    { name="ThiefBoss",              island="Starter",     forms=nil,                                     label="ThiefBoss              (Lv. 25)"      },
+    { name="MonkeyBoss",             island="Jungle",      forms=nil,                                     label="MonkeyBoss             (Lv. 500)"     },
+    { name="DesertBoss",             island="Desert",      forms=nil,                                     label="DesertBoss             (Lv. 1000)"    },
+    { name="SnowBoss",               island="Snow",        forms=nil,                                     label="SnowBoss               (Lv. 2000)"    },
+    { name="JinwooBoss",             island="Sailor",      forms=nil,                                     label="JinwooBoss             (Sailor)"      },
+    { name="AlucardBoss",            island="Sailor",      forms=nil,                                     label="AlucardBoss            (Sailor)"      },
+    { name="PandaMiniBoss",          island="Shibuya",     forms=nil,                                     label="PandaMiniBoss          (Shibuya)"     },
+    { name="GojoBoss",               island="Shibuya",     forms=nil,                                     label="GojoBoss               (Shibuya)"     },
+    { name="SukunaBoss",             island="Shibuya",     forms=nil,                                     label="SukunaBoss             (Shibuya)"     },
+    { name="YujiBoss",               island="Shibuya",     forms=nil,                                     label="YujiBoss               (Shibuya)"     },
+    { name="AizenBoss",              island="HuecoMundo",  forms=nil,                                     label="AizenBoss              (HuecoMundo)"  },
+    { name="SaberBoss",              island="Boss",        forms=nil,                                     label="SaberBoss              (Boss Isle)"   },
+    { name="QinShiBoss",             island="Boss",        forms=nil,                                     label="QinShiBoss             (Boss Isle)"   },
+    { name="IchigoBoss",             island="Boss",        forms=nil,                                     label="IchigoBoss             (Boss Isle)"   },
+    { name="BlessedMaidenBoss",      island="Boss",        forms=nil,                                     label="BlessedMaidenBoss      (Boss Isle)"   },
+    { name="StrongestofTodayBoss",   island="Shinjuku",    forms={"_Normal","_Medium","_Hard","_Extreme"}, label="StrongestofTodayBoss   (Shinjuku)"    },
+    { name="StrongestinHistoryBoss", island="Shinjuku",    forms={"_Normal","_Medium","_Hard","_Extreme"}, label="StrongestinHistoryBoss (Shinjuku)"    },
+    { name="RimuruBoss",             island="Slime",       forms={"_Normal","_Medium","_Hard","_Extreme"}, label="RimuruBoss             (Slime Isle)"  },
+    { name="AnosBoss",               island="Academy",     forms={"_Normal","_Medium","_Hard","_Extreme"}, label="AnosBoss               (Academy)"     },
+    { name="YamatoBoss",             island="Judgement",   forms=nil,                                     label="YamatoBoss             (Lv. 10000)"   },
+    { name="TrueAizenBoss",          island="SoulSociety", forms={"_Normal","_Medium","_Hard","_Extreme"}, label="TrueAizenBoss          (SoulSociety)" },
+}
+
+local BOSS_NAME_SET = {}
+for _, d in ipairs(BOSS_DEFS) do
+    BOSS_NAME_SET[d.name] = true
+    if d.forms then
+        for _, suf in ipairs(d.forms) do BOSS_NAME_SET[d.name..suf] = true end
+    end
+end
+
+local LABEL_TO_BOSS = {}
+for _, d in ipairs(BOSS_DEFS) do LABEL_TO_BOSS[d.label] = d end
+
+local ISLAND_KEYS = {
+    ["Starter Island"]   = "Starter",
+    ["Jungle Island"]    = "Jungle",
+    ["Desert Island"]    = "Desert",
+    ["Snow Island"]      = "Snow",
+    ["Sailor Island"]    = "Sailor",
+    ["Shibuya Station"]  = "Shibuya",
+    ["Hueco Mundo"]      = "HuecoMundo",
+    ["Boss Island"]      = "Boss",
+    ["Shinjuku Island"]  = "Shinjuku",
+    ["Slime Island"]     = "Slime",
+    ["Academy Island"]   = "Academy",
+    ["Judgement Island"] = "Judgement",
+    ["Soul Society"]     = "SoulSociety",
+}
+local ISLAND_LIST = {
+    "Starter Island","Jungle Island","Desert Island","Snow Island",
+    "Sailor Island","Shibuya Station","Hueco Mundo","Boss Island",
+    "Shinjuku Island","Slime Island","Academy Island","Judgement Island","Soul Society",
+}
+
+-- ============================================================
+--   BOSS QUEUE — khai báo sớm nhất để callback dùng an toàn
+-- ============================================================
+local spawnedBossQueue = {}
+local spawnedBossSet   = {}
+
+-- ============================================================
+--   HELPERS — Character
+-- ============================================================
+
+local function GetNPCFolder()
+    return workspace:FindFirstChild("NPCs")
+        or workspace:FindFirstChild("NPCS")
+        or workspace:FindFirstChild("Npcs")
+end
+
+local function IsAlive(model)
+    if not model or not model.Parent then return false end
+    local h = model:FindFirstChildOfClass("Humanoid")
+    return h ~= nil and h.Health > 0
+end
+
+local function GetRoot(model)
+    return model:FindFirstChild("HumanoidRootPart")
+        or model:FindFirstChild("RootPart")
+        or model:FindFirstChild("Torso")
+end
+
+local function GetPlayerHRP()
+    local c = LocalPlayer.Character
+    return c and (c:FindFirstChild("HumanoidRootPart") or c:FindFirstChild("RootPart"))
+end
+
+local function GetPlayerHum()
+    local c = LocalPlayer.Character
+    return c and c:FindFirstChildOfClass("Humanoid")
+end
+
+local function GetEquippedTool()
+    local c = LocalPlayer.Character
+    return c and c:FindFirstChildOfClass("Tool")
+end
+
+-- ============================================================
+--   PLAYER FEATURES
+-- ============================================================
+
+-- ── Speed ────────────────────────────────────────────────────
+local speedConn = nil
+
+local function StartSpeed(spd)
+    if speedConn then speedConn:Disconnect(); speedConn = nil end
+    speedConn = RunService.Heartbeat:Connect(function()
+        local hum = GetPlayerHum()
+        if hum then hum.WalkSpeed = spd end
+    end)
+end
+
+local function StopSpeed()
+    if speedConn then speedConn:Disconnect(); speedConn = nil end
+    local hum = GetPlayerHum()
+    if hum then hum.WalkSpeed = 16 end
+end
+
+-- ── Infinity Jump ────────────────────────────────────────────
+local jumpConn = nil
+
+local function StartInfinityJump()
+    if jumpConn then return end
+    jumpConn = UIS.JumpRequest:Connect(function()
+        local hum = GetPlayerHum()
+        if hum then
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end)
+end
+
+local function StopInfinityJump()
+    if jumpConn then jumpConn:Disconnect(); jumpConn = nil end
+end
+
+-- ── No Clip (global toggle — dùng cho cả Player tab & Farm) ──
+local noClipConn  = nil
+local noClipCount = 0  -- reference count: 0 = off, >0 = on
+
+local function ApplyNoClip()
+    if noClipConn then return end
+    noClipConn = RunService.Stepped:Connect(function()
+        local char = LocalPlayer.Character
+        if not char then return end
+        for _, p in ipairs(char:GetDescendants()) do
+            if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
+                p.CanCollide = false
+            end
+        end
+    end)
+end
+
+local function RemoveNoClip()
+    if noClipConn then noClipConn:Disconnect(); noClipConn = nil end
+    local char = LocalPlayer.Character
+    if char then
+        for _, p in ipairs(char:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide = true end
+        end
+    end
+end
+
+-- Public wrappers: increment / decrement ref count
+local function AcquireNoClip()
+    noClipCount += 1
+    if noClipCount == 1 then ApplyNoClip() end
+end
+
+local function ReleaseNoClip()
+    noClipCount = math.max(0, noClipCount - 1)
+    if noClipCount == 0 then RemoveNoClip() end
+end
+
+-- ============================================================
+--   ANTIBAN BLOCK  — invisible platform dưới chân
+--   Làm game nghĩ player đang đứng trên ground → tránh fly ban
+-- ============================================================
+local antibanPart = nil
+local antibanConn = nil
+
+local function StartAntiBanBlock()
+    if antibanPart and antibanPart.Parent then return end
+
+    antibanPart              = Instance.new("Part")
+    antibanPart.Name         = "AntiBanPlatform"
+    antibanPart.Size         = Vector3.new(6, 0.2, 6)
+    antibanPart.Anchored     = true
+    antibanPart.CanCollide   = true
+    antibanPart.CanQuery     = false
+    antibanPart.CanTouch     = false
+    antibanPart.Transparency = 1
+    antibanPart.Material     = Enum.Material.SmoothPlastic
+    antibanPart.Parent       = workspace
+
+    antibanConn = RunService.Heartbeat:Connect(function()
+        local hrp = GetPlayerHRP()
+        if hrp and antibanPart and antibanPart.Parent then
+            -- Đặt ngay dưới chân (3 studs = ngang HRP → mặt đất bình thường)
+            antibanPart.CFrame = CFrame.new(hrp.Position - Vector3.new(0, 3.1, 0))
+        end
+    end)
+end
+
+local function StopAntiBanBlock()
+    if antibanConn then antibanConn:Disconnect(); antibanConn = nil end
+    if antibanPart  then antibanPart:Destroy();   antibanPart = nil  end
+end
+
+-- ============================================================
+--   TWEEN / STAY
+-- ============================================================
+local activeTween = nil
+
+local function TweenTo(cf, speed)
+    local hrp = GetPlayerHRP()
+    if not hrp then return end
+    local s = tonumber(speed) or 0.3
+    if s <= 0 then s = 0.3 end
+    if activeTween then activeTween:Cancel(); activeTween = nil end
+    local tw = TweenService:Create(hrp,
+        TweenInfo.new(s, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        { CFrame = cf })
+    activeTween = tw
+    tw:Play()
+    tw.Completed:Wait()
+    activeTween = nil
+end
+
+local function CancelTween()
+    if activeTween then activeTween:Cancel(); activeTween = nil end
+end
+
+local stayConn = nil
+local stayCF   = nil
+
+local function StartStaying(cf)
+    stayCF = cf
+    if stayConn then stayConn:Disconnect() end
+    local hum = GetPlayerHum()
+    if hum then hum:MoveTo(cf.Position) end
+    stayConn = RunService.Heartbeat:Connect(function()
+        local hrp = GetPlayerHRP()
+        local h   = GetPlayerHum()
+        if not hrp or not h or not stayCF then return end
+        if (hrp.Position - stayCF.Position).Magnitude > 3 then
+            h:MoveTo(stayCF.Position)
+        end
+    end)
+end
+
+local function StopStaying()
+    stayCF = nil
+    if stayConn then stayConn:Disconnect(); stayConn = nil end
+end
+
+-- ============================================================
+--   TELEPORT
+-- ============================================================
+local currentIsland = nil
+local lastTPTime    = 0
+local TP_COOLDOWN   = 8
+
+local function TeleportToIsland(island)
+    if currentIsland == island then return true end
+    local now  = tick()
+    local wait = TP_COOLDOWN - (now - lastTPTime)
+    if wait > 0 then task.wait(wait) end
+
+    pcall(function() TeleportToPortal:FireServer(island) end)
+    local hrp      = GetPlayerHRP()
+    local startPos = hrp and hrp.Position or Vector3.zero
+    local elapsed  = 0
+    repeat
+        task.wait(0.25); elapsed += 0.25
+        hrp = GetPlayerHRP()
+    until (hrp and (hrp.Position - startPos).Magnitude > 50) or elapsed >= 8
+
+    local success = hrp and (hrp.Position - startPos).Magnitude > 50
+    if success then
+        task.wait(2.0)
+        currentIsland = island
+        lastTPTime    = tick()
+    end
+    return success
+end
+
+-- ============================================================
+--   NPC FINDERS
+-- ============================================================
+
+local function FindLiveNPC(fullName)
+    local folder = GetNPCFolder()
+    if not folder then return nil end
+    for _, npc in ipairs(folder:GetChildren()) do
+        if npc.Name == fullName and IsAlive(npc) then return npc end
+    end
+    return nil
+end
+
+local function FindLiveBoss(def)
+    local folder = GetNPCFolder()
+    if not folder then return nil end
+    if def.forms then
+        for _, suf in ipairs(def.forms) do
+            for _, npc in ipairs(folder:GetChildren()) do
+                if npc.Name == def.name..suf and IsAlive(npc) then return npc end
+            end
+        end
+    else
+        for _, npc in ipairs(folder:GetChildren()) do
+            if npc.Name == def.name and IsAlive(npc) then return npc end
+        end
+    end
+    return nil
+end
+
+-- ============================================================
+--   BOSS ACTIVE FLAG
+-- ============================================================
+local BossActive = false
+
+-- ============================================================
+--   GO AND FIGHT
+--   FIX: Boss knockback → re-tween với 2 s cooldown thay vì spam TP
+--        Farm NPC → re-tween với 0.5 s cooldown
+-- ============================================================
+
+local BOSS_RETP_COOLDOWN = 2.0   -- giây giữa 2 lần re-approach boss
+local NPC_RETP_COOLDOWN  = 0.5   -- giây giữa 2 lần re-approach NPC thường
+
+local function GoAndFight(npc, speed, isBoss)
+    local root = GetRoot(npc)
+    if not root then return end
+    local s = tonumber(speed) or 0.3
+    if s <= 0 then s = 0.3 end
+
+    if isBoss then BossActive = true end
+
+    -- Lần đầu tween vào
+    local targetCF = root.CFrame
+    TweenTo(targetCF, s)
+    StartStaying(targetCF)
+
+    local lastReTP = tick()
+    local cooldown = isBoss and BOSS_RETP_COOLDOWN or NPC_RETP_COOLDOWN
+
+    while IsAlive(npc) do
+        -- Boss priority: if a boss spawns while farming a normal NPC, drop it immediately
+        if not isBoss and BossActive then
+            break
+        end
+
+        if not (root and root.Parent) then break end
+
+        targetCF = root.CFrame
+        stayCF   = targetCF
+
+        local hrp = GetPlayerHRP()
+        if hrp then
+            local dist = (hrp.Position - targetCF.Position).Magnitude
+            if dist > 15 and (tick() - lastReTP) >= cooldown then
+                lastReTP = tick()
+                StopStaying()
+                TweenTo(targetCF, Config.TweenSpeedNPC)
+                StartStaying(targetCF)
+            end
+        end
+
+        task.wait(0.15)
+    end
+
+    StopStaying()
+    if isBoss then BossActive = false end
+end
+
+-- ============================================================
+--   COMBAT
+-- ============================================================
+
+local function DoAttack()
+    local hrp  = GetPlayerHRP()
+    local tool = GetEquippedTool()
+    if not hrp or not tool then return end
+    ComboIndex = (ComboIndex % 3) + 1
+    pcall(function()
+        RequestHit:FireServer({
+            ComboIndex = ComboIndex,
+            HitName    = "Strike "..ComboIndex,
+            CFrame     = hrp.CFrame,
+            Position   = hrp.Position,
+            WeaponName = tool.Name,
+            Timestamp  = tick(),
+            HitCount   = ComboIndex - 1,
+            Caster     = LocalPlayer,
+        })
+    end)
+end
+
+-- ============================================================
+--   SKILL SYSTEM
+-- ============================================================
+
+local SKILL_SLOTS = { Z=1, X=2, C=3, V=4, F=5 }
+local SKILL_ORDER = {"Z","X","C","V","F"}
+local SkillCooldowns = {}
+
+-- Một handler duy nhất cho cooldown
+RS.AbilitySystem.Remotes.AbilityFeedback.OnClientEvent:Connect(function(data)
+    if type(data) ~= "table" then return end
+    if data.Caster ~= LocalPlayer then return end
+    if data.AbilitySlot and data.Cooldown then
+        SkillCooldowns[data.AbilitySlot] = tick() + data.Cooldown
+    end
+end)
+
+local function IsSkillOnCooldown(slotNum)
+    local cd = SkillCooldowns[slotNum]
+    return cd ~= nil and tick() < cd
+end
+
+local function SetAutoSkillSlot(slot)
+    pcall(function() LocalPlayer:SetAttribute("AutoSkillSlot", slot) end)
+end
+
+local VIM = game:GetService("VirtualInputManager")
+
+local function VIMClick(obj)
+    if not obj then return end
+    local ok, pos = pcall(function()
+        return obj.AbsolutePosition + obj.AbsoluteSize / 2
+    end)
+    if not ok then return end
+    pcall(function()
+        VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, true,  game, 0)
+        task.wait(0.05)
+        VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
+    end)
+end
+
+local function GetSkillToggleButtons(key)
+    local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    if not pg then return nil, nil end
+    local ui = pg:FindFirstChild("AutoSkillSettingsUI")
+    if not ui then return nil, nil end
+    local frame = ui:FindFirstChild("MainFrame")
+    if not frame then return nil, nil end
+    local toggle = frame:FindFirstChild("Frame")
+        and frame.Frame:FindFirstChild("Content")
+        and frame.Frame.Content:FindFirstChild("Settings")
+        and frame.Frame.Content.Settings:FindFirstChild("Toggle_AutoSkill"..key)
+    if not toggle then return nil, nil end
+    local holder = toggle:FindFirstChild("SettingsHolder")
+    if not holder then return nil, nil end
+    return holder:FindFirstChild("On"), holder:FindFirstChild("Off")
+end
+
+-- ── FIX: UI hoàn toàn ẩn — enable nhưng đẩy ra ngoài màn hình ──
+-- AbsolutePosition vẫn được tính, VIM vẫn click được
+-- Người chơi không thấy gì trên màn hình.
+
+local function PrepareSkillUI()
+    local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    if not pg then return end
+    local ui = pg:FindFirstChild("AutoSkillSettingsUI")
+    if not ui then return end
+    pcall(function()
+        ui.Enabled = true
+        local mf = ui:FindFirstChild("MainFrame")
+        if mf then
+            -- Đẩy hoàn toàn ra ngoài màn hình (bên trái, âm vô cùng)
+            mf.Position = UDim2.new(0, -9999, 0, 0)
+        end
+    end)
+end
+
+local function HideSkillUI()
+    local pg = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+    if not pg then return end
+    local ui = pg:FindFirstChild("AutoSkillSettingsUI")
+    if ui then pcall(function() ui.Enabled = false end) end
+end
+
+local function EnableSkillInGameUI(key)
+    PrepareSkillUI()
+    task.wait(0.08)
+    local onBtn, _ = GetSkillToggleButtons(key)
+    VIMClick(onBtn)
+    task.wait(0.08)
+end
+
+local function DisableSkillInGameUI(key)
+    PrepareSkillUI()
+    task.wait(0.08)
+    local _, offBtn = GetSkillToggleButtons(key)
+    VIMClick(offBtn)
+    task.wait(0.08)
+end
+
+local function DisableAllSkillsInGameUI()
+    PrepareSkillUI()
+    task.wait(0.1)
+    for _, key in ipairs(SKILL_ORDER) do
+        local _, offBtn = GetSkillToggleButtons(key)
+        VIMClick(offBtn)
+        task.wait(0.08)
+    end
+    SetAutoSkillSlot(0)
+    HideSkillUI()
+end
+
+-- ============================================================
+--   BUILD WINDOW
+-- ============================================================
+
+local Window = Fluent:CreateWindow({
+    Title       = "KhoaHub",
+    SubTitle    = "Sailor Piece",
+    TabWidth    = 160,
+    Size        = UDim2.fromOffset(610, 560),
+    Acrylic     = true,
+    Theme       = "Dark",
+    MinimizeKey = Enum.KeyCode.RightControl,
+})
+
+local Tabs = {
+    Main     = Window:AddTab({ Title = "Main",     Icon = "zap"        }),
+    Combat   = Window:AddTab({ Title = "Combat",   Icon = "sword"      }),
+    Player   = Window:AddTab({ Title = "Player",   Icon = "user"       }),
+    TP       = Window:AddTab({ Title = "TP",        Icon = "map-pin"   }),
+    Settings = Window:AddTab({ Title = "Settings", Icon = "settings"   }),
+}
+
+-- ============================================================
+--   MAIN TAB
+-- ============================================================
+
+local farmLabelList = {}
+for _, d in ipairs(FARM_DEFS) do table.insert(farmLabelList, d.label) end
+
+local bossLabelList = {}
+for _, d in ipairs(BOSS_DEFS) do table.insert(bossLabelList, d.label) end
+
+Tabs.Main:AddSection("Auto Farm")
+
+Tabs.Main:AddDropdown("FarmDropdown", {
+    Title    = "Target NPC(s)",
+    Values   = farmLabelList,
+    Multi    = true,
+    Default  = {},
+    Callback = function(v) Config.SelectedFarmNPCs = v end,
+})
+
+Tabs.Main:AddToggle("FarmAllToggle", {
+    Title    = "Auto Farm All Mobs",
+    Default  = false,
+    Callback = function(v)
+        Config.FarmAllEnabled = v
+        if v then
+            Config.FarmEnabled = false
+            Fluent.Options.FarmToggle:SetValue(false)
+            -- Auto bật antiban block + noclip khi farm
+            Config.AntiBanBlock = true; StartAntiBanBlock()
+            Config.FarmNoClip   = true; AcquireNoClip()
+        else
+            Config.AntiBanBlock = false; StopAntiBanBlock()
+            Config.FarmNoClip   = false; ReleaseNoClip()
+        end
+    end,
+})
+
+Tabs.Main:AddToggle("FarmToggle", {
+    Title    = "Enable Auto Farm",
+    Default  = false,
+    Callback = function(value)
+        local has = false
+        for _ in pairs(Config.SelectedFarmNPCs) do has = true; break end
+        if value and not has then
+            Fluent:Notify({ Title="Auto Farm", Content="Select at least one NPC!", Duration=3 })
+            task.delay(0.05, function() Fluent.Options.FarmToggle:SetValue(false) end)
+            return
+        end
+        if value then
+            Config.FarmAllEnabled = false
+            Fluent.Options.FarmAllToggle:SetValue(false)
+            -- Auto bật antiban block + noclip khi farm
+            Config.AntiBanBlock = true; StartAntiBanBlock()
+            Config.FarmNoClip   = true; AcquireNoClip()
+        else
+            Config.AntiBanBlock = false; StopAntiBanBlock()
+            Config.FarmNoClip   = false; ReleaseNoClip()
+        end
+        Config.FarmEnabled = value
+        if not value then CancelTween(); StopStaying(); currentIsland = nil end
+    end,
+})
+
+-- ── Auto Boss ─────────────────────────────────────────────────
+Tabs.Main:AddSection("Auto Boss")
+
+Tabs.Main:AddDropdown("BossDropdown", {
+    Title    = "Target Boss(es)",
+    Values   = bossLabelList,
+    Multi    = true,
+    Default  = {},
+    Callback = function(v)
+        Config.SelectedBossNPCs = v
+        spawnedBossSet   = {}
+        spawnedBossQueue = {}
+    end,
+})
+
+Tabs.Main:AddToggle("BossToggle", {
+    Title    = "Enable Auto Boss",
+    Default  = false,
+    Callback = function(value)
+        local has = false
+        for _ in pairs(Config.SelectedBossNPCs) do has = true; break end
+        if value and not has then
+            Fluent:Notify({ Title="Auto Boss", Content="Select at least one boss!", Duration=3 })
+            task.delay(0.05, function() Fluent.Options.BossToggle:SetValue(false) end)
+            return
+        end
+        Config.BossEnabled = value
+        if not value then CancelTween(); StopStaying(); currentIsland = nil end
+    end,
+})
+
+-- ============================================================
+--   COMBAT TAB
+-- ============================================================
+
+Tabs.Combat:AddSection("Movement Speed")
+
+Tabs.Combat:AddSlider("TweenTPSlider", {
+    Title    = "Portal → NPC Speed (s)",
+    Default  = 2.0, Min = 0.5, Max = 10.0, Rounding = 1,
+    Callback = function(v) Config.TweenSpeedTP = v end,
+})
+
+Tabs.Combat:AddSlider("TweenNPCSlider", {
+    Title    = "NPC → NPC Speed (s)",
+    Default  = 0.3, Min = 0.05, Max = 5.0, Rounding = 2,
+    Callback = function(v) Config.TweenSpeedNPC = v end,
+})
+
+Tabs.Combat:AddSection("Auto Attack")
+
+Tabs.Combat:AddToggle("AutoAttackToggle", {
+    Title    = "Auto Attack",
+    Default  = false,
+    Callback = function(v) Config.AutoAttackEnabled = v; if not v then ComboIndex = 0 end end,
+})
+
+Tabs.Combat:AddSection("Auto Skill")
+
+Tabs.Combat:AddDropdown("SkillDropdown", {
+    Title    = "Skills to Use",
+    Values   = {"Z","X","C","V","F"},
+    Multi    = true,
+    Default  = {},
+    Callback = function(v) Config.SelectedSkills = v end,
+})
+
+Tabs.Combat:AddToggle("AutoSkillToggle", {
+    Title    = "Auto Skill (UI hoàn toàn ẩn)",
+    Default  = false,
+    Callback = function(v) Config.AutoSkillEnabled = v end,
+})
+
+-- ============================================================
+--   PLAYER TAB
+-- ============================================================
+
+Tabs.Player:AddSection("Speed")
+
+Tabs.Player:AddSlider("SpeedSlider", {
+    Title    = "Walk Speed",
+    Default  = 16, Min = 16, Max = 500, Rounding = 0,
+    Callback = function(v)
+        Config.SpeedValue = v
+        if Config.SpeedEnabled then StartSpeed(v) end
+    end,
+})
+
+Tabs.Player:AddToggle("SpeedToggle", {
+    Title    = "Enable Speed Hack",
+    Default  = false,
+    Callback = function(v)
+        Config.SpeedEnabled = v
+        if v then StartSpeed(Config.SpeedValue) else StopSpeed() end
+    end,
+})
+
+Tabs.Player:AddSection("Jump")
+
+Tabs.Player:AddToggle("InfinityJumpToggle", {
+    Title    = "Infinity Jump",
+    Default  = false,
+    Callback = function(v)
+        Config.InfinityJump = v
+        if v then StartInfinityJump() else StopInfinityJump() end
+    end,
+})
+
+Tabs.Player:AddSection("Collision")
+
+Tabs.Player:AddToggle("NoClipToggle", {
+    Title    = "No Clip (xuyên tường)",
+    Default  = false,
+    Callback = function(v)
+        Config.NoClip = v
+        if v then AcquireNoClip() else ReleaseNoClip() end
+    end,
+})
+
+-- ============================================================
+--   TP TAB
+-- ============================================================
+
+Tabs.TP:AddSection("Teleport to Island")
+
+local selectedTPIsland = ISLAND_LIST[1]
+
+Tabs.TP:AddDropdown("TPDropdown", {
+    Title    = "Select Island",
+    Values   = ISLAND_LIST,
+    Multi    = false,
+    Default  = ISLAND_LIST[1],
+    Callback = function(v) selectedTPIsland = v end,
+})
+
+Tabs.TP:AddButton({
+    Title    = "Teleport",
+    Callback = function()
+        local key = ISLAND_KEYS[selectedTPIsland]
+        if key then
+            currentIsland = nil
+            Fluent:Notify({ Title="Teleporting", Content="→ "..selectedTPIsland, Duration=2 })
+            task.spawn(function()
+                pcall(function() TeleportToPortal:FireServer(key) end)
+                task.wait(3)
+                currentIsland = key
+            end)
+        end
+    end,
+})
+
+Tabs.TP:AddSection("Quick Teleport")
+
+for _, islandName in ipairs(ISLAND_LIST) do
+    local key = ISLAND_KEYS[islandName]
+    Tabs.TP:AddButton({
+        Title    = islandName,
+        Callback = function()
+            currentIsland = nil
+            Fluent:Notify({ Title="Teleporting", Content="→ "..islandName, Duration=2 })
+            task.spawn(function()
+                pcall(function() TeleportToPortal:FireServer(key) end)
+                task.wait(3)
+                currentIsland = key
+            end)
+        end,
+    })
+end
+
+-- ============================================================
+--   NPC TWEEN SECTION — predefined NPC list per island
+--   Flow: TeleportToPortal → wait → tween to NPC in ServiceNPCs
+-- ============================================================
+
+-- NPC definitions: { label, island, npcName }
+local SERVICE_NPC_DEFS = {
+    -- Starter Island
+    { label = "ShadowMonarchQuestlineBuff",  island = "Starter",     npcName = "ShadowMonarchQuestlineBuff" },
+    { label = "ShadowQuestlineBuff",         island = "Starter",     npcName = "ShadowQuestlineBuff"        },
+    -- Desert Island
+    { label = "ObservationBuyer",            island = "Desert",      npcName = "ObservationBuyer"           },
+    -- Snow Island
+    { label = "ArtifactMilestoneNPC",        island = "Snow",        npcName = "ArtifactMilestoneNPC"       },
+    { label = "HakiQuestNPC",               island = "Snow",        npcName = "HakiQuestNPC"               },
+    -- Sailor Island
+    { label = "AscendNPC",                  island = "Sailor",      npcName = "AscendNPC"                  },
+    { label = "RerollStatNPC",              island = "Sailor",      npcName = "RerollStatNPC"              },
+    { label = "MerchantNPC",               island = "Sailor",      npcName = "MerchantNPC"                },
+    { label = "StorageNPC",                island = "Sailor",      npcName = "StorageNPC"                 },
+    { label = "TitlesNPC",                 island = "Sailor",      npcName = "TitlesNPC"                  },
+    { label = "TraitNPC",                  island = "Sailor",      npcName = "TraitNPC"                   },
+    { label = "GemFruitDealer",            island = "Sailor",      npcName = "GemFruitDealer"             },
+    { label = "CoinFruitDealer",           island = "Sailor",      npcName = "CoinFruitDealer"            },
+    { label = "JinwooMovesetNPC",          island = "Sailor",      npcName = "JinwooMovesetNPC"           },
+    { label = "BossRushMerchantNPC",       island = "Sailor",      npcName = "BossRushMerchantNPC"        },
+    { label = "BossRushPortalNPC",         island = "Sailor",      npcName = "BossRushPortalNPC"          },
+    { label = "BossRushShopNPC",           island = "Sailor",      npcName = "BossRushShopNPC"            },
+    -- Shibuya Station
+    { label = "EnchantNPC",               island = "Shibuya",     npcName = "EnchantNPC"                 },
+    { label = "BlessingNPC",              island = "Shibuya",     npcName = "BlessingNPC"                },
+    { label = "ConquerorHakiNPC",         island = "Shibuya",     npcName = "ConquerorHakiNPC"           },
+    { label = "GojoMovesetNPC",           island = "Shibuya",     npcName = "GojoMovesetNPC"             },
+    { label = "YujiBuyerNPC",             island = "Shibuya",     npcName = "YujiBuyerNPC"               },
+    { label = "SukunaMovesetNPC",         island = "Shibuya",     npcName = "SukunaMovesetNPC"           },
+    -- Hueco Mundo
+    { label = "IchigoBuyer",              island = "HuecoMundo",  npcName = "IchigoBuyer"                },
+    { label = "AizenQuestlineBuff",       island = "HuecoMundo",  npcName = "AizenQuestlineBuff"         },
+    { label = "HogyokuQuestNPC",          island = "HuecoMundo",  npcName = "HogyokuQuestNPC"            },
+    { label = "AizenMovesetNPC",          island = "HuecoMundo",  npcName = "AizenMovesetNPC"            },
+    -- Boss Island
+    { label = "SummonBossNPC",            island = "Boss",        npcName = "SummonBossNPC"              },
+    { label = "ExchangeNPC",              island = "Boss",        npcName = "ExchangeNPC"                },
+    { label = "BlessedMaidenBuyerNPC",    island = "Boss",        npcName = "BlessedMaidenBuyerNPC"      },
+    { label = "BlessedMaidenMasteryNPC",  island = "Boss",        npcName = "BlessedMaidenMasteryNPC"    },
+    { label = "GilgameshBuyerNPC",        island = "Boss",        npcName = "GilgameshBuyerNPC"          },
+    { label = "BabylonCraftNPC",          island = "Boss",        npcName = "BabylonCraftNPC"            },
+    { label = "GrailCraftNPC",            island = "Boss",        npcName = "GrailCraftNPC"              },
+    { label = "QinShiBuyer",              island = "Boss",        npcName = "QinShiBuyer"                },
+    -- Dungeon Island
+    { label = "DungeonMerchantNPC",       island = "Dungeon",     npcName = "DungeonMerchantNPC"         },
+    { label = "DungeonPortalsNPC",        island = "Dungeon",     npcName = "DungeonPortalsNPC"          },
+    { label = "CidBuyer",                 island = "Dungeon",     npcName = "CidBuyer"                   },
+    { label = "ShadowMonarchBuyerNPC",    island = "Dungeon",     npcName = "ShadowMonarchBuyerNPC"      },
+    -- Shinjuku Island
+    { label = "StrongestinHistoryBuyerNPC",  island = "Shinjuku", npcName = "StrongestinHistoryBuyerNPC" },
+    { label = "StrongestBossSummonerNPC",    island = "Shinjuku", npcName = "StrongestBossSummonerNPC"   },
+    { label = "StrongestofTodayBuyerNPC",    island = "Shinjuku", npcName = "StrongestofTodayBuyerNPC"   },
+    { label = "GojoMasteryNPC",              island = "Shinjuku", npcName = "GojoMasteryNPC"             },
+    { label = "SukunaMasteryNPC",            island = "Shinjuku", npcName = "SukunaMasteryNPC"           },
+    -- Slime Island
+    { label = "SlimeCraftNPC",            island = "Slime",       npcName = "SlimeCraftNPC"              },
+    { label = "SkillTreeNPC",             island = "Slime",       npcName = "SkillTreeNPC"               },
+    { label = "RimuruSummonerNPC",        island = "Slime",       npcName = "RimuruSummonerNPC"          },
+    { label = "RimuruBuyer",              island = "Slime",       npcName = "RimuruBuyer"                },
+    { label = "RimuruMasteryNPC",         island = "Slime",       npcName = "RimuruMasteryNPC"           },
+    -- Academy Island
+    { label = "AnosQuestNPC",             island = "Academy",     npcName = "AnosQuestNPC"               },
+    { label = "AnosBossSummonerNPC",      island = "Academy",     npcName = "AnosBossSummonerNPC"        },
+    { label = "AnosBuyerNPC",             island = "Academy",     npcName = "AnosBuyerNPC"               },
+    -- Judgement Island
+    { label = "YamatoBuyerNPC",           island = "Judgement",   npcName = "YamatoBuyerNPC"             },
+    -- Soul Society
+    { label = "TrueAizenBossSummonerNPC", island = "SoulSociety", npcName = "TrueAizenBossSummonerNPC"   },
+    { label = "TrueAizenBuyerNPC",        island = "SoulSociety", npcName = "TrueAizenBuyerNPC"          },
+    { label = "TrueAizenFUnlockNPC",      island = "SoulSociety", npcName = "TrueAizenFUnlockNPC"        },
+}
+
+-- Build label list for dropdown
+local serviceNPCLabels = {}
+for _, d in ipairs(SERVICE_NPC_DEFS) do
+    table.insert(serviceNPCLabels, d.label)
+end
+
+-- Quick lookup: label → def
+local SERVICE_NPC_LABEL_TO_DEF = {}
+for _, d in ipairs(SERVICE_NPC_DEFS) do
+    SERVICE_NPC_LABEL_TO_DEF[d.label] = d
+end
+
+-- Config
+local NPCTweenSpeed  = 2.0
+local selectedNPCDef = SERVICE_NPC_DEFS[1]
+
+-- Find a service NPC in workspace.ServiceNPCs
+local function FindServiceNPC(npcName)
+    local folder = workspace:FindFirstChild("ServiceNPCs")
+    if not folder then return nil end
+    return folder:FindFirstChild(npcName)
+end
+
+-- Get best CFrame to stand next to NPC
+local function GetServiceNPCCF(npc)
+    if not npc then return nil end
+    local root = npc:FindFirstChild("HumanoidRootPart")
+        or npc:FindFirstChild("RootPart")
+        or npc:FindFirstChild("Torso")
+        or npc.PrimaryPart
+    if not root then
+        for _, p in ipairs(npc:GetDescendants()) do
+            if p:IsA("BasePart") then root = p; break end
+        end
+    end
+    if not root then return nil end
+    -- Stand 3 studs in front of the NPC
+    return root.CFrame * CFrame.new(0, 0, 3)
+end
+
+-- ── Build TP NPCs UI ─────────────────────────────────────────
+
+Tabs.TP:AddSection("Tween to NPC")
+
+Tabs.TP:AddSlider("NPCTweenSlider", {
+    Title    = "Tween Speed to NPC (s)",
+    Default  = 2.0, Min = 0.1, Max = 10.0, Rounding = 1,
+    Callback = function(v) NPCTweenSpeed = v end,
+})
+
+Tabs.TP:AddDropdown("NPCTweenDropdown", {
+    Title    = "Select NPC",
+    Values   = serviceNPCLabels,
+    Multi    = false,
+    Default  = serviceNPCLabels[1],
+    Callback = function(v)
+        selectedNPCDef = SERVICE_NPC_LABEL_TO_DEF[v]
+    end,
+})
+
+Tabs.TP:AddButton({
+    Title    = "Go to NPC",
+    Callback = function()
+        if not selectedNPCDef then
+            Fluent:Notify({ Title="Tween NPC", Content="No NPC selected!", Duration=2 })
+            return
+        end
+        task.spawn(function()
+            -- Step 1: Teleport to island
+            local island = selectedNPCDef.island
+            Fluent:Notify({
+                Title   = "Tween NPC",
+                Content = "Teleporting to "..island.." → "..selectedNPCDef.label,
+                Duration = 3,
+            })
+            local tpOk = TeleportToIsland(island)
+            if not tpOk then
+                Fluent:Notify({ Title="Tween NPC", Content="Teleport failed! Try again.", Duration=3 })
+                return
+            end
+
+            -- Step 2: Find NPC in ServiceNPCs
+            local npc = FindServiceNPC(selectedNPCDef.npcName)
+            if not npc then
+                Fluent:Notify({
+                    Title   = "Tween NPC",
+                    Content = selectedNPCDef.npcName.." not found in ServiceNPCs.",
+                    Duration = 3,
+                })
+                return
+            end
+
+            -- Step 3: Tween to NPC
+            local cf = GetServiceNPCCF(npc)
+            if not cf then
+                Fluent:Notify({ Title="Tween NPC", Content="Cannot find NPC position.", Duration=3 })
+                return
+            end
+            TweenTo(cf, NPCTweenSpeed)
+            Fluent:Notify({ Title="Tween NPC", Content="Arrived at "..selectedNPCDef.label, Duration=2 })
+        end)
+    end,
+})
+
+-- ============================================================
+--   SETTINGS TAB
+-- ============================================================
+
+Tabs.Settings:AddSection("Interface")
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:BuildInterfaceSection(Tabs.Settings)
+SaveManager:BuildConfigSection(Tabs.Settings)
+
+-- ============================================================
+--   ISLAND → FARM ORDER
+-- ============================================================
+
+local ISLAND_FARM_ORDER = {}
+local _islandIndex = {}
+for _, d in ipairs(FARM_DEFS) do
+    if not _islandIndex[d.island] then
+        _islandIndex[d.island] = #ISLAND_FARM_ORDER + 1
+        table.insert(ISLAND_FARM_ORDER, { island = d.island, defs = {} })
+    end
+    table.insert(ISLAND_FARM_ORDER[_islandIndex[d.island]].defs, d)
+end
+
+-- ============================================================
+--   BOSS NAME → DEF MAP
+-- ============================================================
+
+local BOSS_NAME_TO_DEF = {}
+for _, def in ipairs(BOSS_DEFS) do
+    BOSS_NAME_TO_DEF[def.name] = def
+    if def.forms then
+        for _, suf in ipairs(def.forms) do
+            BOSS_NAME_TO_DEF[def.name..suf] = def
+        end
+    end
+end
+
+-- ============================================================
+--   BOSS TIMER EVENT
+-- ============================================================
+
+local BossTimerEvent = RS.Remotes:WaitForChild("BossTimerEvent")
+BossTimerEvent.OnClientEvent:Connect(function(bossName, state)
+    if state ~= "SPAWNED" then return end
+    if not Config.BossEnabled then return end
+    local def = BOSS_NAME_TO_DEF[bossName]
+    if not def then return end
+    if not Config.SelectedBossNPCs[def.label] then return end
+    if not spawnedBossSet[def.name] then
+        spawnedBossSet[def.name] = true
+        table.insert(spawnedBossQueue, def)
+        -- Signal farm loops to stop immediately — boss loop will set it false when done
+        BossActive = true
+        Fluent:Notify({
+            Title    = "Boss Spawned!",
+            Content  = bossName.." spotted — interrupting farm!",
+            Duration = 3,
+        })
+    end
+end)
+
+-- ============================================================
+--   BOSS LOOP
+-- ============================================================
+
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        if not Config.BossEnabled then
+            BossActive       = false
+            spawnedBossQueue = {}
+            spawnedBossSet   = {}
+            continue
+        end
+
+        -- Initial scan
+        for _, def in ipairs(BOSS_DEFS) do
+            if not Config.SelectedBossNPCs[def.label] then continue end
+            if spawnedBossSet[def.name] then continue end
+            if FindLiveBoss(def) then
+                spawnedBossSet[def.name] = true
+                table.insert(spawnedBossQueue, def)
+            end
+        end
+
+        if #spawnedBossQueue == 0 then BossActive = false; continue end
+
+        local def = table.remove(spawnedBossQueue, 1)
+        spawnedBossSet[def.name] = nil
+
+        BossActive = true
+        local tpOk = TeleportToIsland(def.island)
+        if not tpOk then
+            table.insert(spawnedBossQueue, def)
+            spawnedBossSet[def.name] = true
+            BossActive = false
+            task.wait(2)
+            continue
+        end
+
+        local boss = FindLiveBoss(def)
+        if boss then
+            GoAndFight(boss, Config.TweenSpeedTP, true)
+            task.wait(0.3)
+        end
+        BossActive = false
+    end
+end)
+
+-- ============================================================
+--   FARM ALL LOOP
+-- ============================================================
+
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        if not Config.FarmAllEnabled then continue end
+        while BossActive do task.wait(0.2) end
+
+        for _, islandGroup in ipairs(ISLAND_FARM_ORDER) do
+            if not Config.FarmAllEnabled then break end
+            while BossActive do task.wait(0.2) end
+
+            if currentIsland ~= islandGroup.island then
+                TeleportToIsland(islandGroup.island)
+            end
+
+            local isFirst = true
+            for _, def in ipairs(islandGroup.defs) do
+                if not Config.FarmAllEnabled then break end
+                for i = 1, def.max do
+                    if not Config.FarmAllEnabled then break end
+                    local npc = FindLiveNPC(def.prefix..i)
+                    if npc then
+                        local speed = isFirst and Config.TweenSpeedTP or Config.TweenSpeedNPC
+                        GoAndFight(npc, speed)
+                        isFirst = false
+                        task.wait(0.1)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- ============================================================
+--   SPECIFIC FARM LOOP
+-- ============================================================
+
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        if not Config.FarmEnabled then continue end
+        while BossActive do task.wait(0.2) end
+
+        local queue = {}
+        for _, d in ipairs(FARM_DEFS) do
+            if Config.SelectedFarmNPCs[d.label] then table.insert(queue, d) end
+        end
+        if #queue == 0 then task.wait(0.5); continue end
+
+        local anyKilled = false
+        for _, def in ipairs(queue) do
+            if not Config.FarmEnabled then break end
+            if not Config.SelectedFarmNPCs[def.label] then continue end
+            while BossActive do task.wait(0.2) end
+
+            local needTP = currentIsland ~= def.island
+            if needTP then
+                local ok = TeleportToIsland(def.island)
+                if not ok then task.wait(1); continue end
+            end
+
+            local isFirst = needTP
+            for i = 1, def.max do
+                if not Config.FarmEnabled then break end
+                if not Config.SelectedFarmNPCs[def.label] then break end
+                local npc = FindLiveNPC(def.prefix..i)
+                if npc then
+                    anyKilled = true
+                    local speed = isFirst and Config.TweenSpeedTP or Config.TweenSpeedNPC
+                    GoAndFight(npc, speed)
+                    isFirst = false
+                    task.wait(0.2)
+                end
+            end
+            task.wait(0.1)
+        end
+        if not anyKilled then task.wait(1) end
+    end
+end)
+
+-- ============================================================
+--   AUTO ATTACK LOOP
+-- ============================================================
+
+task.spawn(function()
+    while true do
+        if Config.AutoAttackEnabled then
+            DoAttack(); task.wait(0.5)
+        else
+            task.wait(0.1)
+        end
+    end
+end)
+
+-- ============================================================
+--   AUTO SKILL LOOP
+--   Handler riêng để track lastFired (không duplicate cooldown update)
+-- ============================================================
+
+task.spawn(function()
+    local prevEnabled   = false
+    local lastFiredSlot = 0
+    local lastFiredTime = 0
+
+    -- Track fired slot ONLY (cooldown đã xử lý bởi handler ngoài)
+    RS.AbilitySystem.Remotes.AbilityFeedback.OnClientEvent:Connect(function(data)
+        if type(data) ~= "table" then return end
+        if data.Caster ~= LocalPlayer then return end
+        if data.AbilitySlot then
+            lastFiredSlot = data.AbilitySlot
+            lastFiredTime = tick()
+        end
+    end)
+
+    while true do
+        task.wait(0.1)
+
+        if not Config.AutoSkillEnabled then
+            if prevEnabled then
+                task.spawn(DisableAllSkillsInGameUI)
+                prevEnabled = false
+                SetAutoSkillSlot(0)
+            end
+            continue
+        end
+
+        prevEnabled = true
+
+        local hasSkills = false
+        for _ in pairs(Config.SelectedSkills) do hasSkills = true; break end
+        if not hasSkills then task.wait(0.3); continue end
+
+        for _, key in ipairs(SKILL_ORDER) do
+            if not Config.AutoSkillEnabled then break end
+            if not Config.SelectedSkills[key] then continue end
+
+            local slotNum = SKILL_SLOTS[key]
+            if IsSkillOnCooldown(slotNum) then continue end
+
+            EnableSkillInGameUI(key)
+            SetAutoSkillSlot(slotNum)
+
+            local timeout       = 3.0
+            local waited        = 0
+            local confirmed     = false
+            local prevFiredTime = lastFiredTime
+
+            while waited < timeout do
+                if not Config.AutoSkillEnabled then break end
+                task.wait(0.1); waited += 0.1
+                if lastFiredSlot == slotNum and lastFiredTime ~= prevFiredTime then
+                    confirmed = true; break
+                end
+            end
+
+            DisableSkillInGameUI(key)
+            SetAutoSkillSlot(0)
+
+            if confirmed then
+                local cd = SkillCooldowns[slotNum]
+                if cd then
+                    while tick() < cd do
+                        if not Config.AutoSkillEnabled then break end
+                        task.wait(0.2)
+                    end
+                end
+            else
+                task.wait(0.5)
+            end
+
+            task.wait(0.1)
+        end
+    end
+end)
+
+-- ============================================================
+--   SPEED LOOP (keep WalkSpeed synced khi CharacterAdded)
+-- ============================================================
+
+task.spawn(function()
+    while true do
+        task.wait(1)
+        if Config.SpeedEnabled then
+            local hum = GetPlayerHum()
+            if hum and hum.WalkSpeed ~= Config.SpeedValue then
+                hum.WalkSpeed = Config.SpeedValue
+            end
+        end
+    end
+end)
+
+-- ============================================================
+--   CLEANUP on Respawn
+-- ============================================================
+
+LocalPlayer.CharacterAdded:Connect(function()
+    CancelTween(); StopStaying()
+    ComboIndex = 0; currentIsland = nil; BossActive = false
+    spawnedBossQueue = {}; spawnedBossSet = {}
+    SkillCooldowns = {}
+    SetAutoSkillSlot(0)
+    task.spawn(HideSkillUI)
+
+    -- Re-apply player features after respawn
+    task.wait(1)
+    if Config.SpeedEnabled  then StartSpeed(Config.SpeedValue) end
+    if Config.InfinityJump  then StopInfinityJump(); StartInfinityJump() end
+    if noClipCount > 0      then RemoveNoClip(); ApplyNoClip() end
+    if Config.AntiBanBlock  then StopAntiBanBlock(); StartAntiBanBlock() end
+end)
+
+-- ============================================================
+--   INIT
+-- ============================================================
+
+SaveManager:LoadAutoloadConfig()
+Window:SelectTab(1)
+
+Fluent:Notify({
+    Title    = "KhoaHub v12 Ready",
+    Content  = "Tween to NPC + Farm auto-enables AntiBan & NoClip!",
+    Duration = 5,
+})
