@@ -1,12 +1,12 @@
 -- ============================================================
---   AUTO FARM  |  Fluent UI  |  v18
---   v17 giữ nguyên +
---   [20] PreFirePortal chỉ dùng trong TP mode — Tween mode bị gián
---        đoạn khi portal fire giữa chừng gây loop TP→tween→TP
---   [21] TeleportToIsland alreadyFired: không chờ 50-stud movement
---        (player đã ở đó rồi) → dùng short settle wait + verify
---   [22] IsAlive fallback 3 bị xóa — trả false nếu không có Humanoid
---        hay HP value → GoAndFight không bị loop vô tận
+--   AUTO FARM  |  Fluent UI  |  v42
+--   [v42]:
+--     1. Xóa PauseFarmForBoss/ResumeFarmAfterBoss hoàn toàn
+--        Farm toggle KHÔNG bị tắt khi boss bật
+--        Farm loop tự tạm dừng (task.wait) khi BossRunning, không đụng UI
+--     2. ApproachCF và GoAndFight tôn trọng FarmMode hoàn toàn
+--        Tween → Tween cho cả farm lẫn boss
+--        TP    → direct CFrame cho cả farm lẫn boss
 -- ============================================================
 
 local Fluent           = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -28,29 +28,32 @@ local TeleportToPortal = RS.Remotes.TeleportToPortal
 --   CONFIG
 -- ============================================================
 local Config = {
-    FarmEnabled       = false,
-    FarmAllEnabled    = false,
-    SelectedFarmNPCs  = {},
-    BossEnabled       = false,
-    SelectedBossNPCs  = {},
-    TweenSpeedTP      = 2.0,
-    TweenSpeedNPC     = 0.3,
-    AutoAttackEnabled = false,
-    AutoSkillEnabled  = false,
-    SelectedSkills    = {},
-    SkillDelay        = 1.0,
-    SpeedEnabled      = false,
-    SpeedValue        = 16,
-    InfinityJump      = false,
-    AntiBanBlock      = false,
-    FarmMode          = "Tween",
+    FarmEnabled          = false,
+    FarmAllEnabled       = false,
+    SelectedFarmNPCs     = {},
+    BossEnabled          = false,
+    SelectedBossNPCs     = {},
+    BossFarmEnabled      = false,   -- quét liên tục boss trên đảo hiện tại
+    TweenSpeedTP         = 2.0,
+    TweenSpeedNPC        = 0.3,
+    AutoAttackEnabled    = false,
+    AutoSkillFarmEnabled = false,
+    SelectedSkillsFarm   = {},
+    AutoSkillBossEnabled = false,
+    SelectedSkillsBoss   = {},
+    SkillDelay           = 1.0,
+    SpeedEnabled         = false,
+    SpeedValue           = 16,
+    InfinityJump         = false,
+    AntiBanBlock         = false,
+    FarmMode             = "Tween",
 }
 
--- TP Mode timing (chỉ áp dụng khi FarmMode = "TP")
-local TP_POST_WAIT    = 0.4    -- post-TP settle (Tween = 2.0s)
-local TP_INTER_NPC    = 0.02   -- delay giữa NPC (Tween = 0.2s)
-local TP_INTER_DEF    = 0.02   -- delay giữa def group (Tween = 0.1s)
-local TWEEN_POST_WAIT = 2.0
+-- TP Mode timing
+local TP_POST_WAIT    = 0.2
+local TP_INTER_NPC    = 0.02
+local TP_INTER_DEF    = 0.02
+local TWEEN_POST_WAIT = 1.0
 local TWEEN_INTER_NPC = 0.2
 local TWEEN_INTER_DEF = 0.1
 
@@ -71,41 +74,11 @@ CombatFeedback.OnClientEvent:Connect(function(d)
 end)
 
 -- ============================================================
---   [7] FARM STATE SAVE/RESTORE cho Boss toggle
+--   FARM STATE (v42: không còn pause/resume farm khi boss)
 -- ============================================================
--- Lưu mode farm đang bật trước khi boss interrupt
--- "none" | "farm" | "farmAll"
-local savedFarmMode = "none"
-
--- Gọi khi boss bắt đầu: tắt farm thật sự
-local function PauseFarmForBoss()
-    if Config.FarmEnabled then
-        savedFarmMode = "farm"
-        -- Tắt toggle thật sự
-        Config.FarmEnabled = false
-        pcall(function() Fluent.Options.FarmToggle:SetValue(false) end)
-    elseif Config.FarmAllEnabled then
-        savedFarmMode = "farmAll"
-        Config.FarmAllEnabled = false
-        pcall(function() Fluent.Options.FarmAllToggle:SetValue(false) end)
-    else
-        savedFarmMode = "none"
-    end
-    -- Reset island context để farm restart sạch
-    -- (currentIsland được khai báo bên dưới nhưng Lua cho phép closure)
-end
-
--- Gọi khi boss xong: bật lại farm
-local function ResumeFarmAfterBoss()
-    if savedFarmMode == "farm" then
-        Config.FarmEnabled = true
-        pcall(function() Fluent.Options.FarmToggle:SetValue(true) end)
-    elseif savedFarmMode == "farmAll" then
-        Config.FarmAllEnabled = true
-        pcall(function() Fluent.Options.FarmAllToggle:SetValue(true) end)
-    end
-    savedFarmMode = "none"
-end
+-- PauseFarmForBoss / ResumeFarmAfterBoss đã bị xóa.
+-- Farm loop tự dừng fight NPC (break trong GoAndFight) khi BossRunning = true,
+-- nhưng toggle UI không bị chạm → người chơi thấy farm vẫn "on".
 
 -- ============================================================
 --   NPC / BOSS DEFINITIONS
@@ -189,12 +162,11 @@ local ISLAND_LIST = {
 }
 
 -- ============================================================
---   BOSS QUEUE
+--   BOSS RUNNING FLAG + QUEUE (khai báo sớm — closure cần)
 -- ============================================================
-local spawnedBossQueue = {}
-local spawnedBossSet   = {}
--- [7] Boss đang xử lý (để các loop farm biết thoát ngay)
 local BossRunning = false
+local bossQueue   = {}
+local queueLock   = false
 
 -- ============================================================
 --   HELPERS
@@ -206,26 +178,42 @@ local function GetNPCFolder()
         or workspace:FindFirstChild("Npcs")
 end
 
--- [22] IsAlive: xóa fallback "model còn trong folder = sống"
--- vì nó gây GoAndFight loop vô tận trên NPC không có Humanoid
 local function IsAlive(model)
     if not model or not model.Parent then return false end
-    -- Cách 1: Humanoid tiêu chuẩn
     local h = model:FindFirstChildOfClass("Humanoid")
     if h then return h.Health > 0 end
-    -- Cách 2: Boss dùng IntValue/NumberValue tên "Health" hoặc "HP"
     local hp = model:FindFirstChild("Health") or model:FindFirstChild("HP")
     if hp and (hp:IsA("IntValue") or hp:IsA("NumberValue")) then
         return hp.Value > 0
     end
-    -- Không có cơ chế HP nào → coi là đã chết để tránh infinite loop
     return false
 end
 
+-- [v39] FIX 1: GetRoot mạnh hơn — fallback tìm cả descendants
+-- Nguyên nhân boss không di chuyển: GetRoot() trả nil → GoAndFight return ngay
 local function GetRoot(model)
-    return model:FindFirstChild("HumanoidRootPart")
+    if not model then return nil end
+    -- Thử các tên phổ biến trước
+    local root = model:FindFirstChild("HumanoidRootPart")
         or model:FindFirstChild("RootPart")
         or model:FindFirstChild("Torso")
+        or model.PrimaryPart
+    if root then return root end
+    -- Fallback: tìm trong descendants
+    for _, p in ipairs(model:GetDescendants()) do
+        if p:IsA("BasePart") and p.Name == "HumanoidRootPart" then return p end
+    end
+    for _, p in ipairs(model:GetDescendants()) do
+        if p:IsA("BasePart") and p.Name == "RootPart" then return p end
+    end
+    for _, p in ipairs(model:GetDescendants()) do
+        if p:IsA("BasePart") and p.Name == "Torso" then return p end
+    end
+    -- Last resort: bất kỳ BasePart nào
+    for _, p in ipairs(model:GetDescendants()) do
+        if p:IsA("BasePart") then return p end
+    end
+    return nil
 end
 
 local function GetPlayerHRP()
@@ -356,34 +344,40 @@ local function StopStaying()
 end
 
 -- ============================================================
---   TELEPORT
+--   TELEPORT (Farm dùng portal như cũ)
 -- ============================================================
 local currentIsland  = nil
 local lastTPTime     = 0
-local TP_COOLDOWN    = 8
+local TP_COOLDOWN    = 4
 
--- [20] Pre-fire tracking — chỉ dùng trong TP mode
 local preFiredIsland = nil
-local preFiredTime   = 0
 
 local function TeleportToIsland(island)
     if currentIsland == island then return true end
 
     local alreadyFired = (preFiredIsland == island)
-    preFiredIsland = nil  -- clear ngay
+    preFiredIsland = nil
 
     if alreadyFired then
-        -- [21] Player đã được TP bởi pre-fire
-        -- Không fire lần 2, không chờ 50-stud movement
-        -- Chỉ cần settle ngắn để map load xong
-        local settle = GetPostTPWait()
-        task.wait(settle)
-        lastTPTime    = tick()
-        currentIsland = island
-        return true
+        local hrp      = GetPlayerHRP()
+        local startPos = hrp and hrp.Position or Vector3.zero
+        local elapsed  = 0
+        local moved    = false
+        repeat
+            task.wait(0.2); elapsed += 0.2
+            hrp = GetPlayerHRP()
+            if hrp and (hrp.Position - startPos).Magnitude > 20 then
+                moved = true; break
+            end
+        until elapsed >= 4
+        if moved then
+            task.wait(GetPostTPWait())
+            currentIsland = island
+            lastTPTime    = tick()
+            return true
+        end
     end
 
-    -- TP bình thường: chờ cooldown → fire → chờ di chuyển
     local now  = tick()
     local wait = TP_COOLDOWN - (now - lastTPTime)
     if wait > 0 then task.wait(wait) end
@@ -394,11 +388,11 @@ local function TeleportToIsland(island)
     local startPos = hrp and hrp.Position or Vector3.zero
     local elapsed  = 0
     repeat
-        task.wait(0.25); elapsed += 0.25
+        task.wait(0.2); elapsed += 0.2
         hrp = GetPlayerHRP()
-    until (hrp and (hrp.Position - startPos).Magnitude > 50) or elapsed >= 8
+    until (hrp and (hrp.Position - startPos).Magnitude > 20) or elapsed >= 5
 
-    local success = hrp and (hrp.Position - startPos).Magnitude > 50
+    local success = hrp and (hrp.Position - startPos).Magnitude > 20
     if success then
         task.wait(GetPostTPWait())
         currentIsland = island
@@ -407,18 +401,69 @@ local function TeleportToIsland(island)
     return success
 end
 
--- [20] PreFirePortal: CHỈ dùng trong TP mode
--- Tween mode: portal fire giữa chừng TP player ra khỏi vị trí đang tween
--- gây loop TP→tween→TP. Không có lợi ích gì trong Tween mode.
 local function PreFirePortal(island)
-    if Config.FarmMode ~= "TP" then return end  -- [20] Tween mode: bỏ qua
+    if Config.FarmMode ~= "TP" then return end
     if not island or island == currentIsland then return end
     local now = tick()
     if (now - lastTPTime) >= (TP_COOLDOWN - 1) then
         pcall(function() TeleportToPortal:FireServer(island) end)
         preFiredIsland = island
-        preFiredTime   = now
     end
+end
+
+-- ============================================================
+--   TP BOSS qua Portal — retry 3 lan, timeout 8s
+-- ============================================================
+local lastBossTPTime   = 0
+local BOSS_TP_COOLDOWN = 4
+
+local function TeleportToBossIsland(island)
+    if currentIsland == island then return true end
+
+    local MAX_RETRY = 3
+    for attempt = 1, MAX_RETRY do
+        local now  = tick()
+        local w    = BOSS_TP_COOLDOWN - (now - lastBossTPTime)
+        if w > 0 then task.wait(w) end
+
+        local hrp      = GetPlayerHRP()
+        local startPos = hrp and hrp.Position or Vector3.zero
+
+        pcall(function() TeleportToPortal:FireServer(island) end)
+        lastBossTPTime = tick()
+
+        local elapsed = 0
+        repeat
+            task.wait(0.2); elapsed += 0.2
+            hrp = GetPlayerHRP()
+        until (hrp and (hrp.Position - startPos).Magnitude > 20) or elapsed >= 8
+
+        local moved = hrp and (hrp.Position - startPos).Magnitude > 20
+        if moved then
+            task.wait(0.6)
+            currentIsland  = island
+            lastBossTPTime = tick()
+            lastTPTime     = tick()
+            return true
+        end
+
+        warn(string.format("[KhoaHub] BossTP attempt %d/%d fail -> retry", attempt, MAX_RETRY))
+        task.wait(1)
+    end
+
+    warn("[KhoaHub] BossTP FAILED: " .. tostring(island))
+    return false
+end
+
+-- Kiem tra player con dung tren dao dung khong
+-- (boss chet co the ban player ra khoi arena)
+local function VerifyOnIsland()
+    local folder = GetNPCFolder()
+    if not folder then
+        currentIsland = nil
+        return false
+    end
+    return true
 end
 
 -- ============================================================
@@ -434,13 +479,10 @@ local function FindLiveNPC(fullName)
     return nil
 end
 
--- [17] FindLiveBoss: dùng string.find để bắt cả suffix không khai báo
--- Ví dụ GojoBoss có thể spawn thành "GojoBoss" hoặc "GojoBoss_Phase2" v.v.
 local function FindLiveBoss(def)
     local folder = GetNPCFolder()
     if not folder then return nil end
 
-    -- Ưu tiên: exact match với forms đã khai báo
     if def.forms then
         for _, suf in ipairs(def.forms) do
             for _, npc in ipairs(folder:GetChildren()) do
@@ -449,13 +491,10 @@ local function FindLiveBoss(def)
         end
     end
 
-    -- Fallback: exact name
     for _, npc in ipairs(folder:GetChildren()) do
         if npc.Name == def.name and IsAlive(npc) then return npc end
     end
 
-    -- [17] Fallback 2: prefix match — bắt tên có suffix bất kỳ
-    -- Chỉ dùng khi forms=nil để tránh nhầm boss khác
     if not def.forms then
         for _, npc in ipairs(folder:GetChildren()) do
             if string.sub(npc.Name, 1, #def.name) == def.name and IsAlive(npc) then
@@ -467,8 +506,6 @@ local function FindLiveBoss(def)
     return nil
 end
 
--- [15] Workspace-scan: build set tên NPC rồi scan folder 1 lần O(n)
--- Nhanh hơn nested loop IslandHasLiveNPCs cũ
 local function BuildIslandWatchSet(defs)
     local set = {}
     for _, def in ipairs(defs) do
@@ -479,7 +516,6 @@ local function BuildIslandWatchSet(defs)
     return set
 end
 
--- Trả về true nếu CÒN ít nhất 1 NPC sống trong watchSet
 local function FolderHasAnyAlive(watchSet)
     local folder = GetNPCFolder()
     if not folder then return false end
@@ -491,16 +527,11 @@ local function FolderHasAnyAlive(watchSet)
     return false
 end
 
--- [9] Kiểm tra các slot còn lại của 1 def (sau slot i) — giữ cho Specific loop
-local function DefHasLiveNPCsAfter(def, afterIndex)
-    for j = afterIndex + 1, def.max do
-        if FindLiveNPC(def.prefix..j) then return true end
-    end
-    return false
-end
-
 -- ============================================================
 --   GO AND FIGHT
+--   [v42] ApproachCF và re-approach đều tôn trọng FarmMode
+--   Tween → TweenTo()   |   TP → direct CFrame
+--   Boss và farm dùng chung logic, không có forceTp riêng
 -- ============================================================
 
 local BOSS_RETP_COOLDOWN = 2.0
@@ -517,7 +548,10 @@ end
 
 local function GoAndFight(npc, speed, isBoss)
     local root = GetRoot(npc)
-    if not root then return end
+    if not root then
+        warn("[KhoaHub] GetRoot nil for: " .. tostring(npc and npc.Name))
+        return
+    end
     local s = tonumber(speed) or 0.3
     if s <= 0 then s = 0.3 end
 
@@ -526,11 +560,11 @@ local function GoAndFight(npc, speed, isBoss)
     StartStaying(targetCF)
 
     local lastReApproach = tick()
-    local cooldown  = isBoss and BOSS_RETP_COOLDOWN or NPC_RETP_COOLDOWN
-    local loopWait  = Config.FarmMode == "TP" and 0.05 or 0.15
+    local cooldown = isBoss and BOSS_RETP_COOLDOWN or NPC_RETP_COOLDOWN
+    local loopWait = Config.FarmMode == "TP" and 0.05 or 0.15
 
     while IsAlive(npc) do
-        -- [7] Farm loop thoát sớm vì toggle đã bị tắt bởi boss
+        -- Farm NPC: nhường thread cho boss nhưng KHÔNG tắt toggle
         if not isBoss and BossRunning then break end
         if not (root and root.Parent) then break end
 
@@ -543,11 +577,7 @@ local function GoAndFight(npc, speed, isBoss)
             if dist > 15 and (tick() - lastReApproach) >= cooldown then
                 lastReApproach = tick()
                 StopStaying()
-                if Config.FarmMode == "TP" then
-                    hrp.CFrame = targetCF
-                else
-                    TweenTo(targetCF, Config.TweenSpeedNPC)
-                end
+                ApproachCF(targetCF, Config.TweenSpeedNPC)
                 StartStaying(targetCF)
             end
         end
@@ -589,18 +619,29 @@ local SKILL_SLOTS = { Z=1, X=2, C=3, V=4, F=5 }
 local SKILL_ORDER = {"Z","X","C","V","F"}
 local SkillCooldowns = {}
 
+-- Dùng 1 biến cho lastFiredSlot, lastFiredTime — không cần local riêng trong loop
+local lastFiredSlot = 0
+local lastFiredTime = 0
+
 local _abFeedback = (function()
     local ab  = RS:FindFirstChild("AbilitySystem")
     local rem = ab and ab:FindFirstChild("Remotes")
     return rem and rem:FindFirstChild("AbilityFeedback")
 end)()
 
+-- [v39] FIX 4: Gộp 2 connection _abFeedback thành 1 duy nhất
 if _abFeedback then
     _abFeedback.OnClientEvent:Connect(function(data)
         if type(data) ~= "table" then return end
         if data.Caster ~= LocalPlayer then return end
+        -- Cập nhật cooldown skill
         if data.AbilitySlot and data.Cooldown then
             SkillCooldowns[data.AbilitySlot] = tick() + data.Cooldown
+        end
+        -- Cập nhật lastFired cho skill loop
+        if data.AbilitySlot then
+            lastFiredSlot = data.AbilitySlot
+            lastFiredTime = tick()
         end
     end)
 end
@@ -710,6 +751,7 @@ local Tabs = {
     Combat   = Window:AddTab({ Title = "Combat",   Icon = "sword"    }),
     Player   = Window:AddTab({ Title = "Player",   Icon = "user"     }),
     TP       = Window:AddTab({ Title = "TP",        Icon = "map-pin" }),
+    Dungeon  = Window:AddTab({ Title = "Dungeon",  Icon = "shield"   }),
     Settings = Window:AddTab({ Title = "Settings", Icon = "settings" }),
 }
 
@@ -757,7 +799,7 @@ Tabs.Main:AddToggle("FarmToggle", {
         local has = false
         for _ in pairs(Config.SelectedFarmNPCs) do has = true; break end
         if value and not has then
-            Fluent:Notify({ Title="Auto Farm", Content="Chọn ít nhất 1 NPC!", Duration=3 })
+            Fluent:Notify({ Title="Auto Farm", Content="Select at least 1 NPC!", Duration=3 })
             task.delay(0.05, function() Fluent.Options.FarmToggle:SetValue(false) end)
             return
         end
@@ -782,8 +824,6 @@ Tabs.Main:AddDropdown("BossDropdown", {
     Default  = {},
     Callback = function(v)
         Config.SelectedBossNPCs = v
-        spawnedBossSet   = {}
-        spawnedBossQueue = {}
     end,
 })
 
@@ -794,18 +834,73 @@ Tabs.Main:AddToggle("BossToggle", {
         local has = false
         for _ in pairs(Config.SelectedBossNPCs) do has = true; break end
         if value and not has then
-            Fluent:Notify({ Title="Auto Boss", Content="Chọn ít nhất 1 boss!", Duration=3 })
+            Fluent:Notify({ Title="Auto Boss", Content="Select at least 1 boss!", Duration=3 })
             task.delay(0.05, function() Fluent.Options.BossToggle:SetValue(false) end)
             return
         end
         Config.BossEnabled = value
-        if not value then
+        if value then
+            task.spawn(function()
+                task.wait(0.1)
+                local found = 0
+                for _, def in ipairs(BOSS_DEFS) do
+                    if not Config.SelectedBossNPCs[def.label] then continue end
+                    local boss = FindLiveBoss(def)
+                    if not boss then continue end
+                    local dup = false
+                    for _, entry in ipairs(bossQueue) do
+                        if entry.def.name == def.name then dup = true; break end
+                    end
+                    if not dup then
+                        table.insert(bossQueue, { def = def, timestamp = tick() })
+                        found = found + 1
+                    end
+                end
+                if found > 0 then
+                    Fluent:Notify({
+                        Title   = "Boss Detected!",
+                        Content = found .. " boss(es) already alive → queued",
+                        Duration = 3,
+                    })
+                else
+                    Fluent:Notify({
+                        Title   = "Auto Boss ON",
+                        Content = "Waiting for boss spawn...",
+                        Duration = 2,
+                    })
+                end
+            end)
+        else
             CancelTween(); StopStaying(); currentIsland = nil
             BossRunning = false
-            -- Nếu boss đang giữ farm, trả farm lại
-            if savedFarmMode ~= "none" then
-                ResumeFarmAfterBoss()
-            end
+            queueLock   = false
+            bossQueue   = {}
+        end
+    end,
+})
+
+Tabs.Main:AddSection("Boss Farm Loop")
+
+Tabs.Main:AddToggle("BossFarmToggle", {
+    Title    = "Enable Boss Farm Loop",
+    Default  = false,
+    Callback = function(value)
+        local has = false
+        for _ in pairs(Config.SelectedBossNPCs) do has = true; break end
+        if value and not has then
+            Fluent:Notify({ Title="Boss Farm", Content="Chọn ít nhất 1 boss trước!", Duration=3 })
+            task.delay(0.05, function() Fluent.Options.BossFarmToggle:SetValue(false) end)
+            return
+        end
+        Config.BossFarmEnabled = value
+        if value then
+            Fluent:Notify({
+                Title   = "Boss Farm ON",
+                Content = "Đang quét boss trên đảo hiện tại...",
+                Duration = 2,
+            })
+        else
+            CancelTween(); StopStaying()
         end
     end,
 })
@@ -824,9 +919,10 @@ Tabs.Combat:AddDropdown("FarmModeDropdown", {
     Callback = function(v)
         Config.FarmMode = v
         if v == "TP" then
-            Fluent:Notify({ Title="Farm Mode: TP", Content="Warp tức thì — post-TP wait 0.4s.", Duration=3 })
+            -- [v39] FIX: "0.4s" → "0.2s" (đúng với TP_POST_WAIT = 0.2)
+            Fluent:Notify({ Title="Farm Mode: TP", Content="Instant warp — post-TP wait 0.2s.", Duration=3 })
         else
-            Fluent:Notify({ Title="Farm Mode: Tween", Content="Di chuyển mượt đến NPC.", Duration=3 })
+            Fluent:Notify({ Title="Farm Mode: Tween", Content="Smooth movement to NPC.", Duration=3 })
         end
     end,
 })
@@ -853,20 +949,36 @@ Tabs.Combat:AddToggle("AutoAttackToggle", {
     Callback = function(v) Config.AutoAttackEnabled = v; if not v then ComboIndex = 0 end end,
 })
 
-Tabs.Combat:AddSection("Auto Skill")
+Tabs.Combat:AddSection("Auto Skill — Farm")
 
-Tabs.Combat:AddDropdown("SkillDropdown", {
-    Title    = "Skills to Use",
+Tabs.Combat:AddDropdown("SkillFarmDropdown", {
+    Title    = "Farm Skills",
     Values   = {"Z","X","C","V","F"},
     Multi    = true,
     Default  = {},
-    Callback = function(v) Config.SelectedSkills = v end,
+    Callback = function(v) Config.SelectedSkillsFarm = v end,
 })
 
-Tabs.Combat:AddToggle("AutoSkillToggle", {
-    Title    = "Auto Skill (UI ẩn hoàn toàn)",
+Tabs.Combat:AddToggle("AutoSkillFarmToggle", {
+    Title    = "Auto Skill (Farm)",
     Default  = false,
-    Callback = function(v) Config.AutoSkillEnabled = v end,
+    Callback = function(v) Config.AutoSkillFarmEnabled = v end,
+})
+
+Tabs.Combat:AddSection("Auto Skill — Boss")
+
+Tabs.Combat:AddDropdown("SkillBossDropdown", {
+    Title    = "Boss Skills",
+    Values   = {"Z","X","C","V","F"},
+    Multi    = true,
+    Default  = {},
+    Callback = function(v) Config.SelectedSkillsBoss = v end,
+})
+
+Tabs.Combat:AddToggle("AutoSkillBossToggle", {
+    Title    = "Auto Skill (Boss)",
+    Default  = false,
+    Callback = function(v) Config.AutoSkillBossEnabled = v end,
 })
 
 -- ============================================================
@@ -1067,7 +1179,7 @@ Tabs.TP:AddButton({
     Title    = "Go to NPC",
     Callback = function()
         if not selectedNPCDef then
-            Fluent:Notify({ Title="Tween NPC", Content="Chưa chọn NPC!", Duration=2 })
+            Fluent:Notify({ Title="Tween NPC", Content="No NPC selected!", Duration=2 })
             return
         end
         task.spawn(function()
@@ -1075,21 +1187,21 @@ Tabs.TP:AddButton({
             Fluent:Notify({ Title="Tween NPC", Content="TP → "..island.." | "..selectedNPCDef.label, Duration=3 })
             local tpOk = TeleportToIsland(island)
             if not tpOk then
-                Fluent:Notify({ Title="Tween NPC", Content="Teleport thất bại!", Duration=3 })
+                Fluent:Notify({ Title="Tween NPC", Content="Teleport failed!", Duration=3 })
                 return
             end
             local npc = FindServiceNPC(selectedNPCDef.npcName)
             if not npc then
-                Fluent:Notify({ Title="Tween NPC", Content=selectedNPCDef.npcName.." không tìm thấy.", Duration=3 })
+                Fluent:Notify({ Title="Tween NPC", Content=selectedNPCDef.npcName.." not found.", Duration=3 })
                 return
             end
             local cf = GetServiceNPCCF(npc)
             if not cf then
-                Fluent:Notify({ Title="Tween NPC", Content="Không xác định được vị trí NPC.", Duration=3 })
+                Fluent:Notify({ Title="Tween NPC", Content="Cannot determine NPC position.", Duration=3 })
                 return
             end
             TweenTo(cf, NPCTweenSpeed)
-            Fluent:Notify({ Title="Tween NPC", Content="Đã đến "..selectedNPCDef.label, Duration=2 })
+            Fluent:Notify({ Title="Tween NPC", Content="Arrived at "..selectedNPCDef.label, Duration=2 })
         end)
     end,
 })
@@ -1103,6 +1215,222 @@ InterfaceManager:SetLibrary(Fluent)
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:BuildInterfaceSection(Tabs.Settings)
 SaveManager:BuildConfigSection(Tabs.Settings)
+
+-- ============================================================
+--   DUNGEON TAB
+-- ============================================================
+
+Config.DungeonDifficulty  = "Hard"
+Config.AutoVoteEnabled    = false
+Config.AutoReplayEnabled  = false
+Config.AutoDungeonKill    = false
+
+local DUNGEON_UI_PATH = "DungeonUI"
+local DIFF_BUTTONS = {
+    Easy    = "ContentFrame.Actions.EasyDifficultyFrame.EasyDifficultyButton",
+    Medium  = "ContentFrame.Actions.MediumDifficultyFrame.MediumDifficultyButton",
+    Hard    = "ContentFrame.Actions.HardDifficultyFrame.HardDifficultyButton",
+    Extreme = "ContentFrame.Actions.ExtremeDifficultyFrame.ExtremeDifficultyButton",
+}
+local REPLAY_FRAME_PATH = "ReplayDungeonFrameVisibleOnlyWhenClearingDungeon"
+
+local function GetDungeonUI()
+    return LocalPlayer.PlayerGui:FindFirstChild(DUNGEON_UI_PATH)
+end
+
+local GuiService = game:GetService("GuiService")
+
+local function NavClick(btn)
+    if not btn then return false end
+    local ok = pcall(function()
+        local prevSelectable = btn.Selectable
+        btn.Selectable = true
+        GuiService.SelectedObject = btn
+        task.wait(0.1)
+        local inset  = GuiService:GetGuiInset()
+        local pos    = btn.AbsolutePosition
+        local size   = btn.AbsoluteSize
+        local x = pos.X + size.X / 2
+        local y = pos.Y + size.Y / 2 + inset.Y
+        mousemoveabs(x, y)
+        task.wait(0.1)
+        mouse1click()
+        task.wait(0.1)
+        btn.Selectable = prevSelectable
+        GuiService.SelectedObject = nil
+    end)
+    return ok
+end
+
+local function WalkPath(root, path)
+    local cur = root
+    for part in path:gmatch("[^%.]+") do
+        cur = cur and cur:FindFirstChild(part)
+    end
+    return cur
+end
+
+local function ClickVoteButton(difficulty)
+    local dui = GetDungeonUI()
+    if not dui then return false end
+    local btn = WalkPath(dui, DIFF_BUTTONS[difficulty] or "")
+    if not btn then return false end
+    return NavClick(btn)
+end
+
+local function ClickReplayButton()
+    local dui = GetDungeonUI()
+    if not dui then return false end
+    local replayFrame = dui:FindFirstChild(REPLAY_FRAME_PATH)
+    if not replayFrame then return false end
+    local btn = nil
+    for _, v in ipairs(replayFrame:GetDescendants()) do
+        if (v:IsA("ImageButton") or v:IsA("TextButton"))
+            and string.find(v.Name:lower(), "replay") then
+            btn = v; break
+        end
+    end
+    return NavClick(btn)
+end
+
+local function IsVoteFrameVisible()
+    local dui = GetDungeonUI()
+    if not dui then return false end
+    local actions = WalkPath(dui, "ContentFrame.Actions")
+    return actions ~= nil and actions.Visible == true
+end
+
+local function IsReplayFrameVisible()
+    local dui = GetDungeonUI()
+    if not dui then return false end
+    local rf = dui:FindFirstChild(REPLAY_FRAME_PATH)
+    return rf ~= nil and rf.Visible == true
+end
+
+Tabs.Dungeon:AddSection("Auto Vote Difficulty")
+
+Tabs.Dungeon:AddDropdown("DifficultyDropdown", {
+    Title   = "Select Difficulty",
+    Values  = { "Easy", "Medium", "Hard", "Extreme" },
+    Multi   = false,
+    Default = "Hard",
+    Callback = function(v) Config.DungeonDifficulty = v end,
+})
+
+Tabs.Dungeon:AddToggle("AutoVoteToggle", {
+    Title   = "Auto Vote Difficulty",
+    Default = false,
+    Callback = function(v)
+        Config.AutoVoteEnabled = v
+        if v then
+            Fluent:Notify({ Title="Auto Vote", Content="Will auto vote "..Config.DungeonDifficulty.." when vote screen appears!", Duration=3 })
+        end
+    end,
+})
+
+Tabs.Dungeon:AddButton({
+    Title = "Vote Now",
+    Desc  = "Manually click the selected difficulty",
+    Callback = function()
+        local ok = ClickVoteButton(Config.DungeonDifficulty)
+        Fluent:Notify({
+            Title   = ok and "Voted!" or "Vote Failed",
+            Content = ok and Config.DungeonDifficulty.." — success!" or "Vote screen not open",
+            Duration = 3,
+        })
+    end,
+})
+
+Tabs.Dungeon:AddSection("Auto Replay")
+
+Tabs.Dungeon:AddToggle("AutoReplayToggle", {
+    Title   = "Auto Replay Dungeon",
+    Default = false,
+    Callback = function(v)
+        Config.AutoReplayEnabled = v
+        if v then
+            Fluent:Notify({ Title="Auto Replay", Content="Will auto replay when dungeon ends!", Duration=3 })
+        end
+    end,
+})
+
+Tabs.Dungeon:AddButton({
+    Title = "Replay Now",
+    Desc  = "Manually click Pay & Replay",
+    Callback = function()
+        local ok = ClickReplayButton()
+        Fluent:Notify({
+            Title   = ok and "Replayed!" or "Replay Failed",
+            Content = ok and "Replaying dungeon..." or "Replay screen not visible",
+            Duration = 3,
+        })
+    end,
+})
+
+Tabs.Dungeon:AddSection("Auto Kill Dungeon Mobs")
+
+Tabs.Dungeon:AddToggle("AutoDungeonKillToggle", {
+    Title   = "Auto Kill All Mobs",
+    Desc    = "Scan and kill all NPCs — no target filter",
+    Default = false,
+    Callback = function(v)
+        Config.AutoDungeonKill = v
+        if v then
+            Fluent:Notify({ Title="Auto Kill", Content="Scanning and killing all Dungeon NPCs!", Duration=3 })
+        end
+    end,
+})
+
+-- Vote + Replay loop
+task.spawn(function()
+    local lastVoteTime   = 0
+    local lastReplayTime = 0
+    while true do
+        task.wait(0.5)
+        if Config.AutoVoteEnabled then
+            local now = tick()
+            if IsVoteFrameVisible() and (now - lastVoteTime) >= 10 then
+                if NavClick(WalkPath(GetDungeonUI(), DIFF_BUTTONS[Config.DungeonDifficulty] or "")) then
+                    lastVoteTime = now
+                    Fluent:Notify({ Title="Auto Vote", Content="Voted "..Config.DungeonDifficulty.."!", Duration=2 })
+                end
+            end
+        end
+        if Config.AutoReplayEnabled then
+            local now = tick()
+            if IsReplayFrameVisible() and (now - lastReplayTime) >= 10 then
+                if ClickReplayButton() then
+                    lastReplayTime = now
+                    Fluent:Notify({ Title="Auto Replay", Content="Replaying dungeon...", Duration=2 })
+                end
+            end
+        end
+    end
+end)
+
+-- Auto Kill Dungeon Mobs
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        if not Config.AutoDungeonKill then continue end
+        if BossRunning then continue end
+        local folder = GetNPCFolder()
+        if not folder then continue end
+        local targets = {}
+        for _, npc in ipairs(folder:GetChildren()) do
+            if IsAlive(npc) then table.insert(targets, npc) end
+        end
+        if #targets == 0 then continue end
+        for _, npc in ipairs(targets) do
+            if not Config.AutoDungeonKill then break end
+            if BossRunning then break end
+            if not IsAlive(npc) then continue end
+            -- [v39] FIX 5: thêm isBoss=false tường minh
+            GoAndFight(npc, Config.TweenSpeedNPC, false)
+            task.wait(0.05)
+        end
+    end
+end)
 
 -- ============================================================
 --   ISLAND → FARM ORDER
@@ -1133,154 +1461,233 @@ for _, def in ipairs(BOSS_DEFS) do
 end
 
 -- ============================================================
---   BOSS TIMER EVENT
+--   BOSS LOOP — Event-driven
 -- ============================================================
-
-local BossTimerEvent = RS.Remotes:WaitForChild("BossTimerEvent")
-BossTimerEvent.OnClientEvent:Connect(function(bossName, state)
-    if state ~= "SPAWNED" then return end
-    if not Config.BossEnabled then return end
-    local def = BOSS_NAME_TO_DEF[bossName]
-    if not def then return end
-    if not Config.SelectedBossNPCs[def.label] then return end
-    if not spawnedBossSet[def.name] then
-        spawnedBossSet[def.name] = true
-        table.insert(spawnedBossQueue, def)
-        Fluent:Notify({ Title="Boss Spawned!", Content=bossName.." — đã thêm vào queue!", Duration=3 })
-    end
-end)
-
--- ============================================================
---   BOSS LOOP  [7][16]
---   Sau khi kill boss, drain tất cả boss cùng đảo trong queue
---   trước khi restore farm → không cần TP lại cùng đảo
--- ============================================================
-
--- Helper: lấy và xóa boss cùng island khỏi queue
-local function PopSameIslandBoss(island)
-    for i, qdef in ipairs(spawnedBossQueue) do
-        if qdef.island == island then
-            spawnedBossSet[qdef.name] = nil
-            return table.remove(spawnedBossQueue, i)
-        end
-    end
-    return nil
-end
 
 task.spawn(function()
+    local ok, BossTimerEvent = pcall(function()
+        return RS:WaitForChild("Remotes", 10):WaitForChild("BossTimerEvent", 10)
+    end)
+    if not ok or not BossTimerEvent then
+        warn("[KhoaHub] BossTimerEvent not found!")
+        return
+    end
+
+    BossTimerEvent.OnClientEvent:Connect(function(bossName, state, _timer)
+        if state ~= "SPAWNED" then return end
+        if not Config.BossEnabled then return end
+
+        local def = BOSS_NAME_TO_DEF[bossName]
+        if not def then return end
+        if not Config.SelectedBossNPCs[def.label] then return end
+
+        for _, entry in ipairs(bossQueue) do
+            if entry.def.name == def.name then return end
+        end
+
+        table.insert(bossQueue, { def = def, timestamp = tick() })
+
+        Fluent:Notify({
+            Title   = "Boss Spawned!",
+            Content = bossName .. " → added to queue (" .. #bossQueue .. ")",
+            Duration = 3,
+        })
+    end)
+end)
+
+-- Boss Worker Loop
+task.spawn(function()
     while true do
-        task.wait(0.2)
+        task.wait(0.3)
+
         if not Config.BossEnabled then
             if BossRunning then
-                BossRunning = false
-                if savedFarmMode ~= "none" then ResumeFarmAfterBoss() end
+                BossRunning   = false
+                queueLock     = false
+                currentIsland = nil
             end
-            spawnedBossQueue = {}
-            spawnedBossSet   = {}
             continue
         end
 
-        -- Scan workspace nếu boss đang sống nhưng chưa trong queue
-        for _, def in ipairs(BOSS_DEFS) do
-            if not Config.SelectedBossNPCs[def.label] then continue end
-            if spawnedBossSet[def.name] then continue end
-            if FindLiveBoss(def) then
-                spawnedBossSet[def.name] = true
-                table.insert(spawnedBossQueue, def)
-            end
-        end
+        if #bossQueue == 0 then continue end
+        if queueLock then continue end
 
-        -- Prune: loại boss đã chết khỏi queue
-        local i = 1
-        while i <= #spawnedBossQueue do
-            if not FindLiveBoss(spawnedBossQueue[i]) then
-                spawnedBossSet[spawnedBossQueue[i].name] = nil
-                table.remove(spawnedBossQueue, i)
-            else
-                i += 1
-            end
-        end
+        local entry = table.remove(bossQueue, 1)
+        local def   = entry.def
 
-        if #spawnedBossQueue == 0 then continue end
-
-        local def = table.remove(spawnedBossQueue, 1)
-        spawnedBossSet[def.name] = nil
-        if not FindLiveBoss(def) then continue end
-
-        -- Tắt farm thật sự trước khi bắt đầu boss
-        PauseFarmForBoss()
-        BossRunning   = true
-        currentIsland = nil
-
-        Fluent:Notify({ Title="Boss!", Content=def.name.." — tạm dừng farm, đang đến!", Duration=3 })
-
-        local tpOk = TeleportToIsland(def.island)
-
-        if not Config.BossEnabled then
-            BossRunning = false; currentIsland = nil; ResumeFarmAfterBoss(); continue
-        end
-
-        if not tpOk then
-            table.insert(spawnedBossQueue, def)
-            spawnedBossSet[def.name] = true
-            BossRunning = false; currentIsland = nil; ResumeFarmAfterBoss()
-            task.wait(2); continue
-        end
-
-        -- Fight boss đầu tiên
-        local boss = FindLiveBoss(def)
-        if boss then
-            GoAndFight(boss, Config.TweenSpeedTP, true)
-        end
-
-        -- [16] Drain tất cả boss CÙng đảo trong queue — không TP lại
-        while Config.BossEnabled do
-            -- Rescan workspace trước khi lấy boss tiếp
-            for _, scanDef in ipairs(BOSS_DEFS) do
-                if not Config.SelectedBossNPCs[scanDef.label] then continue end
-                if spawnedBossSet[scanDef.name] then continue end
-                if scanDef.island ~= def.island then continue end
-                if FindLiveBoss(scanDef) then
-                    spawnedBossSet[scanDef.name] = true
-                    table.insert(spawnedBossQueue, scanDef)
-                end
-            end
-
-            local nextDef = PopSameIslandBoss(def.island)
-            if not nextDef then break end
-            if not FindLiveBoss(nextDef) then continue end
-
+        if (tick() - entry.timestamp) > 300 then
             Fluent:Notify({
-                Title   = "Boss tiếp theo!",
-                Content = nextDef.name.." — cùng đảo, đang tiến đến!",
+                Title   = "Boss Skipped",
+                Content = def.name .. " — entry expired",
                 Duration = 2,
             })
-
-            local nextBoss = FindLiveBoss(nextDef)
-            if nextBoss then
-                -- Cùng đảo → dùng TweenSpeedNPC (nhanh), không TP
-                GoAndFight(nextBoss, Config.TweenSpeedNPC, true)
-            end
-            def = nextDef
+            continue
         end
 
-        -- Xong tất cả boss trên đảo này
-        BossRunning   = false
-        currentIsland = nil
-        ResumeFarmAfterBoss()
-        Fluent:Notify({ Title="Boss xong!", Content="Đã kill xong — tiếp tục farm.", Duration=3 })
+        queueLock   = true
+        BossRunning = true
+
+        -- BƯỚC 1: TP qua portal đến đảo boss
+        Fluent:Notify({
+            Title   = "Auto Boss",
+            Content = "TP → " .. def.island .. " | " .. def.name,
+            Duration = 2,
+        })
+
+        -- [v41] Cung dao: VerifyOnIsland truoc khi skip TP
+        -- Boss chet co the ban player ra arena → reset neu NPCFolder mat
+        if currentIsland == def.island then
+            if not VerifyOnIsland() then
+                currentIsland = nil
+            end
+        end
+        local tpOk = TeleportToBossIsland(def.island)
+
+        if not tpOk or not Config.BossEnabled then
+            BossRunning   = false
+            queueLock     = false
+            currentIsland = nil
+            continue
+        end
+
+        -- BƯỚC 2: Chờ boss load (tối đa 15s — tăng từ 8s)
+        -- [v41] Cùng đảo: boss có thể chưa respawn ngay → đợi lâu hơn
+        local boss   = nil
+        local waited = 0
+        local waitMax = (currentIsland == def.island) and 15 or 8
+        repeat
+            task.wait(0.3)
+            waited = waited + 0.3
+            boss = FindLiveBoss(def)
+        until boss or waited >= waitMax or not Config.BossEnabled
+
+        if not boss then
+            Fluent:Notify({
+                Title   = "Boss Not Found",
+                Content = def.name .. " — not found after " .. waitMax .. "s, skipping",
+                Duration = 3,
+            })
+            BossRunning = false
+            queueLock   = false
+            -- [v41] KHÔNG reset currentIsland khi boss not found
+            -- Boss tiếp theo cùng đảo vẫn có thể tìm được
+            if #bossQueue == 0 then
+                currentIsland = nil
+            end
+            continue
+        end
+
+        -- BƯỚC 3: Kill boss (isBoss=true → luôn direct CFrame TP)
+        Fluent:Notify({
+            Title   = "Fighting!",
+            Content = def.name .. " found — engaging",
+            Duration = 2,
+        })
+
+        GoAndFight(boss, Config.TweenSpeedTP, true)
+
+        -- BƯỚC 4: Done
+        BossRunning = false
+        queueLock   = false
+        -- [v40] FIX: Giữ currentIsland sau mỗi boss
+        -- Nếu boss tiếp theo cùng đảo → skip TP, tìm boss trực tiếp
+        -- Nếu boss tiếp theo khác đảo → TeleportToBossIsland tự xử lý
+        -- Chỉ reset khi queue rỗng và trả về farm
+
+        if #bossQueue == 0 then
+            currentIsland = nil
+            Fluent:Notify({
+                Title   = "Boss Done!",
+                Content = def.name .. " cleared — resuming farm.",
+                Duration = 2,
+            })
+        else
+            Fluent:Notify({
+                Title   = "Boss Done!",
+                Content = def.name .. " cleared — " .. #bossQueue .. " boss(es) in queue.",
+                Duration = 2,
+            })
+        end
+
         task.wait(0.3)
     end
 end)
 
+
 -- ============================================================
---   FARM ALL LOOP  [15] workspace-scan island clear
+--   BOSS FARM LOOP — Quét liên tục boss trên đảo hiện tại
+--   Khác với event-driven: không cần BossTimerEvent, không TP
+--   Điều kiện: BossFarmEnabled = true + đang đứng trên đảo + boss alive
+-- ============================================================
+
+task.spawn(function()
+    local lastKillTime = {}   -- def.name → tick() lần kill gần nhất
+    local RESPAWN_WAIT = 2.0  -- đợi ít nhất 2s sau khi boss chết trước khi scan lại
+
+    while true do
+        task.wait(0.3)
+
+        if not Config.BossFarmEnabled then continue end
+        -- Nhường cho Boss Worker Loop nếu đang xử lý queue event
+        if BossRunning then task.wait(0.3); continue end
+
+        -- Gom danh sách boss được chọn
+        local candidates = {}
+        for _, def in ipairs(BOSS_DEFS) do
+            if Config.SelectedBossNPCs[def.label] then
+                table.insert(candidates, def)
+            end
+        end
+        if #candidates == 0 then task.wait(0.5); continue end
+
+        -- Quét boss alive ngay trên đảo (không TP, không kiểm tra island)
+        local found = false
+        for _, def in ipairs(candidates) do
+            if not Config.BossFarmEnabled then break end
+            if BossRunning then break end
+
+            -- Throttle: bỏ qua boss vừa mới bị kill (tránh spam)
+            local lastKill = lastKillTime[def.name] or 0
+            if (tick() - lastKill) < RESPAWN_WAIT then continue end
+
+            local boss = FindLiveBoss(def)
+            if not boss then continue end
+
+            found = true
+            BossRunning = true
+
+            Fluent:Notify({
+                Title   = "Boss Farm",
+                Content = def.name .. " detected — engaging!",
+                Duration = 2,
+            })
+
+            GoAndFight(boss, Config.TweenSpeedNPC, true)
+
+            lastKillTime[def.name] = tick()
+            BossRunning = false
+
+            -- Nghỉ ngắn giữa các boss để tránh spam
+            task.wait(0.5)
+        end
+
+        -- Nếu không tìm thấy boss nào, nghỉ 1s trước khi scan lại
+        if not found then
+            task.wait(1.0)
+        end
+    end
+end)
+
+-- ============================================================
+--   FARM ALL LOOP
 -- ============================================================
 
 task.spawn(function()
     while true do
         task.wait(0.2)
         if not Config.FarmAllEnabled then continue end
+        -- [v42] Boss đang chạy: farm nhường thread, không đụng UI toggle
+        if BossRunning then task.wait(0.3); continue end
 
         for gi, islandGroup in ipairs(ISLAND_FARM_ORDER) do
             if not Config.FarmAllEnabled then break end
@@ -1290,36 +1697,29 @@ task.spawn(function()
                 if not ok then task.wait(1); continue end
             end
 
-            -- Tìm đảo tiếp theo để pre-fire
             local nextIsland = nil
             for ni = gi + 1, #ISLAND_FARM_ORDER do
                 nextIsland = ISLAND_FARM_ORDER[ni].island; break
             end
             if not nextIsland then nextIsland = ISLAND_FARM_ORDER[1].island end
 
-            -- [15] Build watch set cho đảo này — O(1) lookup khi scan folder
             local watchSet = BuildIslandWatchSet(islandGroup.defs)
-
-            local isFirst   = true
-            local cleared   = false  -- [18] thay goto
+            local isFirst  = true
+            local cleared  = false
 
             for _, def in ipairs(islandGroup.defs) do
                 if not Config.FarmAllEnabled or cleared then break end
-
                 for i = 1, def.max do
                     if not Config.FarmAllEnabled or cleared then break end
-
                     local npc = FindLiveNPC(def.prefix..i)
                     if npc then
                         local speed = isFirst and Config.TweenSpeedTP or Config.TweenSpeedNPC
-                        GoAndFight(npc, speed)
+                        -- [v39] FIX 5: thêm isBoss=false tường minh
+                        GoAndFight(npc, speed, false)
                         isFirst = false
-
-                        -- [15] Scan folder trực tiếp sau mỗi kill
                         if not FolderHasAnyAlive(watchSet) then
                             PreFirePortal(nextIsland)
-                            cleared = true  -- [18] thoát cả 2 vòng for
-                            break
+                            cleared = true; break
                         end
                         task.wait(GetInterNPC())
                     end
@@ -1331,7 +1731,7 @@ task.spawn(function()
 end)
 
 -- ============================================================
---   SPECIFIC FARM LOOP  [15] workspace-scan island clear
+--   SPECIFIC FARM LOOP
 -- ============================================================
 
 task.spawn(function()
@@ -1344,10 +1744,11 @@ task.spawn(function()
             if Config.SelectedFarmNPCs[d.label] then table.insert(queue, d) end
         end
         if #queue == 0 then task.wait(0.5); continue end
+        -- [v42] Boss đang chạy: farm nhường thread, không đụng UI toggle
+        if BossRunning then task.wait(0.3); continue end
 
-        -- Group queue theo island để build watchSet hiệu quả
-        local islandDefs = {}   -- island → { defs }
-        local islandOrder = {}  -- thứ tự island xuất hiện trong queue
+        local islandDefs  = {}
+        local islandOrder = {}
         local seen = {}
         for _, def in ipairs(queue) do
             if not seen[def.island] then
@@ -1370,34 +1771,27 @@ task.spawn(function()
                 if not ok then task.wait(1); continue end
             end
 
-            -- Tìm đảo tiếp theo (khác island) để pre-fire
             local nextIsland = islandOrder[ii + 1]
-
-            -- [15] Build watchSet cho đảo này
-            local watchSet = BuildIslandWatchSet(defs)
-            local isFirst  = needTP
-            local cleared  = false  -- [18] thay goto
+            local watchSet   = BuildIslandWatchSet(defs)
+            local isFirst    = needTP
+            local cleared    = false
 
             for _, def in ipairs(defs) do
                 if not Config.FarmEnabled or cleared then break end
                 if not Config.SelectedFarmNPCs[def.label] then continue end
-
                 for i = 1, def.max do
                     if not Config.FarmEnabled or cleared then break end
                     if not Config.SelectedFarmNPCs[def.label] then break end
-
                     local npc = FindLiveNPC(def.prefix..i)
                     if npc then
                         anyKilled = true
                         local speed = isFirst and Config.TweenSpeedTP or Config.TweenSpeedNPC
-                        GoAndFight(npc, speed)
+                        -- [v39] FIX 5: thêm isBoss=false tường minh
+                        GoAndFight(npc, speed, false)
                         isFirst = false
-
-                        -- [15] Scan folder trực tiếp — nếu đảo sạch thì pre-fire và thoát
                         if not FolderHasAnyAlive(watchSet) then
                             if nextIsland then PreFirePortal(nextIsland) end
-                            cleared = true  -- [18] thoát cả 2 vòng for
-                            break
+                            cleared = true; break
                         end
                         task.wait(GetInterNPC())
                     end
@@ -1428,27 +1822,27 @@ end)
 
 -- ============================================================
 --   AUTO SKILL LOOP
+--   [v39] FIX 3: Dùng if/else thay ternary — tránh Lua operator bug
+--   [v39] FIX 4: lastFiredSlot/lastFiredTime đã merge vào 1 connection ở trên
 -- ============================================================
 
 task.spawn(function()
-    local prevEnabled   = false
-    local lastFiredSlot = 0
-    local lastFiredTime = 0
-
-    if _abFeedback then
-        _abFeedback.OnClientEvent:Connect(function(data)
-            if type(data) ~= "table" then return end
-            if data.Caster ~= LocalPlayer then return end
-            if data.AbilitySlot then
-                lastFiredSlot = data.AbilitySlot
-                lastFiredTime = tick()
-            end
-        end)
-    end
+    local prevEnabled = false
 
     while true do
         task.wait(0.1)
-        if not Config.AutoSkillEnabled then
+
+        -- [v39] FIX 3: if/else thay vì ternary (sửa lỗi Lua precedence)
+        local skillEnabled, selectedSkills
+        if BossRunning then
+            skillEnabled   = Config.AutoSkillBossEnabled
+            selectedSkills = Config.SelectedSkillsBoss
+        else
+            skillEnabled   = Config.AutoSkillFarmEnabled
+            selectedSkills = Config.SelectedSkillsFarm
+        end
+
+        if not skillEnabled then
             if prevEnabled then
                 task.spawn(DisableAllSkillsInGameUI)
                 prevEnabled = false
@@ -1459,12 +1853,12 @@ task.spawn(function()
         prevEnabled = true
 
         local hasSkills = false
-        for _ in pairs(Config.SelectedSkills) do hasSkills = true; break end
+        for _ in pairs(selectedSkills) do hasSkills = true; break end
         if not hasSkills then task.wait(0.3); continue end
 
         for _, key in ipairs(SKILL_ORDER) do
-            if not Config.AutoSkillEnabled then break end
-            if not Config.SelectedSkills[key] then continue end
+            if not skillEnabled then break end
+            if not selectedSkills[key] then continue end
             local slotNum = SKILL_SLOTS[key]
             if IsSkillOnCooldown(slotNum) then continue end
 
@@ -1477,7 +1871,7 @@ task.spawn(function()
             local prevFiredTime = lastFiredTime
 
             while waited < timeout do
-                if not Config.AutoSkillEnabled then break end
+                if not skillEnabled then break end
                 task.wait(0.1); waited += 0.1
                 if lastFiredSlot == slotNum and lastFiredTime ~= prevFiredTime then
                     confirmed = true; break
@@ -1491,7 +1885,7 @@ task.spawn(function()
                 local cd = SkillCooldowns[slotNum]
                 if cd then
                     while tick() < cd do
-                        if not Config.AutoSkillEnabled then break end
+                        if not skillEnabled then break end
                         task.wait(0.2)
                     end
                 end
@@ -1525,13 +1919,16 @@ end)
 
 LocalPlayer.CharacterAdded:Connect(function()
     CancelTween(); StopStaying()
-    ComboIndex    = 0
-    currentIsland = nil
+    Config.BossFarmEnabled = false
+    pcall(function() Fluent.Options.BossFarmToggle:SetValue(false) end)
+    ComboIndex     = 0
+    currentIsland  = nil
     preFiredIsland = nil
-    BossRunning   = false
-    savedFarmMode = "none"
-    spawnedBossQueue = {}
-    spawnedBossSet   = {}
+    BossRunning    = false
+    queueLock      = false
+    bossQueue      = {}
+    lastFiredSlot  = 0
+    lastFiredTime  = 0
     for k in pairs(SkillCooldowns) do SkillCooldowns[k] = nil end
     SetAutoSkillSlot(0)
     task.spawn(HideSkillUI)
@@ -1550,7 +1947,7 @@ SaveManager:LoadAutoloadConfig()
 Window:SelectTab(1)
 
 Fluent:Notify({
-    Title    = "KhoaHub v18 Ready",
-    Content  = "Tween loop fix + PreFire TP-only + IsAlive safe!",
+    Title    = "KhoaHub v43 Ready",
+    Content  = "v43: Boss Farm Loop — quét liên tục boss trên đảo hiện tại!",
     Duration = 5,
 })
