@@ -1,0 +1,360 @@
+-- ══════════════════════════════════════════════════════════════
+-- FAKE UNUSUAL — Standalone Script
+-- Clone real unusual effects từ ReplicatedStorage.Items.Cosmetics
+-- vào character của bạn. Chỉ bạn thấy.
+-- Key: khoahandsome
+-- ══════════════════════════════════════════════════════════════
+
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local TweenService     = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui          = game:GetService("CoreGui")
+local GuiService       = game:GetService("GuiService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local VALID_KEY = "khoahandsome"
+
+-- ── Animated border ──────────────────────────────────────────
+local animatedBorders = {}
+local _animT = 0
+RunService.Heartbeat:Connect(function(dt)
+    _animT = _animT + dt * 2.8
+    local pulse     = math.sin(_animT) * 0.5 + 0.5
+    local thickness = 3.5 + pulse * 2.0
+    local rVal      = math.floor(200 + 55 * pulse)
+    local gbVal     = math.floor(pulse * 40)
+    local color     = Color3.fromRGB(rVal, gbVal, gbVal)
+    for i = #animatedBorders, 1, -1 do
+        local s = animatedBorders[i]
+        if s and s.Parent then
+            pcall(function() s.Thickness = thickness; s.Color = color end)
+        else
+            table.remove(animatedBorders, i)
+        end
+    end
+end)
+local function addAnimatedBorder(parent, startThickness)
+    local stroke = Instance.new("UIStroke")
+    stroke.Color     = Color3.fromRGB(220, 0, 0)
+    stroke.Thickness = startThickness or 3.5
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    stroke.Parent = parent
+    table.insert(animatedBorders, stroke)
+    return stroke
+end
+
+-- ── Key UI ───────────────────────────────────────────────────
+local keyUnlocked = false
+local function createKeyUI()
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "FakeUnusualKeyUI"; sg.ResetOnSpawn = false
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    pcall(function() sg.Parent = CoreGui end)
+    if not sg.Parent then sg.Parent = player.PlayerGui end
+
+    local overlay = Instance.new("Frame")
+    overlay.Size = UDim2.new(1,0,1,0)
+    overlay.BackgroundColor3 = Color3.fromRGB(0,0,0)
+    overlay.BackgroundTransparency = 0.50
+    overlay.BorderSizePixel = 0; overlay.ZIndex = 1; overlay.Parent = sg
+
+    local panel = Instance.new("Frame")
+    panel.Size = UDim2.new(0,290,0,185)
+    panel.Position = UDim2.new(0.5,-145,0.5,-92)
+    panel.BackgroundColor3 = Color3.fromRGB(255,255,255)
+    panel.BorderSizePixel = 0; panel.ZIndex = 2; panel.Parent = sg
+    Instance.new("UICorner",panel).CornerRadius = UDim.new(0,8)
+    addAnimatedBorder(panel, 3.5)
+
+    local titleBar = Instance.new("Frame")
+    titleBar.Size = UDim2.new(1,0,0,34)
+    titleBar.BackgroundColor3 = Color3.fromRGB(255,255,255)
+    titleBar.BorderSizePixel = 0; titleBar.ZIndex = 3; titleBar.Parent = panel
+    Instance.new("UICorner",titleBar).CornerRadius = UDim.new(0,8)
+    local titleDiv = Instance.new("Frame")
+    titleDiv.Size = UDim2.new(1,0,0,1); titleDiv.Position = UDim2.new(0,0,1,-1)
+    titleDiv.BackgroundColor3 = Color3.fromRGB(200,0,0)
+    titleDiv.BorderSizePixel = 0; titleDiv.ZIndex = 4; titleDiv.Parent = titleBar
+    local titleLbl = Instance.new("TextLabel")
+    titleLbl.Size = UDim2.new(1,-40,1,0); titleLbl.Position = UDim2.new(0,12,0,0)
+    titleLbl.BackgroundTransparency = 1; titleLbl.Text = "Fake Unusual — Key Required"
+    titleLbl.TextColor3 = Color3.fromRGB(20,20,20); titleLbl.Font = Enum.Font.GothamBold
+    titleLbl.TextSize = 13; titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+    titleLbl.ZIndex = 4; titleLbl.Parent = titleBar
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0,26,0,26); closeBtn.Position = UDim2.new(1,-32,0,4)
+    closeBtn.BackgroundTransparency = 1; closeBtn.Text = "x"
+    closeBtn.TextColor3 = Color3.fromRGB(80,80,80); closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 14; closeBtn.ZIndex = 4; closeBtn.Parent = titleBar
+
+    local inputBg = Instance.new("Frame")
+    inputBg.Size = UDim2.new(1,-24,0,34); inputBg.Position = UDim2.new(0,12,0,46)
+    inputBg.BackgroundColor3 = Color3.fromRGB(248,248,248)
+    inputBg.BorderSizePixel = 0; inputBg.ZIndex = 3; inputBg.Parent = panel
+    Instance.new("UICorner",inputBg).CornerRadius = UDim.new(0,6)
+    local inputStroke = Instance.new("UIStroke")
+    inputStroke.Color = Color3.fromRGB(180,180,180); inputStroke.Thickness = 1.5; inputStroke.Parent = inputBg
+    local inputBox = Instance.new("TextBox")
+    inputBox.Size = UDim2.new(1,-16,1,0); inputBox.Position = UDim2.new(0,10,0,0)
+    inputBox.BackgroundTransparency = 1; inputBox.Text = ""
+    inputBox.PlaceholderText = "Enter key here"
+    inputBox.PlaceholderColor3 = Color3.fromRGB(180,180,180)
+    inputBox.TextColor3 = Color3.fromRGB(20,20,20); inputBox.Font = Enum.Font.Gotham
+    inputBox.TextSize = 13; inputBox.TextXAlignment = Enum.TextXAlignment.Left
+    inputBox.ClearTextOnFocus = false; inputBox.ZIndex = 4; inputBox.Parent = inputBg
+
+    local errorLbl = Instance.new("TextLabel")
+    errorLbl.Size = UDim2.new(1,-24,0,14); errorLbl.Position = UDim2.new(0,12,0,84)
+    errorLbl.BackgroundTransparency = 1; errorLbl.Text = ""
+    errorLbl.TextColor3 = Color3.fromRGB(200,0,0); errorLbl.Font = Enum.Font.Gotham
+    errorLbl.TextSize = 11; errorLbl.TextXAlignment = Enum.TextXAlignment.Left
+    errorLbl.ZIndex = 3; errorLbl.Parent = panel
+
+    local discordBtn = Instance.new("TextButton")
+    discordBtn.Size = UDim2.new(0,124,0,34); discordBtn.Position = UDim2.new(0,12,0,104)
+    discordBtn.BackgroundColor3 = Color3.fromRGB(255,242,242)
+    discordBtn.BorderSizePixel = 0; discordBtn.Text = ""; discordBtn.ZIndex = 3; discordBtn.Parent = panel
+    Instance.new("UICorner",discordBtn).CornerRadius = UDim.new(0,6)
+    addAnimatedBorder(discordBtn, 3.5)
+    local dInner = Instance.new("TextLabel")
+    dInner.Size = UDim2.new(1,0,1,0); dInner.BackgroundTransparency = 1
+    dInner.Text = "Discord"; dInner.TextColor3 = Color3.fromRGB(20,20,20)
+    dInner.Font = Enum.Font.GothamBold; dInner.TextSize = 13;
+    dInner.ZIndex = 4; dInner.Parent = discordBtn
+    discordBtn.MouseButton1Click:Connect(function()
+        pcall(function() setclipboard("https://discord.gg/n3CP2gmS") end)
+        pcall(function() GuiService:OpenBrowserWindow("https://discord.gg/n3CP2gmS") end)
+        dInner.Text = "Copied!"; task.delay(1.8, function() dInner.Text = "Discord" end)
+    end)
+
+    local applyBtn = Instance.new("TextButton")
+    applyBtn.Size = UDim2.new(0,124,0,34); applyBtn.Position = UDim2.new(1,-136,0,104)
+    applyBtn.BackgroundColor3 = Color3.fromRGB(255,242,242)
+    applyBtn.BorderSizePixel = 0; applyBtn.Text = ""; applyBtn.ZIndex = 3; applyBtn.Parent = panel
+    Instance.new("UICorner",applyBtn).CornerRadius = UDim.new(0,6)
+    addAnimatedBorder(applyBtn, 3.5)
+    local aInner = Instance.new("TextLabel")
+    aInner.Size = UDim2.new(1,0,1,0); aInner.BackgroundTransparency = 1
+    aInner.Text = "Apply"; aInner.TextColor3 = Color3.fromRGB(20,20,20)
+    aInner.Font = Enum.Font.GothamBold; aInner.TextSize = 14; aInner.ZIndex = 4; aInner.Parent = applyBtn
+
+    local div = Instance.new("Frame")
+    div.Size = UDim2.new(1,-24,0,1); div.Position = UDim2.new(0,12,0,148)
+    div.BackgroundColor3 = Color3.fromRGB(220,220,220); div.BorderSizePixel = 0; div.ZIndex = 3; div.Parent = panel
+    local footerLbl = Instance.new("TextLabel")
+    footerLbl.Size = UDim2.new(1,-24,0,18); footerLbl.Position = UDim2.new(0,12,0,153)
+    footerLbl.BackgroundTransparency = 1; footerLbl.Text = "Fake Unusual by KhoaProSigmaAlphaMale"
+    footerLbl.TextColor3 = Color3.fromRGB(160,160,160); footerLbl.Font = Enum.Font.Gotham
+    footerLbl.TextSize = 10; footerLbl.ZIndex = 3; footerLbl.Parent = panel
+
+    inputBox.Focused:Connect(function()
+        TweenService:Create(inputStroke,TweenInfo.new(0.2),{Color=Color3.fromRGB(200,0,0),Thickness=2}):Play()
+    end)
+    inputBox.FocusLost:Connect(function()
+        TweenService:Create(inputStroke,TweenInfo.new(0.2),{Color=Color3.fromRGB(180,180,180),Thickness=1.5}):Play()
+    end)
+
+    local function tryUnlock()
+        local k = inputBox.Text:gsub("^%s*(.-)%s*$","%1")
+        if k == VALID_KEY then
+            errorLbl.Text = "Key correct! Loading..."; errorLbl.TextColor3 = Color3.fromRGB(0,160,60)
+            applyBtn.Active = false
+            task.spawn(function()
+                task.wait(0.7)
+                TweenService:Create(overlay,TweenInfo.new(0.35),{BackgroundTransparency=1}):Play()
+                TweenService:Create(panel,TweenInfo.new(0.35),{BackgroundTransparency=1}):Play()
+                task.wait(0.4); sg:Destroy(); keyUnlocked = true
+            end)
+        else
+            errorLbl.Text = "Incorrect key."; errorLbl.TextColor3 = Color3.fromRGB(200,0,0)
+            local origPos = panel.Position
+            TweenService:Create(panel,TweenInfo.new(0.05),{Position=UDim2.new(0.5,-140,0.5,-92)}):Play()
+            task.delay(0.05, function() TweenService:Create(panel,TweenInfo.new(0.05),{Position=UDim2.new(0.5,-150,0.5,-92)}):Play() end)
+            task.delay(0.10, function() TweenService:Create(panel,TweenInfo.new(0.05),{Position=origPos}):Play() end)
+            task.delay(2.0, function() errorLbl.Text = "" end)
+        end
+    end
+    applyBtn.MouseButton1Click:Connect(tryUnlock)
+    inputBox.FocusLost:Connect(function(enter) if enter then tryUnlock() end end)
+    closeBtn.MouseButton1Click:Connect(function() sg:Destroy() end)
+end
+
+createKeyUI()
+repeat task.wait(0.1) until keyUnlocked
+task.wait(0.3)
+
+-- ══════════════════════════════════════════════════════════════
+-- CORE LOGIC
+-- ══════════════════════════════════════════════════════════════
+
+local fakeUnusual = {
+    enabled  = false,
+    selected = "",
+    conn     = nil,
+}
+
+-- Only safe effect classes — never clone BaseParts/Meshes (causes invisibility on respawn)
+local SAFE_CLASSES = {
+    ParticleEmitter = true,
+    Attachment      = true,
+    Fire            = true,
+    Smoke           = true,
+    Sparkles        = true,
+    PointLight      = true,
+    SpotLight       = true,
+    SurfaceLight    = true,
+}
+
+local function cleanup()
+    local char = player.Character; if not char then return end
+    for _, v in pairs(char:GetDescendants()) do
+        if v:GetAttribute("FakeUnusual") then pcall(function() v:Destroy() end) end
+    end
+end
+
+local function apply()
+    cleanup()
+    if not fakeUnusual.enabled or fakeUnusual.selected == "" then return end
+    local char = player.Character; if not char then return end
+    local hum  = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+    local isR6 = hum.RigType == Enum.HumanoidRigType.R6
+
+    local cosFolder = ReplicatedStorage:FindFirstChild("Items")
+    if cosFolder then cosFolder = cosFolder:FindFirstChild("Cosmetics") end
+    if not cosFolder then return end
+
+    local module = cosFolder:FindFirstChild(fakeUnusual.selected)
+    if not module then return end
+
+    local modelName = isR6 and "CharacterClassic" or "Character"
+    local effectModel = module:FindFirstChild(modelName)
+                     or module:FindFirstChild("Character")
+                     or module:FindFirstChild("CharacterClassic")
+    if not effectModel then return end
+
+    for _, sourcePart in pairs(effectModel:GetChildren()) do
+        if sourcePart:IsA("BasePart") then
+            local targetPart = char:FindFirstChild(sourcePart.Name)
+            if targetPart then
+                for _, effect in pairs(sourcePart:GetChildren()) do
+                    if SAFE_CLASSES[effect.ClassName] then
+                        local ok, clone = pcall(function() return effect:Clone() end)
+                        if ok and clone then
+                            clone:SetAttribute("FakeUnusual", true)
+                            clone.Parent = targetPart
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function enable()
+    fakeUnusual.enabled = true
+    apply()
+    if fakeUnusual.conn then fakeUnusual.conn:Disconnect() end
+    fakeUnusual.conn = player.CharacterAdded:Connect(function(newChar)
+        newChar:WaitForChild("Head", 8)
+        task.wait(1.5)
+        if fakeUnusual.enabled then apply() end
+    end)
+end
+
+local function disable()
+    fakeUnusual.enabled = false
+    cleanup()
+    if fakeUnusual.conn then fakeUnusual.conn:Disconnect(); fakeUnusual.conn = nil end
+end
+
+local function getList()
+    local list = {}
+    local cosFolder = ReplicatedStorage:FindFirstChild("Items")
+    if cosFolder then cosFolder = cosFolder:FindFirstChild("Cosmetics") end
+    if not cosFolder then return {"(Not found)"} end
+    for _, item in pairs(cosFolder:GetChildren()) do
+        if item:IsA("ModuleScript") then
+            if item:FindFirstChild("Character") or item:FindFirstChild("CharacterClassic") then
+                local ok, data = pcall(require, item)
+                if ok and type(data) == "table" then
+                    local ci = data.CosmeticInfo
+                    if ci and ci.Unusual then
+                        table.insert(list, item.Name)
+                    end
+                end
+            end
+        end
+    end
+    table.sort(list)
+    return #list > 0 and list or {"(None found)"}
+end
+
+-- ══════════════════════════════════════════════════════════════
+-- UI  (Fluent)
+-- ══════════════════════════════════════════════════════════════
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+
+local Window = Fluent:CreateWindow({
+    Title       = "Fake Unusual",
+    SubTitle    = "by KhoaProSigmaAlphaMale",
+    TabWidth    = 160,
+    Size        = UDim2.fromOffset(420, 300),
+    Acrylic     = false,
+    Theme       = "Dark",
+    MinimizeKey = Enum.KeyCode.RightControl,
+})
+
+local Tab = Window:AddTab({ Title = "Unusual", Icon = "sparkles" })
+local sFU = Tab:AddSection("Fake Unusual (Real Effects)")
+
+local fuList = {"(Loading...)"}
+
+sFU:AddDropdown("FakeUnusualSelect", {
+    Title    = "Select Unusual",
+    Values   = fuList,
+    Default  = "(Loading...)",
+    Callback = function(v)
+        fakeUnusual.selected = tostring(v)
+        if fakeUnusual.enabled then apply() end
+    end,
+})
+
+task.spawn(function()
+    task.wait(0.5)
+    fuList = getList()
+    pcall(function()
+        Fluent.Options.FakeUnusualSelect:SetValues(fuList)
+        if #fuList > 0 then
+            Fluent.Options.FakeUnusualSelect:SetValue(fuList[1])
+            fakeUnusual.selected = fuList[1]
+        end
+    end)
+end)
+
+sFU:AddButton({Title = "Refresh List", Callback = function()
+    task.spawn(function()
+        local newList = getList()
+        fuList = newList
+        pcall(function() Fluent.Options.FakeUnusualSelect:SetValues(newList) end)
+    end)
+end})
+
+sFU:AddToggle("FakeUnusualEnable", {
+    Title    = "Enable Effect",
+    Default  = false,
+    Callback = function(v)
+        if v then enable() else disable() end
+    end,
+})
+
+sFU:AddButton({Title = "Reload Effect", Callback = function()
+    if fakeUnusual.enabled then apply() end
+end})
+
+sFU:AddButton({Title = "Remove Effect", Callback = function()
+    cleanup()
+end})
+
+Window:SelectTab(1)
