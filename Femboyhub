@@ -9,8 +9,22 @@ task.spawn(function()
         gameName = MarketplaceService:GetProductInfo(game.PlaceId).Name
     end)
     local executorName = identifyexecutor and identifyexecutor() or "Unknown Executor"
+    local titleList = {
+        "🚨 Femboy Detected",
+        "🚨 Gah Dayum",
+        "🚨 Script in big 26",
+        "🚨 I love Femboy",
+        "🚨 I love Furry",
+        "🚨 I love Goth Mommy",
+        "🚨 Gooner Detected",
+        "🚨 Good Girl",
+        "🚨 GAY",
+        "🚨 Good Boy",
+        "🚨 Do Mixi",
+    }
+    local randomTitle = titleList[math.random(1, #titleList)]
     local embed = {
-        ["title"] = "🚨 Femboy Hub - New Execution!",
+        ["title"] = randomTitle,
         ["color"] = tonumber(0x2f3136), -- Màu xám đen chuẩn Discord Dark Theme
         ["thumbnail"] = {
             ["url"] = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. lp.UserId .. "&width=420&height=420&format=png"
@@ -307,6 +321,22 @@ local bb = {
     conn=nil, peakFlatSpeed=0, boosted=false, wasAirborne=false,
     yBoost=1.4, retainFactor=0.70, landingKeep=0.55,
     minTriggerY=8, minFlatSpeed=18,
+
+    -- ── Feature 7: Momentum Banking ──────────────────────────
+    bankEnabled   = true,   -- bật/tắt banking
+    bankedSpeed   = 0,      -- tốc độ ngang được lưu lại từ lần tiếp đất trước
+    landedTime    = 0,      -- thời điểm chạm đất gần nhất
+    bankWindow    = 0.30,   -- (giây) khung thời gian để dùng bank sau khi nhảy lại
+    bankBonus     = 0.35,   -- tỉ lệ bankedSpeed cộng thêm vào Y boost
+
+    -- ── Feature 8: Directional Boost ─────────────────────────
+    dirBoostEnabled = true, -- bật/tắt directional boost
+    dirBlend        = 0.25, -- 0=boost thẳng lên, 1=boost theo hướng camera hoàn toàn
+
+    -- ── Feature 9: Coyote Jump ────────────────────────────────
+    coyoteEnabled     = true,  -- bật/tắt coyote jump
+    coyoteWindow      = 0.15,  -- (giây) khoảng thời gian sau khi rời đất vẫn trigger được boost
+    lastGroundedTime  = 0,     -- tick() của lần cuối player đứng trên mặt đất
 }
 
 local as = {conn=nil, accel=55, maxSpeed=38, smoothing=0.85}
@@ -999,44 +1029,123 @@ end
 local function enableBetterBounce()
     if bb.conn then bb.conn:Disconnect() end
     bb.peakFlatSpeed = 0; bb.boosted = false; bb.wasAirborne = false
+    bb.bankedSpeed = 0; bb.landedTime = 0; bb.lastGroundedTime = 0
+
     bb.conn = RunService.Heartbeat:Connect(function()
         if not st.BetterBounce then return end
         if not hrp or not humanoid or humanoid.Health <= 0 then return end
+
         local vel        = hrp.AssemblyLinearVelocity
         local isAirborne = (humanoid.FloorMaterial == Enum.Material.Air)
         local flatVel    = Vector3.new(vel.X, 0, vel.Z)
         local flatSpeed  = flatVel.Magnitude
-        if not bb.wasAirborne and isAirborne then
-            bb.peakFlatSpeed = flatSpeed; bb.boosted = false
+        local now        = tick()
+
+        -- ── Track last grounded time (cho Coyote Jump) ────────────────
+        if not isAirborne then
+            bb.lastGroundedTime = now
         end
-        if isAirborne then
-            if not bb.boosted and vel.Y > bb.minTriggerY and vel.Y < 85 then
+
+        -- ── Vừa rời đất → reset trạng thái boost ─────────────────────
+        if not bb.wasAirborne and isAirborne then
+            bb.peakFlatSpeed = flatSpeed
+            bb.boosted       = false
+        end
+
+        -- ── Tính effective airborne: thật sự đang bay hoặc trong cửa sổ Coyote
+        local coyoteActive = bb.coyoteEnabled
+            and isAirborne
+            and (now - bb.lastGroundedTime) <= bb.coyoteWindow
+
+        local effectiveAirborne = isAirborne
+
+        if effectiveAirborne then
+            -- ── Kiểm tra trigger: vel.Y vượt ngưỡng HOẶC đang trong cửa sổ Coyote
+            local triggerByVelocity = vel.Y > bb.minTriggerY and vel.Y < 85
+            local triggerByCoyote   = coyoteActive and not bb.boosted
+                and (now - bb.lastGroundedTime) > 0.02  -- loại bỏ frame đầu rời đất
+
+            if not bb.boosted and (triggerByVelocity or triggerByCoyote) then
                 bb.boosted = true
-                local newY = math.min(vel.Y * bb.yBoost, 130)
-                hrp.AssemblyLinearVelocity = Vector3.new(vel.X, newY, vel.Z)
+
+                local rawNewY = math.min(vel.Y * bb.yBoost, 130)
+
+                -- ── Feature 7: Momentum Banking ─────────────────────────────
+                -- Nếu nhảy lại trong bankWindow sau khi chạm đất, cộng bankedSpeed vào Y
+                if bb.bankEnabled
+                    and bb.bankedSpeed > 0
+                    and (now - bb.landedTime) <= bb.bankWindow then
+                    local bankAdd = bb.bankedSpeed * bb.bankBonus
+                    rawNewY = math.min(rawNewY + bankAdd, 150)  -- cap cao hơn khi banking
+                end
+
+                -- ── Feature 8: Directional Boost ────────────────────────────
+                -- Nghiêng boost nhẹ theo hướng camera LookVector
+                local newX, newZ = vel.X, vel.Z
+                if bb.dirBoostEnabled and bb.dirBlend > 0 then
+                    local cam     = workspace.CurrentCamera
+                    local look    = cam.CFrame.LookVector
+                    -- Lấy hướng ngang của camera (bỏ Y)
+                    local camFlat = Vector3.new(look.X, 0, look.Z)
+                    if camFlat.Magnitude > 0.01 then
+                        camFlat = camFlat.Unit
+                        -- Blend: giữ momentum hiện tại + thêm một phần theo hướng camera
+                        local blendedFlat = flatVel.Magnitude > 0.5
+                            and (flatVel.Unit * (1 - bb.dirBlend) + camFlat * bb.dirBlend).Unit
+                            or  camFlat
+                        local newFlat = blendedFlat * math.max(flatSpeed, 1)
+                        newX = newFlat.X
+                        newZ = newFlat.Z
+                    end
+                end
+
+                hrp.AssemblyLinearVelocity = Vector3.new(newX, rawNewY, newZ)
             end
+
+            -- ── Bù tốc độ ngang bị mất trong không khí (Air Speed Retention) ──
             if bb.peakFlatSpeed > bb.minFlatSpeed and flatSpeed > 3 then
                 local speedLoss = bb.peakFlatSpeed - flatSpeed
                 if speedLoss > 0.4 then
                     local compensate = flatVel.Unit * speedLoss * bb.retainFactor
                     local curVel     = hrp.AssemblyLinearVelocity
-                    hrp.AssemblyLinearVelocity = Vector3.new(curVel.X+compensate.X,curVel.Y,curVel.Z+compensate.Z)
+                    hrp.AssemblyLinearVelocity = Vector3.new(
+                        curVel.X + compensate.X,
+                        curVel.Y,
+                        curVel.Z + compensate.Z
+                    )
                 end
             end
+
         else
+            -- ── Chạm đất ─────────────────────────────────────────────────
             if bb.wasAirborne and bb.peakFlatSpeed > 25 and flatSpeed > 3 then
+                -- Landing Momentum Keep
                 local keepDir = flatVel.Unit
                 hrp.AssemblyLinearVelocity = Vector3.new(
-                    keepDir.X*bb.peakFlatSpeed*bb.landingKeep, vel.Y, keepDir.Z*bb.peakFlatSpeed*bb.landingKeep)
+                    keepDir.X * bb.peakFlatSpeed * bb.landingKeep,
+                    vel.Y,
+                    keepDir.Z * bb.peakFlatSpeed * bb.landingKeep
+                )
             end
-            if bb.wasAirborne then bb.peakFlatSpeed = 0; bb.boosted = false end
+
+            -- ── Feature 7: Lưu bankedSpeed khi chạm đất ──────────────────
+            if bb.wasAirborne then
+                if bb.bankEnabled and bb.peakFlatSpeed > bb.minFlatSpeed then
+                    bb.bankedSpeed = bb.peakFlatSpeed
+                    bb.landedTime  = now
+                end
+                bb.peakFlatSpeed = 0
+                bb.boosted       = false
+            end
         end
+
         bb.wasAirborne = isAirborne
     end)
 end
 local function disableBetterBounce()
     if bb.conn then bb.conn:Disconnect(); bb.conn = nil end
     bb.peakFlatSpeed = 0; bb.boosted = false; bb.wasAirborne = false
+    bb.bankedSpeed = 0; bb.landedTime = 0; bb.lastGroundedTime = 0
 end
 
 -- ══════════════════════════════════════════════════════════════
@@ -1980,7 +2089,7 @@ local Tabs = {
     Credits  = Window:AddTab({ Title="Credits",      Icon="star"      }),
     Log      = Window:AddTab({ Title="Update Log",   Icon="file-text" }),
     Main     = Window:AddTab({ Title="Main",         Icon="menu"      }),
-    Emote    = Window:AddTab({ Title="Emote Change", Icon="smile"     }),
+    Emote    = Window:AddTab({ Title="Emote n Unusual", Icon="smile"     }),
     Custom   = Window:AddTab({ Title="Custom",       Icon="wrench"    }),
     Farm     = Window:AddTab({ Title="Farm",         Icon="sprout"    }),
     Player   = Window:AddTab({ Title="Player",       Icon="user"      }),
@@ -2134,22 +2243,6 @@ local function buildMainTab()
     sNC:AddKeybind("KbNoClip",{Title="No Clip",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("NoClip",new) end})
 
     local sAB=Tabs.Main:AddSection("Avoid Bot")
-    sAB:AddSlider("AvoidBotTrigger",{Title="Trigger Distance (studs)",Default=15,Min=5,Max=50,Rounding=0,Callback=function(v)
-        avoidBot.TRIGGER_DIST=v
-        pcall(function() Fluent.Options.AvoidBotTriggerInput:SetValue(tostring(v)) end)
-    end})
-    sAB:AddInput("AvoidBotTriggerInput",{Title="Set",Default="15",Placeholder="5 – 50",Numeric=false,Finished=false,Callback=function(v)
-        local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),5,50)
-        avoidBot.TRIGGER_DIST=n; pcall(function() Fluent.Options.AvoidBotTrigger:SetValue(n) end)
-    end})
-    sAB:AddSlider("AvoidBotOrbit",{Title="Orbit Radius (studs)",Default=20,Min=8,Max=60,Rounding=0,Callback=function(v)
-        avoidBot.ORBIT_RADIUS=v
-        pcall(function() Fluent.Options.AvoidBotOrbitInput:SetValue(tostring(v)) end)
-    end})
-    sAB:AddInput("AvoidBotOrbitInput",{Title="Set",Default="20",Placeholder="8 – 60",Numeric=false,Finished=false,Callback=function(v)
-        local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),8,60)
-        avoidBot.ORBIT_RADIUS=n; pcall(function() Fluent.Options.AvoidBotOrbit:SetValue(n) end)
-    end})
     toggleRefs["AvoidBot"]=sAB:AddToggle("AvoidBot",{Title="Enable Avoid Bot",Default=false,Callback=function(v)
         st.AvoidBot=v
         if v then enableAvoidBot()
@@ -2196,28 +2289,17 @@ local function buildMainTab()
     sFly:AddKeybind("KbFly",{Title="Keybind",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("Fly",new) end})
 
     local sESP=Tabs.Main:AddSection("ESP")
+    sESP:AddSlider("ESPWarnDist",{Title="Warning Distance (studs)",Default=40,Min=10,Max=150,Rounding=0,Callback=function(v) esp.warnDist=v end})
     toggleRefs["ESP"]=sESP:AddToggle("ESP",{Title="Enable ESP (Players)",Default=false,Callback=function(v)
         st.ESP=v
-        if v then buildESP()
-        else removeESP() end
+        if v then buildESP() else removeESP() end
     end})
-    sESP:AddKeybind("KbESP",{Title="Keybind",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("ESP",new) end})
-
-    local sEAI=Tabs.Main:AddSection("ESP AI")
-    toggleRefs["ESPAI"]=sEAI:AddToggle("ESPAI",{Title="Enable ESP Bot",Default=false,Callback=function(v)
-        -- Force outline-only + distance labels every time
-        espAi.FILL_TRANS    = 1.0
-        espAi.OUTLINE_TRANS = 0.0
-        if v then
-            enableAiESP()
-        else
-            disableAiESP()
-        end
+    toggleRefs["ESPAI"]=sESP:AddToggle("ESPAI",{Title="Enable ESP Bot",Default=false,Callback=function(v)
+        espAi.FILL_TRANS=1.0; espAi.OUTLINE_TRANS=0.0
+        if v then enableAiESP() else disableAiESP() end
     end})
-    sEAI:AddKeybind("KbESPAI",{Title="Keybind",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("ESPAI",new) end})
-    sEAI:AddButton({Title="Force Rescan Bots",Callback=function()
+    sESP:AddButton({Title="Force Rescan Bots",Callback=function()
         disableAiESP(); task.wait(0.1); enableAiESP()
-        
     end})
 
     local sJB=Tabs.Main:AddSection("Jump Boost")
@@ -2308,27 +2390,93 @@ local function buildMainTab()
     sAJ:AddKeybind("KbAutoJump",{Title="Keybind",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("AutoJump",new) end})
 
     local sBB = Tabs.Main:AddSection("Better Bounce")
-    sBB:AddSlider("BBYBoost",{Title="Jump Height Multiplier (higher = bounce higher)",Default=14,Min=10,Max=30,Rounding=0,Callback=function(v) bb.yBoost=v/10 end})
+    -- Base
+    sBB:AddSlider("BBYBoost",{Title="Jump Height Multiplier",Default=14,Min=10,Max=30,Rounding=0,Callback=function(v) bb.yBoost=v/10 end})
     sBB:AddSlider("BBRetain",{Title="Air Speed Retention (%)",Default=70,Min=0,Max=100,Rounding=0,Callback=function(v) bb.retainFactor=v/100 end})
     sBB:AddSlider("BBLanding",{Title="Landing Momentum Keep (%)",Default=55,Min=0,Max=90,Rounding=0,Callback=function(v) bb.landingKeep=v/100 end})
-    sBB:AddSlider("BBTriggerY",{Title="Bounce Detection Threshold (lower = more sensitive)",Default=8,Min=3,Max=30,Rounding=0,Callback=function(v) bb.minTriggerY=v end})
-    sBB:AddDropdown("BBPreset",{Title="Preset",Values={"Custom","Gentle (Subtle boost)","Standard (Balanced)","Aggressive (Max trimp)"},Default="Standard (Balanced)",Callback=function(v)
+    sBB:AddSlider("BBTriggerY",{Title="Bounce Sensitivity (lower = easier trigger)",Default=8,Min=3,Max=30,Rounding=0,Callback=function(v) bb.minTriggerY=v end})
+    -- [7] Momentum Banking
+    sBB:AddToggle("BBBankEnable",{Title="Momentum Banking",Default=true,Callback=function(v) bb.bankEnabled=v end})
+    sBB:AddSlider("BBBankWindow",{Title="Bank Window (×100ms)",Default=30,Min=5,Max=80,Rounding=0,Callback=function(v)
+        bb.bankWindow=v/100; pcall(function() Fluent.Options.BBBankWindowInput:SetValue(tostring(v)) end)
+    end})
+    sBB:AddInput("BBBankWindowInput",{Title="Set Bank Window",Default="30",Placeholder="5 – 80",Numeric=false,Finished=false,Callback=function(v)
+        local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),5,80)
+        bb.bankWindow=n/100; pcall(function() Fluent.Options.BBBankWindow:SetValue(n) end)
+    end})
+    sBB:AddSlider("BBBankBonus",{Title="Bank Bonus (%)",Default=35,Min=5,Max=80,Rounding=0,Callback=function(v)
+        bb.bankBonus=v/100; pcall(function() Fluent.Options.BBBankBonusInput:SetValue(tostring(v)) end)
+    end})
+    sBB:AddInput("BBBankBonusInput",{Title="Set Bank Bonus",Default="35",Placeholder="5 – 80",Numeric=false,Finished=false,Callback=function(v)
+        local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),5,80)
+        bb.bankBonus=n/100; pcall(function() Fluent.Options.BBBankBonus:SetValue(n) end)
+    end})
+    -- [8] Directional Boost
+    sBB:AddToggle("BBDirEnable",{Title="Directional Boost",Default=true,Callback=function(v) bb.dirBoostEnabled=v end})
+    sBB:AddSlider("BBDirBlend",{Title="Camera Blend (%)",Default=25,Min=0,Max=60,Rounding=0,Callback=function(v)
+        bb.dirBlend=v/100; pcall(function() Fluent.Options.BBDirBlendInput:SetValue(tostring(v)) end)
+    end})
+    sBB:AddInput("BBDirBlendInput",{Title="Set Camera Blend",Default="25",Placeholder="0 – 60",Numeric=false,Finished=false,Callback=function(v)
+        local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),0,60)
+        bb.dirBlend=n/100; pcall(function() Fluent.Options.BBDirBlend:SetValue(n) end)
+    end})
+    -- [9] Coyote Jump
+    sBB:AddToggle("BBCoyoteEnable",{Title="Coyote Jump",Default=true,Callback=function(v) bb.coyoteEnabled=v end})
+    sBB:AddSlider("BBCoyoteWindow",{Title="Coyote Window (×10ms)",Default=15,Min=3,Max=40,Rounding=0,Callback=function(v)
+        bb.coyoteWindow=v/100; pcall(function() Fluent.Options.BBCoyoteWindowInput:SetValue(tostring(v)) end)
+    end})
+    sBB:AddInput("BBCoyoteWindowInput",{Title="Set Coyote Window",Default="15",Placeholder="3 – 40",Numeric=false,Finished=false,Callback=function(v)
+        local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),3,40)
+        bb.coyoteWindow=n/100; pcall(function() Fluent.Options.BBCoyoteWindow:SetValue(n) end)
+    end})
+    -- Preset
+    sBB:AddDropdown("BBPreset",{Title="Preset",Values={"Gentle","Smooth","Medium","Standard","Aggressive"},Default="Standard",Callback=function(v)
         local s=tostring(v)
-        if s:find("Gentle") then
-            bb.yBoost=1.2; bb.retainFactor=0.45; bb.landingKeep=0.35; bb.minTriggerY=6
-            Fluent.Options.BBYBoost:SetValue(12); Fluent.Options.BBRetain:SetValue(45)
-            Fluent.Options.BBLanding:SetValue(35); Fluent.Options.BBTriggerY:SetValue(6)
-            
-        elseif s:find("Standard") then
-            bb.yBoost=1.4; bb.retainFactor=0.70; bb.landingKeep=0.55; bb.minTriggerY=8
+        if s=="Gentle" then
+            bb.yBoost=1.1; bb.retainFactor=0.35; bb.landingKeep=0.25; bb.minTriggerY=10
+            bb.bankEnabled=true; bb.bankWindow=0.20; bb.bankBonus=0.15
+            bb.dirBoostEnabled=false; bb.dirBlend=0.0
+            bb.coyoteEnabled=true; bb.coyoteWindow=0.10
+            Fluent.Options.BBYBoost:SetValue(11); Fluent.Options.BBRetain:SetValue(35)
+            Fluent.Options.BBLanding:SetValue(25); Fluent.Options.BBTriggerY:SetValue(10)
+            Fluent.Options.BBBankWindow:SetValue(20); Fluent.Options.BBBankBonus:SetValue(15)
+            Fluent.Options.BBDirBlend:SetValue(0); Fluent.Options.BBCoyoteWindow:SetValue(10)
+        elseif s=="Smooth" then
+            bb.yBoost=1.2; bb.retainFactor=0.50; bb.landingKeep=0.40; bb.minTriggerY=8
+            bb.bankEnabled=true; bb.bankWindow=0.25; bb.bankBonus=0.22
+            bb.dirBoostEnabled=true; bb.dirBlend=0.12
+            bb.coyoteEnabled=true; bb.coyoteWindow=0.12
+            Fluent.Options.BBYBoost:SetValue(12); Fluent.Options.BBRetain:SetValue(50)
+            Fluent.Options.BBLanding:SetValue(40); Fluent.Options.BBTriggerY:SetValue(8)
+            Fluent.Options.BBBankWindow:SetValue(25); Fluent.Options.BBBankBonus:SetValue(22)
+            Fluent.Options.BBDirBlend:SetValue(12); Fluent.Options.BBCoyoteWindow:SetValue(12)
+        elseif s=="Medium" then
+            bb.yBoost=1.3; bb.retainFactor=0.60; bb.landingKeep=0.48; bb.minTriggerY=7
+            bb.bankEnabled=true; bb.bankWindow=0.28; bb.bankBonus=0.28
+            bb.dirBoostEnabled=true; bb.dirBlend=0.18
+            bb.coyoteEnabled=true; bb.coyoteWindow=0.13
+            Fluent.Options.BBYBoost:SetValue(13); Fluent.Options.BBRetain:SetValue(60)
+            Fluent.Options.BBLanding:SetValue(48); Fluent.Options.BBTriggerY:SetValue(7)
+            Fluent.Options.BBBankWindow:SetValue(28); Fluent.Options.BBBankBonus:SetValue(28)
+            Fluent.Options.BBDirBlend:SetValue(18); Fluent.Options.BBCoyoteWindow:SetValue(13)
+        elseif s=="Standard" then
+            bb.yBoost=1.4; bb.retainFactor=0.70; bb.landingKeep=0.55; bb.minTriggerY=6
+            bb.bankEnabled=true; bb.bankWindow=0.30; bb.bankBonus=0.35
+            bb.dirBoostEnabled=true; bb.dirBlend=0.25
+            bb.coyoteEnabled=true; bb.coyoteWindow=0.15
             Fluent.Options.BBYBoost:SetValue(14); Fluent.Options.BBRetain:SetValue(70)
-            Fluent.Options.BBLanding:SetValue(55); Fluent.Options.BBTriggerY:SetValue(8)
-            
-        elseif s:find("Aggressive") then
-            bb.yBoost=1.8; bb.retainFactor=0.90; bb.landingKeep=0.75; bb.minTriggerY=5
+            Fluent.Options.BBLanding:SetValue(55); Fluent.Options.BBTriggerY:SetValue(6)
+            Fluent.Options.BBBankWindow:SetValue(30); Fluent.Options.BBBankBonus:SetValue(35)
+            Fluent.Options.BBDirBlend:SetValue(25); Fluent.Options.BBCoyoteWindow:SetValue(15)
+        elseif s=="Aggressive" then
+            bb.yBoost=1.8; bb.retainFactor=0.90; bb.landingKeep=0.75; bb.minTriggerY=4
+            bb.bankEnabled=true; bb.bankWindow=0.40; bb.bankBonus=0.50
+            bb.dirBoostEnabled=true; bb.dirBlend=0.50
+            bb.coyoteEnabled=true; bb.coyoteWindow=0.20
             Fluent.Options.BBYBoost:SetValue(18); Fluent.Options.BBRetain:SetValue(90)
-            Fluent.Options.BBLanding:SetValue(75); Fluent.Options.BBTriggerY:SetValue(5)
-            
+            Fluent.Options.BBLanding:SetValue(75); Fluent.Options.BBTriggerY:SetValue(4)
+            Fluent.Options.BBBankWindow:SetValue(40); Fluent.Options.BBBankBonus:SetValue(50)
+            Fluent.Options.BBDirBlend:SetValue(50); Fluent.Options.BBCoyoteWindow:SetValue(20)
         end
     end})
     toggleRefs["BetterBounce"]=sBB:AddToggle("BetterBounce",{Title="Enable Better Bounce",Default=false,Callback=function(v)
@@ -2470,6 +2618,9 @@ end
 buildMainTab()
 
 -- ════ EMOTE CHANGE TAB ════════════════════════════════════════
+-- ══════════════════════════════════════════════════════════════
+-- FAKE UNUSUAL  (clone real cosmetics từ ReplicatedStorage)
+-- ══════════════════════════════════════════════════════════════
 local function buildEmoteTab()
 
     -- ══════════════════════════════════════════════════════════
@@ -2715,6 +2866,60 @@ local function buildEmoteTab()
             enableAnimOverride()
         end
     end})
+
+    -- ════ CUSTOM UNUSUAL ══════════════════════════════════════════
+    local sCU = Tabs.Emote:AddSection("Custom Unusual")
+    sCU:AddDropdown("UnusualEffect", {
+        Title   = "Select Effect",
+        Values  = UNUSUAL_LIST,
+        Default = "Rainbow Fire",
+        Callback = function(v)
+            unusual.selected = tostring(v)
+            if unusual.enabled then applyUnusual() end
+        end,
+    })
+    sCU:AddDropdown("UnusualBodyPart", {
+        Title   = "Body Parts",
+        Values  = UNUSUAL_PART_KEYS,
+        Default = {},
+        Multi   = true,
+        Callback = function(v)
+            unusual.bodyParts = {}
+            for key, isOn in pairs(v) do
+                if isOn then unusual.bodyParts[tostring(key)] = true end
+            end
+            if unusual.enabled then applyUnusual() end
+        end,
+    })
+    task.defer(function()
+        local opt = Fluent.Options and Fluent.Options["UnusualBodyPart"]
+        if opt and opt.Value then
+            unusual.bodyParts = {}
+            for key, isOn in pairs(opt.Value) do
+                if isOn then unusual.bodyParts[tostring(key)] = true end
+            end
+        else
+            unusual.bodyParts = {}
+        end
+    end)
+    toggleRefs["UnusualEnable"] = sCU:AddToggle("UnusualEnable", {
+        Title    = "Enable Effect",
+        Default  = false,
+        Callback = function(v)
+            unusual.enabled = v
+            if v then applyUnusual() else unusualCleanup() end
+        end,
+    })
+    sCU:AddSlider("UnusualSize",{Title="Effect Size",Default=4,Min=1,Max=12,Rounding=0,Callback=function(v)
+        unusual.size=v; if unusual.enabled then applyUnusual() end
+    end})
+    sCU:AddSlider("UnusualHeat",{Title="Fire Heat (Fire only)",Default=9,Min=1,Max=25,Rounding=0,Callback=function(v) unusual.heat=v end})
+    sCU:AddSlider("UnusualOpacity",{Title="Smoke Opacity (Smoke only)",Default=8,Min=1,Max=10,Rounding=0,Callback=function(v) unusual.opacity=v/10 end})
+    sCU:AddSlider("UnusualSpeed",{Title="Color Cycle Speed",Default=6,Min=1,Max=30,Rounding=0,Callback=function(v) unusual.speed=v/10 end})
+    sCU:AddButton({Title="Reload Effect",Callback=function()
+        if unusual.enabled then applyUnusual() end
+    end})
+
 end
 buildEmoteTab()
 
@@ -2724,7 +2929,7 @@ local function buildCustomTab()
     sDex:AddParagraph({Title="Info",Content="Owner only"})
     sDex:AddButton({Title="Open Dex Explorer",Callback=function() openDexKeyUI() end})
 
-    local sWT=Tabs.Custom:AddSection("World Transparency")
+    local sWT=Tabs.Custom:AddSection("World Visibility")
     local transVals={"0% — Fully Visible","25% — Slight","50% — Half","75% — Mostly Hidden","100% — Invisible"}
     sWT:AddDropdown("WorldTrans",{Title="Transparency Level",Values=transVals,Default="0% — Fully Visible",Callback=function(v)
         local s=tostring(v); local level=0
@@ -2741,15 +2946,12 @@ local function buildCustomTab()
                 end
             end
         end)
-        
     end})
     sWT:AddButton({Title="Restore Visibility",Callback=function()
         for _,d in pairs(worldTransOrig) do pcall(function() if d.p and d.p.Parent then d.p.Transparency=d.t end end) end
-        worldTransOrig={}; 
+        worldTransOrig={}
     end})
-
-    local sWI=Tabs.Custom:AddSection("World Invisibility")
-    toggleRefs["WorldInvis"]=sWI:AddToggle("WorldInvis",{Title="World Invisibility",Default=false,Callback=function(v)
+    toggleRefs["WorldInvis"]=sWT:AddToggle("WorldInvis",{Title="World Invisibility (full)",Default=false,Callback=function(v)
         st.WorldInvis=v
         if v then
             worldInvisOrig={}; local char=player.Character
@@ -2759,10 +2961,9 @@ local function buildCustomTab()
                     worldInvisOrig[obj]=obj.Transparency; pcall(function() obj.Transparency=1 end)
                 end
             end
-            
         else
             for obj,t in pairs(worldInvisOrig) do pcall(function() if obj and obj.Parent then obj.Transparency=t end end) end
-            worldInvisOrig={}; 
+            worldInvisOrig={}
         end
     end})
 
@@ -2834,26 +3035,21 @@ local function buildCustomTab()
         applyCloudSettings(); 
     end})
 
-    local sSnow=Tabs.Custom:AddSection("Snow Settings")
-    sSnow:AddSlider("SnowFallSpeed",{Title="Fall Speed",Default=13,Min=2,Max=60,Rounding=0,Callback=function(v) snowCfg.fallSpeed=v; rebuildSnowEmitter(); pcall(function() Fluent.Options.SnowFallSpeedInput:SetValue(tostring(v)) end) end})
-    sSnow:AddInput("SnowFallSpeedInput",{Title="Set",Default="13",Placeholder="2 – 60",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),2,60); snowCfg.fallSpeed=n; rebuildSnowEmitter(); pcall(function() Fluent.Options.SnowFallSpeed:SetValue(n) end) end})
-    sSnow:AddSlider("SnowAmount",{Title="Particle Rate",Default=300,Min=50,Max=1000,Rounding=0,Callback=function(v) snowCfg.rate=v; rebuildSnowEmitter(); pcall(function() Fluent.Options.SnowAmountInput:SetValue(tostring(v)) end) end})
-    sSnow:AddInput("SnowAmountInput",{Title="Set",Default="300",Placeholder="50 – 1000",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),50,1000); snowCfg.rate=n; rebuildSnowEmitter(); pcall(function() Fluent.Options.SnowAmount:SetValue(n) end) end})
-    sSnow:AddSlider("SnowSize",{Title="Snowflake Size",Default=22,Min=5,Max=80,Rounding=0,Callback=function(v) snowCfg.size=v/100; rebuildSnowEmitter(); pcall(function() Fluent.Options.SnowSizeInput:SetValue(tostring(v)) end) end})
-    sSnow:AddInput("SnowSizeInput",{Title="Set",Default="22",Placeholder="5 – 80",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),5,80); snowCfg.size=n/100; rebuildSnowEmitter(); pcall(function() Fluent.Options.SnowSize:SetValue(n) end) end})
-
-    local sWEToggle=Tabs.Custom:AddSection("Weather Toggle")
-    toggleRefs["Snow"]=sWEToggle:AddToggle("SnowToggle",{Title="Snow",Default=false,Callback=function(v)
+    local sSnow=Tabs.Custom:AddSection("Weather & Snow")
+    sSnow:AddSlider("SnowFallSpeed",{Title="Fall Speed",Default=13,Min=2,Max=60,Rounding=0,Callback=function(v) snowCfg.fallSpeed=v; rebuildSnowEmitter() end})
+    sSnow:AddSlider("SnowAmount",{Title="Particle Rate",Default=300,Min=50,Max=1000,Rounding=0,Callback=function(v) snowCfg.rate=v; rebuildSnowEmitter() end})
+    sSnow:AddSlider("SnowSize",{Title="Snowflake Size",Default=22,Min=5,Max=80,Rounding=0,Callback=function(v) snowCfg.size=v/100; rebuildSnowEmitter() end})
+    sSnow:AddSlider("WeatherVolume",{Title="Sound Volume",Default=55,Min=0,Max=100,Rounding=0,Callback=function(v)
+        if weather.sound and weather.sound.Parent then pcall(function() weather.sound.Volume=v/100 end) end
+    end})
+    toggleRefs["Snow"]=sSnow:AddToggle("SnowToggle",{Title="Enable Snow",Default=false,Callback=function(v)
         if v then task.spawn(function() setWeather("Snow") end)
         else if not weather.switching then clearWeather() end end
     end})
-    sWEToggle:AddSlider("WeatherVolume",{Title="Weather Sound Volume",Default=55,Min=0,Max=100,Rounding=0,Callback=function(v)
-        if weather.sound and weather.sound.Parent then pcall(function() weather.sound.Volume=v/100 end) end
-    end})
-    sWEToggle:AddButton({Title="Clear Weather",Callback=function()
+    sSnow:AddButton({Title="Clear Weather",Callback=function()
         weather.switching=false
         if toggleRefs["Snow"] then toggleRefs["Snow"]:SetValue(false) end
-        clearWeather(); 
+        clearWeather()
     end})
 
     local sSK=Tabs.Custom:AddSection("Sky Change")
@@ -2928,96 +3124,6 @@ local function buildCustomTab()
         else  end
     end})
 
-    -- ── Custom Unusual ─────────────────────────────────────────
-    local sCU = Tabs.Custom:AddSection("Custom Unusual")
-
-    -- [1] Select Effect
-    sCU:AddDropdown("UnusualEffect", {
-        Title   = "Select Effect",
-        Values  = UNUSUAL_LIST,
-        Default = "Rainbow Fire",
-        Callback = function(v)
-            unusual.selected = tostring(v)
-            if unusual.enabled then applyUnusual() end
-        end,
-    })
-
-    -- [2] Body Part (multi-select dropdown) — nằm ngay dưới Select Effect
-    sCU:AddDropdown("UnusualBodyPart", {
-        Title   = "Body Parts",
-        Values  = UNUSUAL_PART_KEYS,
-        Default = {"Head"},
-        Multi   = true,
-        Callback = function(v)
-            -- Rebuild hoàn toàn từ callback — không giữ state cũ
-            unusual.bodyParts = {}
-            for key, isOn in pairs(v) do
-                if isOn then
-                    unusual.bodyParts[tostring(key)] = true
-                end
-            end
-            if unusual.enabled then applyUnusual() end
-        end,
-    })
-    -- Sync lại ngay sau khi tạo dropdown (phòng Fluent không fire callback khi init)
-    task.defer(function()
-        local opt = Fluent.Options and Fluent.Options["UnusualBodyPart"]
-        if opt and opt.Value then
-            unusual.bodyParts = {}
-            for key, isOn in pairs(opt.Value) do
-                if isOn then unusual.bodyParts[tostring(key)] = true end
-            end
-        else
-            unusual.bodyParts = {["Head"] = true}  -- safe fallback
-        end
-    end)
-
-    -- [3] Enable toggle
-    toggleRefs["UnusualEnable"] = sCU:AddToggle("UnusualEnable", {
-        Title    = "Enable Effect",
-        Default  = false,
-        Callback = function(v)
-            unusual.enabled = v
-            if v then applyUnusual() else unusualCleanup() end
-        end,
-    })
-
-    -- [4] Sliders
-    sCU:AddSlider("UnusualSize", {
-        Title    = "Effect Size",
-        Default  = 4, Min = 1, Max = 12, Rounding = 0,
-        Callback = function(v)
-            unusual.size = v
-            if unusual.enabled then applyUnusual() end
-        end,
-    })
-    sCU:AddSlider("UnusualHeat", {
-        Title    = "Fire Heat (Fire only)",
-        Default  = 9, Min = 1, Max = 25, Rounding = 0,
-        Callback = function(v)
-            unusual.heat = v
-        end,
-    })
-    sCU:AddSlider("UnusualOpacity", {
-        Title    = "Smoke Opacity (Smoke only)",
-        Default  = 8, Min = 1, Max = 10, Rounding = 0,
-        Callback = function(v)
-            unusual.opacity = v / 10
-        end,
-    })
-    sCU:AddSlider("UnusualSpeed", {
-        Title    = "Color Cycle Speed",
-        Default  = 6, Min = 1, Max = 30, Rounding = 0,
-        Callback = function(v)
-            unusual.speed = v / 10
-        end,
-    })
-
-    -- [5] Reload (no icon)
-    sCU:AddButton({Title = "Reload Effect", Callback = function()
-        if unusual.enabled then applyUnusual() end
-    end})
-
     buildLightingEditor()
     buildAtmosphereEditor()
     buildPostProcessingEditor()
@@ -3030,17 +3136,40 @@ function buildLightingEditor()
         return eff
     end
     local origLightFull={Brightness=Lighting.Brightness,ClockTime=Lighting.ClockTime,GlobalShadows=Lighting.GlobalShadows,ExposureCompensation=Lighting.ExposureCompensation,Ambient=Lighting.Ambient,OutdoorAmbient=Lighting.OutdoorAmbient}
+    local origAtmo={}
+    local atmo0=Lighting:FindFirstChildOfClass("Atmosphere")
+    if atmo0 then origAtmo={Density=atmo0.Density,Offset=atmo0.Offset,Haze=atmo0.Haze,Color=atmo0.Color,Decay=atmo0.Decay}
+    else origAtmo={Density=0,Offset=0,Haze=0,Color=Color3.fromRGB(199,199,199),Decay=Color3.fromRGB(106,127,139)} end
+    local origPostCC={}; local origPostBloom={}; local origPostSR={}; local origPostBlur={}
+    local cc0=Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
+    if cc0 then origPostCC={Brightness=cc0.Brightness,Contrast=cc0.Contrast,Saturation=cc0.Saturation,TintColor=cc0.TintColor}
+    else origPostCC={Brightness=0,Contrast=0,Saturation=0,TintColor=Color3.new(1,1,1)} end
+    local bl0=Lighting:FindFirstChildOfClass("BloomEffect"); if bl0 then origPostBloom={Intensity=bl0.Intensity} else origPostBloom={Intensity=0.1} end
+    local sr0=Lighting:FindFirstChildOfClass("SunRaysEffect"); if sr0 then origPostSR={Intensity=sr0.Intensity} else origPostSR={Intensity=0.1} end
+    local blur0=Lighting:FindFirstChildOfClass("BlurEffect"); if blur0 then origPostBlur={Size=blur0.Size} else origPostBlur={Size=0} end
+    local origShiftTop=Lighting.ColorShift_Top; local origShiftBottom=Lighting.ColorShift_Bottom
+
     local sLE=Tabs.Custom:AddSection("Lighting Editor")
-    sLE:AddSlider("LEBrightness",{Title="Brightness",Default=math.floor(Lighting.Brightness*10)/10,Min=0,Max=10,Rounding=1,Callback=function(v) pcall(function() Lighting.Brightness=v end); pcall(function() Fluent.Options.LEBrightnessInput:SetValue(tostring(v)) end) end})
-    sLE:AddInput("LEBrightnessInput",{Title="Set",Default="",Placeholder="0 – 10",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; n=math.clamp(n,0,10); pcall(function() Lighting.Brightness=n end); pcall(function() Fluent.Options.LEBrightness:SetValue(n) end) end})
-    sLE:AddSlider("LEClockTime",{Title="Clock Time (0–24h)",Default=math.floor(Lighting.ClockTime*10)/10,Min=0,Max=24,Rounding=1,Callback=function(v) pcall(function() Lighting.ClockTime=v end); pcall(function() Fluent.Options.LEClockTimeInput:SetValue(tostring(v)) end) end})
-    sLE:AddInput("LEClockTimeInput",{Title="Set",Default="",Placeholder="0 – 24",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; n=math.clamp(n,0,24); pcall(function() Lighting.ClockTime=n end); pcall(function() Fluent.Options.LEClockTime:SetValue(n) end) end})
-    sLE:AddSlider("LEExposure",{Title="Exposure Compensation",Default=0,Min=-5,Max=5,Rounding=1,Callback=function(v) pcall(function() Lighting.ExposureCompensation=v end); pcall(function() Fluent.Options.LEExposureInput:SetValue(tostring(v)) end) end})
-    sLE:AddInput("LEExposureInput",{Title="Set",Default="0",Placeholder="-5 – 5",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; n=math.clamp(n,-5,5); pcall(function() Lighting.ExposureCompensation=n end); pcall(function() Fluent.Options.LEExposure:SetValue(n) end) end})
+    -- Base lighting
+    sLE:AddSlider("LEBrightness",{Title="Brightness",Default=math.floor(Lighting.Brightness*10)/10,Min=0,Max=10,Rounding=1,Callback=function(v) pcall(function() Lighting.Brightness=v end) end})
+    sLE:AddSlider("LEClockTime",{Title="Clock Time (0–24h)",Default=math.floor(Lighting.ClockTime*10)/10,Min=0,Max=24,Rounding=1,Callback=function(v) pcall(function() Lighting.ClockTime=v end) end})
+    sLE:AddSlider("LEExposure",{Title="Exposure Compensation",Default=0,Min=-5,Max=5,Rounding=1,Callback=function(v) pcall(function() Lighting.ExposureCompensation=v end) end})
     toggleRefs["LEShadows"]=sLE:AddToggle("LEShadows",{Title="Global Shadows",Default=Lighting.GlobalShadows,Callback=function(v) pcall(function() Lighting.GlobalShadows=v end) end})
     sLE:AddColorpicker("LEAmbient",{Title="Ambient Color",Default=Lighting.Ambient,Callback=function(v) pcall(function() Lighting.Ambient=v end) end})
     sLE:AddColorpicker("LEOutdoorAmbient",{Title="Outdoor Ambient",Default=Lighting.OutdoorAmbient,Callback=function(v) pcall(function() Lighting.OutdoorAmbient=v end) end})
-    sLE:AddDropdown("QuickColorPreset",{Title="Quick Color Preset",Values={"Night (Realistic)","Sunset (Realistic)","Sunrise (Realistic)","Rainy (Realistic)","Cloudy (Realistic)"},Default="Night (Realistic)",Callback=function(v) end})
+    -- Atmosphere
+    sLE:AddSlider("ATMDensity",{Title="Atmosphere Density",Default=math.floor((origAtmo.Density or 0)*100)/100,Min=0,Max=1,Rounding=2,Callback=function(v) local a=Lighting:FindFirstChildOfClass("Atmosphere"); if a then pcall(function() a.Density=v end) end end})
+    sLE:AddSlider("ATMHaze",{Title="Atmosphere Haze",Default=math.floor((origAtmo.Haze or 0)*10)/10,Min=0,Max=10,Rounding=1,Callback=function(v) local a=Lighting:FindFirstChildOfClass("Atmosphere"); if a then pcall(function() a.Haze=v end) end end})
+    sLE:AddColorpicker("ATMColor",{Title="Atmosphere Color",Default=origAtmo.Color or Color3.fromRGB(199,199,199),Callback=function(v) local a=Lighting:FindFirstChildOfClass("Atmosphere"); if a then pcall(function() a.Color=v end) end end})
+    -- Post-Processing
+    sLE:AddSlider("PPBrightness",{Title="CC Brightness",Default=origPostCC.Brightness or 0,Min=-1,Max=1,Rounding=2,Callback=function(v) local cc=getOrCreate("ColorCorrectionEffect"); pcall(function() cc.Brightness=v end) end})
+    sLE:AddSlider("PPContrast",{Title="CC Contrast",Default=origPostCC.Contrast or 0,Min=-1,Max=1,Rounding=2,Callback=function(v) local cc=getOrCreate("ColorCorrectionEffect"); pcall(function() cc.Contrast=v end) end})
+    sLE:AddSlider("PPSaturation",{Title="CC Saturation",Default=origPostCC.Saturation or 0,Min=-1,Max=1,Rounding=2,Callback=function(v) local cc=getOrCreate("ColorCorrectionEffect"); pcall(function() cc.Saturation=v end) end})
+    sLE:AddSlider("PPBloomIntensity",{Title="Bloom Intensity",Default=origPostBloom.Intensity or 0.1,Min=0,Max=2,Rounding=2,Callback=function(v) local bl=getOrCreate("BloomEffect"); pcall(function() bl.Intensity=v end) end})
+    sLE:AddSlider("PPBlurSize",{Title="Blur",Default=origPostBlur.Size or 0,Min=0,Max=56,Rounding=0,Callback=function(v) local blur=getOrCreate("BlurEffect"); pcall(function() blur.Size=v end) end})
+    sLE:AddColorpicker("PPTintColor",{Title="Tint Color",Default=origPostCC.TintColor or Color3.new(1,1,1),Callback=function(v) local cc=getOrCreate("ColorCorrectionEffect"); pcall(function() cc.TintColor=v end) end})
+    -- Presets and Reset
+    sLE:AddDropdown("QuickColorPreset",{Title="Quick Preset",Values={"Night (Realistic)","Sunset (Realistic)","Sunrise (Realistic)","Rainy (Realistic)","Cloudy (Realistic)"},Default="Night (Realistic)",Callback=function(v) end})
     sLE:AddButton({Title="Apply Selected Preset",Callback=function()
         local sel=Fluent.Options.QuickColorPreset and tostring(Fluent.Options.QuickColorPreset.Value) or ""
         if sel=="" then return end
@@ -3050,117 +3179,55 @@ function buildLightingEditor()
             pcall(function() Lighting.Brightness=0.2; Lighting.ClockTime=21; Lighting.GlobalShadows=true; Lighting.Ambient=Color3.fromRGB(10,15,40); Lighting.OutdoorAmbient=Color3.fromRGB(5,8,25) end)
             if atmo then pcall(function() atmo.Density=0.45; atmo.Haze=1.5; atmo.Color=Color3.fromRGB(10,18,55) end) end
             pcall(function() cc.Brightness=-0.1; cc.Saturation=-0.15; bl.Intensity=0.4; sr.Intensity=0.05 end)
-            
         elseif sel=="Sunset (Realistic)" then
             pcall(function() Lighting.Brightness=1.8; Lighting.ClockTime=18.5 end)
             if atmo then pcall(function() atmo.Density=0.28; atmo.Haze=3.0; atmo.Color=Color3.fromRGB(255,130,50) end) end
             pcall(function() cc.Brightness=0.06; cc.Saturation=0.30; bl.Intensity=1.0; sr.Intensity=0.75 end)
-            
         elseif sel=="Sunrise (Realistic)" then
             pcall(function() Lighting.Brightness=1.2; Lighting.ClockTime=5.5 end)
             if atmo then pcall(function() atmo.Density=0.18; atmo.Haze=2.2; atmo.Color=Color3.fromRGB(255,160,100) end) end
             pcall(function() cc.Brightness=0.03; cc.Saturation=0.15; bl.Intensity=0.65; sr.Intensity=0.55 end)
-            
         elseif sel=="Rainy (Realistic)" then
             pcall(function() Lighting.Brightness=0.8; Lighting.ClockTime=14 end)
             if atmo then pcall(function() atmo.Density=0.68; atmo.Haze=4.5; atmo.Color=Color3.fromRGB(100,110,135) end) end
             pcall(function() cc.Brightness=-0.05; cc.Saturation=-0.28; bl.Intensity=0.08; sr.Intensity=0.0 end)
-            
         elseif sel=="Cloudy (Realistic)" then
             pcall(function() Lighting.Brightness=1.5; Lighting.ClockTime=12 end)
             if atmo then pcall(function() atmo.Density=0.30; atmo.Haze=2.0; atmo.Color=Color3.fromRGB(160,168,180) end) end
             pcall(function() cc.Brightness=0.0; cc.Saturation=-0.10; bl.Intensity=0.18; sr.Intensity=0.08 end)
-            
         end
     end})
     sLE:AddButton({Title="Preset: Fullbright",Callback=function()
         pcall(function() Lighting.Brightness=3; Lighting.ClockTime=14; Lighting.GlobalShadows=false; Lighting.Ambient=Color3.fromRGB(178,178,178); Lighting.OutdoorAmbient=Color3.fromRGB(178,178,178) end)
         Fluent.Options.LEBrightness:SetValue(3); Fluent.Options.LEClockTime:SetValue(14)
-        
     end})
-    sLE:AddButton({Title="Reset Lighting",Callback=function()
+    sLE:AddButton({Title="Reset All Lighting",Callback=function()
         pcall(function() for prop,val in pairs(origLightFull) do Lighting[prop]=val end end)
-        Fluent.Options.LEBrightness:SetValue(math.floor(origLightFull.Brightness*10)/10)
-        Fluent.Options.LEClockTime:SetValue(math.floor(origLightFull.ClockTime*10)/10)
-        if toggleRefs.LEShadows then toggleRefs.LEShadows:SetValue(origLightFull.GlobalShadows) end
-        
-    end})
-end
-
-function buildAtmosphereEditor()
-    local origAtmo={}
-    local atmo0=Lighting:FindFirstChildOfClass("Atmosphere")
-    if atmo0 then origAtmo={Density=atmo0.Density,Offset=atmo0.Offset,Haze=atmo0.Haze,Color=atmo0.Color,Decay=atmo0.Decay}
-    else origAtmo={Density=0,Offset=0,Haze=0,Color=Color3.fromRGB(199,199,199),Decay=Color3.fromRGB(106,127,139)} end
-    local sATM=Tabs.Custom:AddSection("Lighting — Atmosphere")
-    sATM:AddSlider("ATMDensity",{Title="Density",Default=math.floor((origAtmo.Density or 0)*100)/100,Min=0,Max=1,Rounding=2,Callback=function(v) local a=Lighting:FindFirstChildOfClass("Atmosphere"); if a then pcall(function() a.Density=v end) end; pcall(function() Fluent.Options.ATMDensityInput:SetValue(tostring(v)) end) end})
-    sATM:AddInput("ATMDensityInput",{Title="Set",Default="0",Placeholder="0 – 1",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; n=math.clamp(n,0,1); local a=Lighting:FindFirstChildOfClass("Atmosphere"); if a then pcall(function() a.Density=n end) end; pcall(function() Fluent.Options.ATMDensity:SetValue(n) end) end})
-    sATM:AddSlider("ATMOffset",{Title="Offset",Default=math.floor((origAtmo.Offset or 0)*100)/100,Min=0,Max=1,Rounding=2,Callback=function(v) local a=Lighting:FindFirstChildOfClass("Atmosphere"); if a then pcall(function() a.Offset=v end) end; pcall(function() Fluent.Options.ATMOffsetInput:SetValue(tostring(v)) end) end})
-    sATM:AddInput("ATMOffsetInput",{Title="Set",Default="0",Placeholder="0 – 1",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; n=math.clamp(n,0,1); local a=Lighting:FindFirstChildOfClass("Atmosphere"); if a then pcall(function() a.Offset=n end) end; pcall(function() Fluent.Options.ATMOffset:SetValue(n) end) end})
-    sATM:AddSlider("ATMHaze",{Title="Haze",Default=math.floor((origAtmo.Haze or 0)*10)/10,Min=0,Max=10,Rounding=1,Callback=function(v) local a=Lighting:FindFirstChildOfClass("Atmosphere"); if a then pcall(function() a.Haze=v end) end; pcall(function() Fluent.Options.ATMHazeInput:SetValue(tostring(v)) end) end})
-    sATM:AddInput("ATMHazeInput",{Title="Set",Default="0",Placeholder="0 – 10",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; n=math.clamp(n,0,10); local a=Lighting:FindFirstChildOfClass("Atmosphere"); if a then pcall(function() a.Haze=n end) end; pcall(function() Fluent.Options.ATMHaze:SetValue(n) end) end})
-    sATM:AddColorpicker("ATMColor",{Title="Atmosphere Color",Default=origAtmo.Color or Color3.fromRGB(199,199,199),Callback=function(v) local a=Lighting:FindFirstChildOfClass("Atmosphere"); if a then pcall(function() a.Color=v end) end end})
-    sATM:AddColorpicker("ATMDecay",{Title="Atmosphere Decay",Default=origAtmo.Decay or Color3.fromRGB(106,127,139),Callback=function(v) local a=Lighting:FindFirstChildOfClass("Atmosphere"); if a then pcall(function() a.Decay=v end) end end})
-    sATM:AddButton({Title="Clear All Fog",Callback=function()
-        local a=Lighting:FindFirstChildOfClass("Atmosphere")
-        if a then pcall(function() a.Density=0; a.Haze=0; a.Offset=0 end); Fluent.Options.ATMDensity:SetValue(0); Fluent.Options.ATMHaze:SetValue(0); Fluent.Options.ATMOffset:SetValue(0) end
-        
-    end})
-    sATM:AddButton({Title="Reset Atmosphere",Callback=function()
         local a=Lighting:FindFirstChildOfClass("Atmosphere")
         if a then pcall(function() a.Density=origAtmo.Density; a.Offset=origAtmo.Offset; a.Haze=origAtmo.Haze; a.Color=origAtmo.Color; a.Decay=origAtmo.Decay end) end
-        
-    end})
-end
-
-function buildPostProcessingEditor()
-    local function getOrCreate(className)
-        local eff=Lighting:FindFirstChildOfClass(className)
-        if not eff then eff=Instance.new(className); eff.Parent=Lighting end
-        return eff
-    end
-    local origPostCC={}; local origPostBloom={}; local origPostSR={}; local origPostBlur={}
-    local cc0=Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
-    if cc0 then origPostCC={Brightness=cc0.Brightness,Contrast=cc0.Contrast,Saturation=cc0.Saturation,TintColor=cc0.TintColor}
-    else origPostCC={Brightness=0,Contrast=0,Saturation=0,TintColor=Color3.new(1,1,1)} end
-    local bl0=Lighting:FindFirstChildOfClass("BloomEffect"); if bl0 then origPostBloom={Intensity=bl0.Intensity} else origPostBloom={Intensity=0.1} end
-    local sr0=Lighting:FindFirstChildOfClass("SunRaysEffect"); if sr0 then origPostSR={Intensity=sr0.Intensity} else origPostSR={Intensity=0.1} end
-    local blur0=Lighting:FindFirstChildOfClass("BlurEffect"); if blur0 then origPostBlur={Size=blur0.Size} else origPostBlur={Size=0} end
-    local origShiftTop=Lighting.ColorShift_Top; local origShiftBottom=Lighting.ColorShift_Bottom
-    local sPP=Tabs.Custom:AddSection("Lighting — Post-Processing")
-    sPP:AddSlider("PPBrightness",{Title="CC Brightness",Default=origPostCC.Brightness or 0,Min=-1,Max=1,Rounding=2,Callback=function(v) local cc=getOrCreate("ColorCorrectionEffect"); pcall(function() cc.Brightness=v end); pcall(function() Fluent.Options.PPBrightnessInput:SetValue(tostring(v)) end) end})
-    sPP:AddInput("PPBrightnessInput",{Title="Set",Default="0",Placeholder="-1 – 1",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; n=math.clamp(n,-1,1); local cc=getOrCreate("ColorCorrectionEffect"); pcall(function() cc.Brightness=n end); pcall(function() Fluent.Options.PPBrightness:SetValue(n) end) end})
-    sPP:AddSlider("PPContrast",{Title="CC Contrast",Default=origPostCC.Contrast or 0,Min=-1,Max=1,Rounding=2,Callback=function(v) local cc=getOrCreate("ColorCorrectionEffect"); pcall(function() cc.Contrast=v end); pcall(function() Fluent.Options.PPContrastInput:SetValue(tostring(v)) end) end})
-    sPP:AddInput("PPContrastInput",{Title="Set",Default="0",Placeholder="-1 – 1",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; n=math.clamp(n,-1,1); local cc=getOrCreate("ColorCorrectionEffect"); pcall(function() cc.Contrast=n end); pcall(function() Fluent.Options.PPContrast:SetValue(n) end) end})
-    sPP:AddSlider("PPSaturation",{Title="CC Saturation",Default=origPostCC.Saturation or 0,Min=-1,Max=1,Rounding=2,Callback=function(v) local cc=getOrCreate("ColorCorrectionEffect"); pcall(function() cc.Saturation=v end); pcall(function() Fluent.Options.PPSaturationInput:SetValue(tostring(v)) end) end})
-    sPP:AddInput("PPSaturationInput",{Title="Set",Default="0",Placeholder="-1 – 1",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; n=math.clamp(n,-1,1); local cc=getOrCreate("ColorCorrectionEffect"); pcall(function() cc.Saturation=n end); pcall(function() Fluent.Options.PPSaturation:SetValue(n) end) end})
-    sPP:AddColorpicker("PPTintColor",{Title="Tint Color",Default=origPostCC.TintColor or Color3.new(1,1,1),Callback=function(v) local cc=getOrCreate("ColorCorrectionEffect"); pcall(function() cc.TintColor=v end) end})
-    sPP:AddSlider("PPBloomIntensity",{Title="Bloom Intensity",Default=origPostBloom.Intensity or 0.1,Min=0,Max=2,Rounding=2,Callback=function(v) local bl=getOrCreate("BloomEffect"); pcall(function() bl.Intensity=v end); pcall(function() Fluent.Options.PPBloomIntensityInput:SetValue(tostring(v)) end) end})
-    sPP:AddInput("PPBloomIntensityInput",{Title="Set",Default="0.1",Placeholder="0 – 2",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; n=math.clamp(n,0,2); local bl=getOrCreate("BloomEffect"); pcall(function() bl.Intensity=n end); pcall(function() Fluent.Options.PPBloomIntensity:SetValue(n) end) end})
-    sPP:AddSlider("PPSunRaysIntensity",{Title="SunRays Intensity",Default=origPostSR.Intensity or 0.1,Min=0,Max=1,Rounding=2,Callback=function(v) local sr=getOrCreate("SunRaysEffect"); pcall(function() sr.Intensity=v end); pcall(function() Fluent.Options.PPSunRaysIntensityInput:SetValue(tostring(v)) end) end})
-    sPP:AddInput("PPSunRaysIntensityInput",{Title="Set",Default="0.1",Placeholder="0 – 1",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; n=math.clamp(n,0,1); local sr=getOrCreate("SunRaysEffect"); pcall(function() sr.Intensity=n end); pcall(function() Fluent.Options.PPSunRaysIntensity:SetValue(n) end) end})
-    sPP:AddSlider("PPBlurSize",{Title="Blur Intensity",Default=origPostBlur.Size or 0,Min=0,Max=56,Rounding=0,Callback=function(v) local blur=getOrCreate("BlurEffect"); pcall(function() blur.Size=v end); pcall(function() Fluent.Options.PPBlurSizeInput:SetValue(tostring(v)) end) end})
-    sPP:AddInput("PPBlurSizeInput",{Title="Set",Default="0",Placeholder="0 – 56",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),0,56); local blur=getOrCreate("BlurEffect"); pcall(function() blur.Size=n end); pcall(function() Fluent.Options.PPBlurSize:SetValue(n) end) end})
-    sPP:AddColorpicker("PPColorShiftTop",{Title="ColorShift Top",Default=origShiftTop,Callback=function(v) pcall(function() Lighting.ColorShift_Top=v end) end})
-    sPP:AddColorpicker("PPColorShiftBottom",{Title="ColorShift Bottom",Default=origShiftBottom,Callback=function(v) pcall(function() Lighting.ColorShift_Bottom=v end) end})
-    sPP:AddButton({Title="Reset Post-Processing",Callback=function()
         pcall(function()
             local cc=Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
             if cc then cc.Brightness=origPostCC.Brightness; cc.Contrast=origPostCC.Contrast; cc.Saturation=origPostCC.Saturation; cc.TintColor=origPostCC.TintColor end
-            local bl=Lighting:FindFirstChildOfClass("BloomEffect"); if bl then bl.Intensity=origPostBloom.Intensity end
-            local sr=Lighting:FindFirstChildOfClass("SunRaysEffect"); if sr then sr.Intensity=origPostSR.Intensity end
-            local blur=Lighting:FindFirstChildOfClass("BlurEffect"); if blur then blur.Size=origPostBlur.Size end
+            local bl2=Lighting:FindFirstChildOfClass("BloomEffect"); if bl2 then bl2.Intensity=origPostBloom.Intensity end
+            local sr2=Lighting:FindFirstChildOfClass("SunRaysEffect"); if sr2 then sr2.Intensity=origPostSR.Intensity end
+            local blur2=Lighting:FindFirstChildOfClass("BlurEffect"); if blur2 then blur2.Size=origPostBlur.Size end
             Lighting.ColorShift_Top=origShiftTop; Lighting.ColorShift_Bottom=origShiftBottom
         end)
-        
+        Fluent.Options.LEBrightness:SetValue(math.floor(origLightFull.Brightness*10)/10)
+        Fluent.Options.LEClockTime:SetValue(math.floor(origLightFull.ClockTime*10)/10)
+        if toggleRefs.LEShadows then toggleRefs.LEShadows:SetValue(origLightFull.GlobalShadows) end
     end})
 end
+
+function buildAtmosphereEditor() end
+function buildPostProcessingEditor() end
 buildCustomTab()
 
 -- ════ FARM TAB ════════════════════════════════════════════════
 local function buildFarmTab()
     local sFM=Tabs.Farm:AddSection("Auto Farm")
-    sFM:AddDropdown("FarmMethod",{Title="Method",Values={"Method 1","Method 2","Method 3"},Default="Method 1",Callback=function(v)
+    -- Auto Farm
+    sFM:AddDropdown("FarmMethod",{Title="Farm Method",Values={"Method 1","Method 2","Method 3"},Default="Method 1",Callback=function(v)
         local s=tostring(v)
         if s:find("Method 1") then farm.method=1 elseif s:find("Method 2") then farm.method=2 elseif s:find("Method 3") then farm.method=3 end
         if farm.active then stopAutoFarm(); task.wait(0.2); startAutoFarm() end
@@ -3169,65 +3236,50 @@ local function buildFarmTab()
         st.AutoFarm=v; if v then startAutoFarm() else stopAutoFarm() end
     end})
     sFM:AddKeybind("KbAutoFarm",{Title="Keybind",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("AutoFarm",new) end})
+    sFM:AddButton({Title="Reset Phase 1 (M1)",Callback=function()
+        if farm.active and farm.method==1 then farm.phase=1; farmTP() end
+    end})
+    sFM:AddButton({Title="Return to Surface (M3)",Callback=function()
+        if farm.method==3 then
+            local c=player.Character; if not c then return end
+            local h=c:FindFirstChild("HumanoidRootPart")
+            if h then h.CFrame=CFrame.new(0,5,0); h.AssemblyLinearVelocity=Vector3.new() end
+        end
+    end})
 
-    -- ── Auto Vote Map ─────────────────────────────────────────
-    local sVote = Tabs.Farm:AddSection("Auto Vote Map")
+    -- Auto Vote
     local autoVoteConn  = nil
     local autoVoteMode  = "Easiest First"
-
     local VOTE_PRIORITIES = {
         ["Easiest First"] = {"EASY", "NORMAL", "HARD", "EXPERT"},
         ["Hardest First"] = {"EXPERT", "HARD", "NORMAL", "EASY"},
         ["Random"]        = nil,
     }
-
     local function executeAutoVote()
         if not st.AutoVote then return end
-        local playerGui = player:FindFirstChild("PlayerGui")
-        if not playerGui then return end
-
-        -- Find Vote frame (confirmed path: PlayerGui.Global.CanDisable.Vote)
+        local playerGui = player:FindFirstChild("PlayerGui"); if not playerGui then return end
         local voteFrame = nil
         for _, desc in pairs(playerGui:GetDescendants()) do
-            if desc.Name == "Vote" and desc:IsA("Frame") and desc.Visible then
-                voteFrame = desc; break
-            end
+            if desc.Name == "Vote" and desc:IsA("Frame") and desc.Visible then voteFrame = desc; break end
         end
         if not voteFrame then return end
-
-        -- Wait until Choices has all 4 slots populated
         local choices = nil
         for _ = 1, 20 do
             choices = voteFrame:FindFirstChild("Choices")
             if choices and #choices:GetChildren() >= 4 then break end
             task.wait(0.2)
         end
-        if not choices then
-            
-            return
-        end
-
-        -- Read all 4 slots
-        -- Path: Choices → "1"/"2"/"3"/"4" → ImageButton → Difficulty / Title
+        if not choices then return end
         local slots = {}
         for i = 1, 4 do
             local container = choices:FindFirstChild(tostring(i))
             if container then
-                -- The child named "ImageButton" (confirmed from logs)
-                local imgBtn = container:FindFirstChild("ImageButton")
-                           or container:FindFirstChildOfClass("ImageButton")
-                           or container
+                local imgBtn = container:FindFirstChild("ImageButton") or container:FindFirstChildOfClass("ImageButton") or container
                 local diffLabel  = imgBtn and imgBtn:FindFirstChild("Difficulty")
                 local titleLabel = imgBtn and imgBtn:FindFirstChild("Title")
-                slots[i] = {
-                    button     = imgBtn,
-                    difficulty = diffLabel  and diffLabel.Text  or "UNKNOWN",
-                    mapName    = titleLabel and titleLabel.Text or "Slot "..i,
-                }
+                slots[i] = {button=imgBtn, difficulty=diffLabel and diffLabel.Text or "UNKNOWN", mapName=titleLabel and titleLabel.Text or "Slot "..i}
             end
         end
-
-        -- Pick target by mode
         local target = nil
         if autoVoteMode == "Random" then
             local available = {}
@@ -3236,111 +3288,58 @@ local function buildFarmTab()
         else
             local priority = VOTE_PRIORITIES[autoVoteMode] or VOTE_PRIORITIES["Easiest First"]
             for _, pref in ipairs(priority) do
-                for i = 1, 4 do
-                    if slots[i] and slots[i].difficulty == pref then
-                        target = slots[i]; break
-                    end
-                end
+                for i = 1, 4 do if slots[i] and slots[i].difficulty == pref then target = slots[i]; break end end
                 if target then break end
             end
         end
-
-        -- Fallback slot 4
         if not target then target = slots[4] end
-        if not target or not target.button then
-            
-            return
-        end
-
+        if not target or not target.button then return end
         local btn = target.button
-        local cx  = math.floor(btn.AbsolutePosition.X + btn.AbsoluteSize.X * 0.5)
-        local cy  = math.floor(btn.AbsolutePosition.Y + btn.AbsoluteSize.Y * 0.5)
+        local cx = math.floor(btn.AbsolutePosition.X + btn.AbsoluteSize.X * 0.5)
+        local cy = math.floor(btn.AbsolutePosition.Y + btn.AbsoluteSize.Y * 0.5)
         pcall(function() VIM:SendMouseMovementEvent(cx, cy, false, game) end)
         task.wait(0.05)
-        pcall(function()
-            VIM:SendMouseButtonEvent(cx, cy, 0, true,  game, 1)
-            task.wait(0.08)
-            VIM:SendMouseButtonEvent(cx, cy, 0, false, game, 1)
-        end)
-        
+        pcall(function() VIM:SendMouseButtonEvent(cx, cy, 0, true, game, 1); task.wait(0.08); VIM:SendMouseButtonEvent(cx, cy, 0, false, game, 1) end)
     end
-
-    sVote:AddDropdown("VoteMode", {
-        Title   = "Vote Priority",
-        Values  = {"Easiest First", "Hardest First", "Random"},
-        Default = "Easiest First",
-        Callback = function(v)
-            autoVoteMode = tostring(v)
-            
-        end,
-    })
-
-    toggleRefs["AutoVote"] = sVote:AddToggle("AutoVote", {
-        Title   = "Enable Auto Vote",
-        Default = false,
-        Callback = function(v)
-            st.AutoVote = v
-            if v then
-                task.spawn(function()
-                    local playerGui = player:WaitForChild("PlayerGui")
-                    if autoVoteConn then autoVoteConn:Disconnect() end
-
-                    -- Continuous scan: check every 2s if Vote frame is visible
-                    -- This way it works whether toggled before or during the vote screen
-                    local voteLastCheck = 0
-                    autoVoteConn = RunService.Heartbeat:Connect(function()
-                        if not st.AutoVote then return end
-                        -- Throttle to once per 2 seconds
-                        if tick() - voteLastCheck < 2 then return end
-                        voteLastCheck = tick()
-
-                        for _, desc in pairs(playerGui:GetDescendants()) do
-                            if desc.Name == "Vote" and desc:IsA("Frame") and desc.Visible then
-                                -- Vote screen is open — vote if not already voted
-                                local choices = desc:FindFirstChild("Choices")
-                                if choices then
-                                    -- Check if already voted (any slot shows Voted=true visible)
-                                    local alreadyVoted = false
-                                    for i = 1, 4 do
-                                        local container = choices:FindFirstChild(tostring(i))
-                                        local imgBtn = container and (container:FindFirstChild("ImageButton") or container:FindFirstChildOfClass("ImageButton"))
-                                        local votedLabel = imgBtn and imgBtn:FindFirstChild("Voted")
-                                        if votedLabel and votedLabel.Visible then
-                                            alreadyVoted = true; break
-                                        end
-                                    end
-                                    if not alreadyVoted then
-                                        task.spawn(executeAutoVote)
-                                    end
+    sFM:AddDropdown("VoteMode",{Title="Vote Priority",Values={"Easiest First","Hardest First","Random"},Default="Easiest First",Callback=function(v) autoVoteMode=tostring(v) end})
+    toggleRefs["AutoVote"] = sFM:AddToggle("AutoVote",{Title="Enable Auto Vote",Default=false,Callback=function(v)
+        st.AutoVote=v
+        if v then
+            task.spawn(function()
+                local playerGui = player:WaitForChild("PlayerGui")
+                if autoVoteConn then autoVoteConn:Disconnect() end
+                local voteLastCheck = 0
+                autoVoteConn = RunService.Heartbeat:Connect(function()
+                    if not st.AutoVote then return end
+                    if tick() - voteLastCheck < 2 then return end
+                    voteLastCheck = tick()
+                    for _, desc in pairs(playerGui:GetDescendants()) do
+                        if desc.Name == "Vote" and desc:IsA("Frame") and desc.Visible then
+                            local choices = desc:FindFirstChild("Choices")
+                            if choices then
+                                local alreadyVoted = false
+                                for i = 1, 4 do
+                                    local container = choices:FindFirstChild(tostring(i))
+                                    local imgBtn = container and (container:FindFirstChild("ImageButton") or container:FindFirstChildOfClass("ImageButton"))
+                                    local votedLabel = imgBtn and imgBtn:FindFirstChild("Voted")
+                                    if votedLabel and votedLabel.Visible then alreadyVoted = true; break end
                                 end
-                                break
+                                if not alreadyVoted then task.spawn(executeAutoVote) end
                             end
+                            break
                         end
-                    end)
+                    end
                 end)
-            else
-                if autoVoteConn then autoVoteConn:Disconnect(); autoVoteConn=nil end
-            end
-        end,
-    })
-    sVote:AddButton({Title="Vote Now (manual)", Callback=function()
-        task.spawn(executeAutoVote)
-    end})
-
-    sFM:AddButton({Title="Reset Phase 1 (M1)",Callback=function()
-        if farm.active and farm.method==1 then farm.phase=1; farmTP();  end
-    end})
-    sFM:AddButton({Title="Return to Surface (M3)",Callback=function()
-        if farm.method==3 then
-            local c=player.Character; if not c then return end
-            local h=c:FindFirstChild("HumanoidRootPart")
-            if h then h.CFrame=CFrame.new(0,5,0); h.AssemblyLinearVelocity=Vector3.new();  end
+            end)
+        else
+            if autoVoteConn then autoVoteConn:Disconnect(); autoVoteConn=nil end
         end
     end})
+    sFM:AddButton({Title="Vote Now (manual)",Callback=function() task.spawn(executeAutoVote) end})
 
-    local sTF = Tabs.Farm:AddSection("Auto Ticket Farm")
-    local tfStatusPara = sTF:AddParagraph({Title="Status",  Content="Idle"})
-    local tfCountPara  = sTF:AddParagraph({Title="Collected",Content="0"})
+    -- Auto Ticket
+    local tfStatusPara = sFM:AddParagraph({Title="Ticket Status", Content="Idle"})
+    local tfCountPara  = sFM:AddParagraph({Title="Collected",     Content="0"})
     task.spawn(function()
         while true do
             task.wait(0.5)
@@ -3348,31 +3347,19 @@ local function buildFarmTab()
             pcall(function() tfCountPara:SetDesc(tostring(ticketFarm.count)) end)
         end
     end)
-    toggleRefs["TicketFarm"] = sTF:AddToggle("TicketFarm", {
-        Title    = "Enable Auto Ticket Farm",
-        Default  = false,
-        Callback = function(v)
-            st.TicketFarm = v
-            ticketFarm.enabled = v
-            if v then startTicketFarm() else stopTicketFarm() end
-        end,
-    })
-    sTF:AddKeybind("KbTicketFarm", {
-        Title   = "Keybind — Auto Ticket Farm",
-        Default = "None",
-        Callback = function() end,
-        ChangedCallback = function(new) registerKeybind("TicketFarm", new) end,
-    })
-
-    local sAFK=Tabs.Farm:AddSection("Anti-AFK")
-    toggleRefs["AntiAFK"]=sAFK:AddToggle("AntiAFK",{Title="Enable Anti-AFK",Default=false,Callback=function(v)
-        st.AntiAFK=v
-        if v then lastInputTime=tick(); enableAntiAFK()
-        else disableAntiAFK() end
+    toggleRefs["TicketFarm"] = sFM:AddToggle("TicketFarm",{Title="Enable Auto Ticket Farm",Default=false,Callback=function(v)
+        st.TicketFarm=v; ticketFarm.enabled=v
+        if v then startTicketFarm() else stopTicketFarm() end
     end})
-    local sAFKT=Tabs.Farm:AddSection("AFK Countdown")
-    local afkTimeP=sAFKT:AddParagraph({Title="Time Until Kick",Content="20:00"})
-    local afkStatusP=sAFKT:AddParagraph({Title="Status",Content="Active"})
+    sFM:AddKeybind("KbTicketFarm",{Title="Ticket Keybind",Default="None",Callback=function() end,ChangedCallback=function(new) registerKeybind("TicketFarm",new) end})
+
+    -- Anti-AFK
+    toggleRefs["AntiAFK"]=sFM:AddToggle("AntiAFK",{Title="Enable Anti-AFK",Default=false,Callback=function(v)
+        st.AntiAFK=v
+        if v then lastInputTime=tick(); enableAntiAFK() else disableAntiAFK() end
+    end})
+    local afkTimeP=sFM:AddParagraph({Title="Time Until Kick",Content="20:00"})
+    local afkStatusP=sFM:AddParagraph({Title="AFK Status",Content="Active"})
     RunService.Heartbeat:Connect(function()
         local elapsed=tick()-lastInputTime; local remaining=math.max(0,1200-elapsed)
         pcall(function() afkTimeP:SetDesc(string.format("%02d:%02d",math.floor(remaining/60),math.floor(remaining%60))) end)
@@ -3383,50 +3370,30 @@ local function buildFarmTab()
         end)
     end)
 end
+
 buildFarmTab()
 
 -- ════ PLAYER TAB ══════════════════════════════════════════════
 local function buildPlayerTab()
-    local inputStreak_v=""
-    local sStreak=Tabs.Player:AddSection("Streak")
-    sStreak:AddInput("InputStreak",{Title="Streak Value",Default="",Placeholder="e.g. 9999",Numeric=false,Finished=false,Callback=function(v) inputStreak_v=v end})
-    sStreak:AddButton({Title="Apply Streak",Callback=function()
-        local v=tonumber(inputStreak_v); if not v then return end
-        applyFakeStat("Streak",v,{"streak","CurrentStreak","BestStreak"}); 
+    local inputStreak_v,inputTicket_v,inputToken_v,inputLevel_v,inputDN_v = "","","","",""
+    local sPlayer = Tabs.Player:AddSection("Player Stats")
+
+    sPlayer:AddInput("InputStreak",{Title="Streak Value",Default="",Placeholder="e.g. 9999",Numeric=false,Finished=false,Callback=function(v) inputStreak_v=v end})
+    sPlayer:AddInput("InputTicket",{Title="Ticket Value",Default="",Placeholder="e.g. 9999",Numeric=false,Finished=false,Callback=function(v) inputTicket_v=v end})
+    sPlayer:AddInput("InputToken",{Title="Token Value",Default="",Placeholder="e.g. 9999",Numeric=false,Finished=false,Callback=function(v) inputToken_v=v end})
+    sPlayer:AddInput("InputLevel",{Title="Level Value",Default="",Placeholder="e.g. 100",Numeric=false,Finished=false,Callback=function(v) inputLevel_v=v end})
+    sPlayer:AddInput("InputDisplayName",{Title="Display Name",Default="",Placeholder="e.g. KhoaProSigma",Numeric=false,Finished=false,Callback=function(v) inputDN_v=v end})
+
+    sPlayer:AddButton({Title="Apply All",Callback=function()
+        if inputStreak_v~="" then local v=tonumber(inputStreak_v); if v then applyFakeStat("Streak",v,{"streak","CurrentStreak","BestStreak"}) end end
+        if inputTicket_v~="" then local v=tonumber(inputTicket_v); if v then applyFakeStat("Ticket",v,{"Tickets","ticket","tickets"}) end end
+        if inputToken_v~=""  then local v=tonumber(inputToken_v);  if v then applyFakeStat("Token",v,{"Tokens","token","tokens"}) end end
+        if inputLevel_v~=""  then local v=tonumber(inputLevel_v);  if v then fakeLevelValue=v; applyFakeStat("Level",v,{"level","XP","Exp","Experience","Lvl"}) end end
+        if inputDN_v~=""     then fakeDisplayName=inputDN_v; applyDisplayNameToChar() end
     end})
-    local inputTicket_v=""
-    local sTicket=Tabs.Player:AddSection("Ticket")
-    sTicket:AddInput("InputTicket",{Title="Ticket Value",Default="",Placeholder="e.g. 9999",Numeric=false,Finished=false,Callback=function(v) inputTicket_v=v end})
-    sTicket:AddButton({Title="Apply Ticket",Callback=function()
-        local v=tonumber(inputTicket_v); if not v then return end
-        applyFakeStat("Ticket",v,{"Tickets","ticket","tickets"}); 
-    end})
-    local inputToken_v=""
-    local sToken=Tabs.Player:AddSection("Token")
-    sToken:AddInput("InputToken",{Title="Token Value",Default="",Placeholder="e.g. 9999",Numeric=false,Finished=false,Callback=function(v) inputToken_v=v end})
-    sToken:AddButton({Title="Apply Token",Callback=function()
-        local v=tonumber(inputToken_v); if not v then return end
-        applyFakeStat("Token",v,{"Tokens","token","tokens"}); 
-    end})
-    local inputLevel_v=""
-    local sLevel=Tabs.Player:AddSection("Level")
-    sLevel:AddInput("InputLevel",{Title="Level Value",Default="",Placeholder="e.g. 100",Numeric=false,Finished=false,Callback=function(v) inputLevel_v=v end})
-    sLevel:AddButton({Title="Apply Level",Callback=function()
-        local v=tonumber(inputLevel_v); if not v then return end
-        fakeLevelValue=v; applyFakeStat("Level",v,{"level","XP","Exp","Experience","Lvl"}); 
-    end})
-    local inputDN_v=""
-    local sDN=Tabs.Player:AddSection("Display Name")
-    sDN:AddInput("InputDisplayName",{Title="New Display Name",Default="",Placeholder="e.g. KhoaProSigma",Numeric=false,Finished=false,Callback=function(v) inputDN_v=v end})
-    sDN:AddButton({Title="Apply Display Name",Callback=function()
-        if inputDN_v=="" then return end
-        fakeDisplayName=inputDN_v; applyDisplayNameToChar()
-        
-    end})
-    local sReset=Tabs.Player:AddSection("Reset")
-    sReset:AddButton({Title="Reset All Player Changes",Callback=function()
+    sPlayer:AddButton({Title="Remove All Changes",Callback=function()
         fakeDisplayName=""; fakeLevelValue=nil
-        
+        inputStreak_v=""; inputTicket_v=""; inputToken_v=""; inputLevel_v=""; inputDN_v=""
     end})
 end
 buildPlayerTab()
@@ -3721,18 +3688,17 @@ function buildWetFloorSection()
         reflectGroundActive=v; if v then task.spawn(enableReflectiveGround) else disableReflectiveGround() end
     end})
 
-    local sCC2=Tabs.Settings:AddSection("Water CanCollide")
-    local ccStatePara=sCC2:AddParagraph({Title="Info",Content="Toggle whether the water overlay blocks your movement."})
-    sCC2:AddButton({Title="Toggle: Walk Through / Solid",Callback=function()
+    -- Water CanCollide merged into Wet Floor section
+    local ccStatePara = sMF:AddParagraph({Title="Water CanCollide", Content="Pass-through (CanCollide OFF)"})
+    sMF:AddButton({Title="Toggle: Walk Through / Solid",Callback=function()
         waterCanCollide=not waterCanCollide; refreshAllWaterParts()
-        if not waterCanCollide then pcall(function() ccStatePara:SetDesc("Solid (CanCollide ON)") end)
+        if waterCanCollide then pcall(function() ccStatePara:SetDesc("Solid (CanCollide ON)") end)
         else pcall(function() ccStatePara:SetDesc("Pass-through (CanCollide OFF)") end) end
     end})
 
-    sMF:AddSlider("RippleOpacity",{Title="Ripple Opacity",Default=15,Min=0,Max=90,Rounding=0,Callback=function(v) rippleOpacity=v/100; pcall(function() Fluent.Options.RippleOpacityInput:SetValue(tostring(v)) end) end})
-    sMF:AddInput("RippleOpacityInput",{Title="Set",Default="15",Placeholder="0 – 90",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),0,90); rippleOpacity=n/100; pcall(function() Fluent.Options.RippleOpacity:SetValue(n) end) end})
-    sMF:AddSlider("RippleThickness",{Title="Ring Thickness",Default=7,Min=1,Max=50,Rounding=0,Callback=function(v) rippleThickness=v/100; pcall(function() Fluent.Options.RippleThicknessInput:SetValue(tostring(v)) end) end})
-    sMF:AddInput("RippleThicknessInput",{Title="Set",Default="7",Placeholder="1 – 50",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),1,50); rippleThickness=n/100; pcall(function() Fluent.Options.RippleThickness:SetValue(n) end) end})
+    sMF:AddSlider("RippleOpacity",{Title="Ripple Opacity",Default=15,Min=0,Max=90,Rounding=0,Callback=function(v) rippleOpacity=v/100 end})
+    sMF:AddInput("RippleOpacityInput",{Title="Set Ripple Opacity",Default="15",Placeholder="0 – 90",Numeric=false,Finished=false,Callback=function(v) local n=tonumber(v); if not n then return end; n=math.clamp(math.floor(n),0,90); rippleOpacity=n/100; pcall(function() Fluent.Options.RippleOpacity:SetValue(n) end) end})
+    sMF:AddSlider("RippleThickness",{Title="Ring Thickness",Default=7,Min=1,Max=50,Rounding=0,Callback=function(v) rippleThickness=v/100 end})
     sMF:AddColorpicker("RippleColor",{Title="Ripple Color — Primary",Default=Color3.fromRGB(180,220,255),Callback=function(v) rippleColor=v end})
     sMF:AddColorpicker("RippleColor2",{Title="Ripple Color — Secondary",Default=Color3.fromRGB(140,195,240),Callback=function(v) rippleColor2=v end})
     local RIPPLE_MATS={["Glass"]=Enum.Material.Glass,["Plastic"]=Enum.Material.Plastic,["SmoothPlastic"]=Enum.Material.SmoothPlastic}
@@ -3742,8 +3708,8 @@ function buildWetFloorSection()
         else stopRipple() end
     end})
 
-    -- ── FPS Overlay UI ────────────────────────────────────────
-    local sFPSOv = Tabs.Settings:AddSection("FPS ")
+    -- ── FPS Overlay + Delete UI (merged) ─────────────────────
+    local sFPSOv = Tabs.Settings:AddSection("FPS & Delete UI")
     local fpsOverlayGui = nil
     local fpsOverlayConn = nil
 
@@ -3760,96 +3726,78 @@ function buildWetFloorSection()
         fpsOverlayGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
         pcall(function() fpsOverlayGui.Parent = CoreGui end)
         if not fpsOverlayGui.Parent then fpsOverlayGui.Parent = player.PlayerGui end
-
         local frame = Instance.new("Frame")
-        frame.Size = UDim2.fromOffset(90, 36)
-        frame.Position = UDim2.new(0, 10, 0, 10)
-        frame.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
-        frame.BackgroundTransparency = 0.15
-        frame.BorderSizePixel = 0
-        frame.ZIndex = 20
-        frame.Parent = fpsOverlayGui
+        frame.Size = UDim2.fromOffset(90, 36); frame.Position = UDim2.new(0, 10, 0, 10)
+        frame.BackgroundColor3 = Color3.fromRGB(12, 12, 16); frame.BackgroundTransparency = 0.15
+        frame.BorderSizePixel = 0; frame.ZIndex = 20; frame.Parent = fpsOverlayGui
         Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
-
         local stroke = Instance.new("UIStroke", frame)
-        stroke.Color = Color3.fromRGB(180, 0, 0)
-        stroke.Thickness = 1.5
-
+        stroke.Color = Color3.fromRGB(180, 0, 0); stroke.Thickness = 1.5
         local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(1, 0, 0.5, 0)
-        label.Position = UDim2.new(0, 0, 0, 0)
-        label.BackgroundTransparency = 1
-        label.Text = "FPS"
-        label.TextColor3 = Color3.fromRGB(160, 160, 160)
-        label.TextSize = 10
-        label.Font = Enum.Font.GothamBold
-        label.ZIndex = 21
-        label.Parent = frame
-
+        label.Size = UDim2.new(1,0,0.5,0); label.BackgroundTransparency = 1
+        label.Text = "FPS"; label.TextColor3 = Color3.fromRGB(160,160,160)
+        label.TextSize = 10; label.Font = Enum.Font.GothamBold; label.ZIndex = 21; label.Parent = frame
         local value = Instance.new("TextLabel")
-        value.Size = UDim2.new(1, 0, 0.5, 0)
-        value.Position = UDim2.new(0, 0, 0.5, 0)
-        value.BackgroundTransparency = 1
-        value.Text = "--"
-        value.TextColor3 = Color3.fromRGB(255, 255, 255)
-        value.TextSize = 15
-        value.Font = Enum.Font.GothamBold
-        value.ZIndex = 21
-        value.Parent = frame
-
-        -- Sample FPS from Heartbeat, update every 0.3s
-        local samples = {}
-        local lastUpdate = 0
+        value.Size = UDim2.new(1,0,0.5,0); value.Position = UDim2.new(0,0,0.5,0)
+        value.BackgroundTransparency = 1; value.Text = "--"
+        value.TextColor3 = Color3.fromRGB(255,255,255); value.TextSize = 15
+        value.Font = Enum.Font.GothamBold; value.ZIndex = 21; value.Parent = frame
+        local samples = {}; local lastUpdate = 0
         fpsOverlayConn = RunService.Heartbeat:Connect(function(dt)
-            table.insert(samples, 1/math.max(dt, 0.001))
+            table.insert(samples, 1/math.max(dt,0.001))
             if #samples > 30 then table.remove(samples, 1) end
-            local now = tick()
-            if now - lastUpdate < 0.3 then return end
+            local now = tick(); if now - lastUpdate < 0.3 then return end
             lastUpdate = now
-            local avg = 0
-            for _, v in ipairs(samples) do avg = avg + v end
+            local avg = 0; for _, v in ipairs(samples) do avg = avg + v end
             avg = math.floor(avg / #samples)
-            local color = avg >= 50 and Color3.fromRGB(80,220,100)
-                       or avg >= 30 and Color3.fromRGB(255,200,0)
-                       or              Color3.fromRGB(220,60,60)
-            value.Text = tostring(avg)
-            value.TextColor3 = color
+            local color = avg >= 50 and Color3.fromRGB(80,220,100) or avg >= 30 and Color3.fromRGB(255,200,0) or Color3.fromRGB(220,60,60)
+            value.Text = tostring(avg); value.TextColor3 = color
         end)
     end
 
     toggleRefs["FPSOverlay"] = sFPSOv:AddToggle("FPSOverlay", {
-        Title   = "FPS Overlay",
-        Default = false,
+        Title = "FPS Overlay", Default = false,
         Callback = function(v)
             if v then createFPSOverlay() else destroyFPSOverlay() end
         end,
     })
 
-    -- ── Delete UI ─────────────────────────────────────────────
-    local sDel = Tabs.Settings:AddSection("Delete UI")
-    sDel:AddButton({Title="Delete UI — Remove Everything", Callback=function()
-        -- 1. Disconnect all active connections
-        pcall(function() if fpsOverlayConn then fpsOverlayConn:Disconnect(); fpsOverlayConn = nil end end)
-        -- 2. Stop all toggles / loops cleanly
-        for key, ref in pairs(toggleRefs) do
-            pcall(function() ref:SetValue(false) end)
-        end
-        -- 3. Reset game properties modified by hub
-        pcall(function() workspace.Gravity = 196.2 end)
-        pcall(function() game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 16 end)
-        pcall(function() game.Players.LocalPlayer.Character.Humanoid.JumpPower = 50 end)
+    sFPSOv:AddButton({Title="Delete UI — Remove Everything", Callback=function()
+        -- Stop FPS overlay
+        destroyFPSOverlay()
+        -- Turn off all active features cleanly via their disable functions
+        pcall(function() if st.EdgeBoost then st.EdgeBoost=false; if edgeConn then edgeConn:Disconnect(); edgeConn=nil end end end)
+        pcall(function() if st.NoClip then disableNoClip() end end)
+        pcall(function() if st.Fly then disableFly() end end)
+        pcall(function() if st.ESP then removeESP() end end)
+        pcall(function() if st.AvoidBot then disableAvoidBot() end end)
+        pcall(function() if st.BetterBounce then disableBetterBounce() end end)
+        pcall(function() if st.AirStrafe then disableAirStrafe() end end)
+        pcall(function() if st.StrafeBoost then disableStrafeBoost() end end)
+        pcall(function() disableAiESP() end)
+        pcall(function() if motion.infJumpConn then motion.infJumpConn:Disconnect(); motion.infJumpConn=nil end end)
+        pcall(function() if motion.autoJumpConn then motion.autoJumpConn:Disconnect(); motion.autoJumpConn=nil end end)
+        pcall(function() if motion.gravConn then motion.gravConn:Disconnect(); motion.gravConn=nil; workspace.Gravity=motion.ORIG_GRAV end end)
+        pcall(function() if st.JumpBoost and humanoid then humanoid.UseJumpPower=true; humanoid.JumpPower=motion.ORIG_JUMP end end)
+        pcall(function() stopTurnbind() end)
+        pcall(function() stopAutoFarm() end)
+        pcall(function() stopTicketFarm() end)
+        pcall(function() disableAntiAFK() end)
+        pcall(function() fakeDisplayName=""; fakeLevelValue=nil end)
+        pcall(function() disableAnimOverride() end)
+        pcall(function() disableEmoteWalk() end)
+        pcall(function() unusualCleanup() end)
+        pcall(function() clearWeather() end)
         pcall(function() workspace.CurrentCamera.FieldOfView = 70 end)
-        -- 4. Destroy all Femboy/Fluent GUIs from CoreGui
+        -- Sync all toggles to OFF
+        for _, ref in pairs(toggleRefs) do pcall(function() ref:SetValue(false) end) end
+        -- Destroy all hub GUIs
+        task.wait(0.1)
         for _, g in pairs(CoreGui:GetChildren()) do
-            if g.Name:find("Femboy") or g.Name:find("Fluent") or g.Name:find("FemboyHub") then
-                pcall(function() g:Destroy() end)
-            end
+            if g.Name:find("Femboy") or g.Name:find("Fluent") then pcall(function() g:Destroy() end) end
         end
-        -- 5. Destroy all Femboy/Fluent GUIs from PlayerGui
         for _, g in pairs(player.PlayerGui:GetChildren()) do
-            if g.Name:find("Femboy") or g.Name:find("Fluent") then
-                pcall(function() g:Destroy() end)
-            end
+            if g.Name:find("Femboy") or g.Name:find("Fluent") then pcall(function() g:Destroy() end) end
         end
     end})
 end
@@ -4146,14 +4094,13 @@ local function buildMacroTab()
     end
 
     -- ════ UI ═══════════════════════════════════════════════════
+    local sMacro = Tabs.Macro:AddSection("Macro")
 
     -- Status
-    local sStatus = Tabs.Macro:AddSection("Status")
-    statusPara = sStatus:AddParagraph({Title="State", Content="Idle | Loop: OFF | Keys: 0"})
+    statusPara = sMacro:AddParagraph({Title="State", Content="Idle | Loop: OFF | Keys: 0"})
 
     -- Preset dropdown
-    local sPre = Tabs.Macro:AddSection("Combo Preset")
-    sPre:AddDropdown("MacroPreset", {
+    sMacro:AddDropdown("MacroPreset", {
         Title   = "Select Preset",
         Values  = PRESET_NAMES,
         Default = "G → 1",
@@ -4164,17 +4111,16 @@ local function buildMacroTab()
     })
 
     -- Custom keys
-    local sCus = Tabs.Macro:AddSection("Custom Keys")
     local customRaw = ""
-    sCus:AddInput("MacroCustomInput", {
+    sMacro:AddInput("MacroCustomInput", {
         Title       = "Key sequence",
         Default     = "",
         Placeholder = "e.g. G,1,G,2 or Q,E",
         Numeric     = false, Finished = false,
         Callback    = function(v) customRaw = v end,
     })
-    local customStatus = sCus:AddParagraph({Title="Custom", Content="(not applied)"})
-    sCus:AddButton({Title="Apply Custom Keys", Callback=function()
+    local customStatus = sMacro:AddParagraph({Title="Custom", Content="(not applied)"})
+    sMacro:AddButton({Title="Apply Custom Keys", Callback=function()
         local parts = {}
         for seg in customRaw:gmatch("[^,]+") do
             local t = seg:match("^%s*(.-)%s*$")
@@ -4194,68 +4140,49 @@ local function buildMacroTab()
         pcall(function() Fluent.Options.MacroPreset:SetValue("Custom") end)
         updateStatus()
     end})
-    sCus:AddButton({Title="Clear Custom Keys", Callback=function()
+    sMacro:AddButton({Title="Clear Custom Keys", Callback=function()
         macro.customKeys = {}
         pcall(function() customStatus:SetDesc("Cleared.") end)
         updateStatus()
     end})
 
     -- Timing
-    local sTim = Tabs.Macro:AddSection("Timing")
-    sTim:AddSlider("MacroKeyDelay", {
+    sMacro:AddSlider("MacroKeyDelay", {
         Title    = "Delay between keys (ms)",
         Default  = 80, Min = 10, Max = 1000, Rounding = 0,
         Callback = function(v) macro.keyDelay = v / 1000 end,
     })
-    sTim:AddSlider("MacroLoopDelay", {
+    sMacro:AddSlider("MacroLoopDelay", {
         Title    = "Delay between loops (ms)",
         Default  = 500, Min = 10, Max = 1000, Rounding = 0,
         Callback = function(v) macro.loopDelay = v / 1000 end,
     })
 
-    -- Loop
-    local sLoop = Tabs.Macro:AddSection("Loop")
-    toggleRefs["MacroLoop"] = sLoop:AddToggle("MacroLoop", {
+    -- Loop + Enable + Keybind + Mobile
+    toggleRefs["MacroLoop"] = sMacro:AddToggle("MacroLoop", {
         Title    = "Infinite Loop",
         Default  = false,
-        Callback = function(v)
-            macro.loopEnabled = v
-            updateStatus()
-        end,
+        Callback = function(v) macro.loopEnabled = v; updateStatus() end,
     })
-
-    -- Activate
-    local sAct = Tabs.Macro:AddSection("Activate")
-    toggleRefs["MacroEnable"] = sAct:AddToggle("MacroEnable", {
+    toggleRefs["MacroEnable"] = sMacro:AddToggle("MacroEnable", {
         Title    = "Enable Macro",
         Default  = false,
         Callback = function(v)
             if v then startMacro() else stopMacro() end
         end,
     })
-    sAct:AddKeybind("MacroKeybind", {
+    sMacro:AddKeybind("MacroKeybind", {
         Title           = "Keybind (default: Z)",
         Default         = "Z",
         Callback        = function() end,
         ChangedCallback = function(new) rebuildKeybind(new) end,
     })
-
-    -- Mobile Button toggle
-    local sMob = Tabs.Macro:AddSection("Mobile Button")
-    toggleRefs["MacroMobileBtn"] = sMob:AddToggle("MacroMobileBtn", {
+    toggleRefs["MacroMobileBtn"] = sMacro:AddToggle("MacroMobileBtn", {
         Title    = "Mobile Button",
         Default  = false,
         Callback = function(v)
-            if v then
-                createMobileButton()
-            else
-                destroyMobileButton()
-            end
+            if v then createMobileButton() else destroyMobileButton() end
         end,
-    })
-    sMob:AddParagraph({
-        Title   = "Info",
-        Content = "Shows a floating button above the jump button.\nTap it to start / stop the macro.\nDrag to reposition.",
     })
 
 end
